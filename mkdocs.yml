@@ -1,0 +1,77 @@
+site_name: InSARScript
+repo_url: https://github.com/jldz9/InSARScript
+repo_name: jldz9/InSARScript
+site_url: https://jldz9.github.io/InSARScript/
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - toc.follow
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      toggle:
+        icon: material/weather-night
+        name: switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: grey
+      toggle:
+        icon: material/weather-sunny
+        name: switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+nav: 
+  - Home: index.md
+  - About: about.md
+
+extra:
+  social:
+    - icon: fontawesome/solid/envelope
+      link: jiaweiliwork@outlook.com
+      name: Email me
+    - icon: fontawesome/brands/discord
+      link: https://discord.gg/RJJM42MBUU
+      name: Discord
+  version:
+    provider: mike
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.details:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - tables
+  - md_in_html
+  - pymdownx.blocks.caption
+  
+
+plugins:
+  - search
+

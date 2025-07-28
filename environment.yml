@@ -1,0 +1,13 @@
+name: insarscript
+channels:
+    - defaults
+    - conda-forge
+dependencies:
+    - python>3.11
+    - gdal>=3.8
+    - sqlite>=3.44
+    - isce2=2.6.4
+    - mintpy=1.6.2
+    - pip
+    - pip:
+        - colorama

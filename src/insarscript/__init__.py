@@ -6,9 +6,11 @@ import sys
 import subprocess
 from pathlib import Path
 
-from colorama import just_fix_windows_console
+from colorama import just_fix_windows_console, init
 just_fix_windows_console()
+init(autoreset=True)
 from colorama import Fore, Style, Back
+
 
 # For Sentinal-1 InSAR processing, ISCE2 and MintPy are used by default.
 # ---------------------Check GDAL and SQLite3 version---------------------
@@ -72,4 +74,4 @@ os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 # ---------------------package imports---------------------
 
-from insarscript.utils import tool, stac_api
+from insarscript.utils import tool, apis

@@ -1,0 +1,37 @@
+
+# This is the config file for geodlkit program. Program use metric system
+[IO]
+WORKDIR =  "/" # Your Path to the working directory
+
+[PREPROCESS]
+TILE_SIZE = 100 # meter
+BUFFER_SIZE = 10 # meter
+DEBUG = false
+BAND_MODE = "BGR"
+
+[PREPROCESS.RESAMPLE]
+ENABLE = false
+RESOLUTION = 0.1 # meter
+
+[PREPROCESS.TRANSFORM]
+RANDOM_CROP_HEIGHT = 512
+RANDOM_CROP_WIDTH = 512
+
+[PREPROCESS.COCO_INFO]
+NAME = "testdataset"
+VERSION = "1.0"
+DESCRIPTION = "This is a test dataset"
+CONTRIBUTOR = "unknown"
+URL = "unknown"
+# You can add as much descriptions as you want under this section.
+# e.g.
+# time = '2019-08-24'
+# email = 'myemail@email.com'
+
+[TRAIN]
+MODEL = "maskrcnn_rgb" # other model option in the furture
+MAX_EPOCHS = 100
+NUM_CLASSES = 2
+LEARNING_RATE = 1e-3
+BATCH_SIZE = 5
+NUM_WORKERS = 15

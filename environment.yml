@@ -11,3 +11,8 @@ dependencies:
     - pip
     - pip:
         - colorama
+        - tomli_w
+        - pystac-client
+        - planetary-computer
+        - rasterio
+        - importlib-metadata

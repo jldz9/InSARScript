@@ -19,15 +19,11 @@ from osgeo import gdal
 gdal_version = gdal.__version__
 if v(gdal_version) < v('3.8'):
     print(f"{Fore.RED}GDAL version {gdal_version} is not supported. Please install GDAL version >= 3.8.")
-else:
-    print(f"{Fore.GREEN}GDAL version {gdal_version} found.")
 
 import sqlite3
 sqlite_version = sqlite3.sqlite_version
 if v(sqlite_version) < v('3.44'):
     print(f"{Fore.RED}SQLite version {sqlite_version} is not supported. Please install SQLite version >= 3.44.")
-else:
-    print(f"{Fore.GREEN}SQLite version {sqlite_version} found.")
 
 
 # ---------------------ISCE2 Configuration---------------------
@@ -36,7 +32,6 @@ else:
 # https://github.com/yunjunz/conda-envs/blob/main/README.md#2-install-isce-2-and-mintpy
 try: 
     import isce
-    print(f"{Fore.GREEN}ISCE2 version {isce.__version__} found.")
 except ImportError:
     print(f"{Fore.RED}ISCE2 is not installed.")
     sys.exit(1)
@@ -57,7 +52,6 @@ else:
 
 try: 
     import mintpy
-    print(f"{Fore.GREEN}MintPy version {mintpy.__version__} found.")
 except ImportError:
     print(f"{Fore.RED}MintPy is not installed.")
     sys.exit(1)
@@ -76,3 +70,6 @@ os.environ["HDF5_DISABLE_VERSION_CHECK"] = "2"
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 
+# ---------------------package imports---------------------
+
+from insarscript.utils import tool, stac_api

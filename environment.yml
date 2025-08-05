@@ -10,9 +10,9 @@ dependencies:
     - mintpy=1.6.2
     - pip
     - pip:
+        - asf_search
         - colorama
         - tomli_w
-        - pystac-client
         - planetary-computer
         - rasterio
         - importlib-metadata

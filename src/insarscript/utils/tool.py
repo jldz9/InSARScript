@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import getpass
 from pathlib import Path
 from pprint import pformat
 from types import SimpleNamespace
 
-import pystac_client, planetary_computer
 import tomllib, tomli_w
+import asf_search as asf
+from asf_search.exceptions import ASFAuthenticationError
 
-from insarscript.utils.stac_api import APIS
+from colorama import Fore, Style
+
+
 
 
 class Config(SimpleNamespace):
@@ -157,55 +161,62 @@ def get_config(config_path=None):
     else:
         raise FileNotFoundError(f"Config file not found under {config_path}")
   
-class STAC:
-    """Simplify searching and downloading satellite data from various STAC APIs."""
-    apis = Config(**APIS)
+class ASFDownloader:
+    """Simplify searching and downloading satellite data using ASF Search API."""
+
     def __init__(self,
-            api_url: str ,
-            collection_id: str,
             bbox: list[float] ,
-            datetime_range: str,
-            output_dir: str = "downloaded_data",
-            cloud_cover_mas: int = 10,
-            sign_item_func=None,
+            start_time: str,
+            end_time: str,
+            output_dir: str = "tmp",
     ):
         """
-        Connects to a STAC API, searches for data, and downloads the first available visual asset.
-
-        Args:
-            api_url (str): The URL of the STAC API.
-            collection (str): The ID of the data collection to search (e.g., 'sentinel-2-l2a').
-            bbox (list): The bounding box [lon_min, lat_min, lon_max, lat_max].
-            datetime_range (str): The date range in 'YYYY-MM-DD/YYYY-MM-DD' format.
-            output_dir (str, optional): Directory to save downloaded files. Defaults to "downloaded_data".
-            cloud_cover_max (int, optional): Maximum allowed cloud cover. Defaults to 10.
-            sign_item_func (callable, optional): A function to sign the item for download (e.g., for Planetary Computer).
+        Initialize the Downloader with search parameters.
         """
-        self.api_url = api_url
-        self.collection_id = collection_id
         self.bbox = bbox
-        self.datetime_range = datetime_range
-        self.output_dir = output_dir
-        self.cloud_cover_max = cloud_cover_mas
-        self.sign_item_func = sign_item_func
-
-        # Initialize the STAC client
-        self.client = pystac_client.Client.open(self.api_url)
-        
+        self.start_time = start_time
+        self.end_time = end_time
+        self.output_dir = Path(output_dir)
+        print(f"""
+This downloader relies on the ASF API. Please ensure you to create an account at https://search.asf.alaska.edu/. 
+If a .netrc file is not found under your home directory, you will be prompted to enter your ASF username and password. 
+Check documentation for how to setup .netrc file.\n""")
+        self._check_netrc = self._check_netrc()
+        if not self._check_netrc:
+            while True:
+                self._username = input("Enter your ASF username: ")
+                self._password = getpass.getpass("Enter your ASF password: ")
+                try:
+                    self._session = asf.ASFSession().auth_with_creds(self._username, self._password)
+                except ASFAuthenticationError:
+                    print(f"{Fore.RED}Authentication failed. Please check your credentials and try again.\n")
+                    continue
+                print(f"{Fore.GREEN}Authentication successful.\n")
+                break
+        else:
+            self._session = asf.ASFSession()
+            print(f"{Fore.GREEN}Credential from .netrc was found for authentication.\n")
         # Ensure output directory exists
-        if self.output_dir == 'downloaded_data':
+        if not self.output_dir.is_absolute():
             self.output_dir = Path.cwd() / self.output_dir
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
+        print(f"Download directory set to: {self.output_dir}")
 
-    @classmethod
-    def list_apis(cls):
-        """List available STAC APIs."""
-        return {name: api.url for name, api in cls.apis.__dict__.items() if not name.startswith('_')}
+    def _check_netrc(self):
+        """Check if .netrc file exists in the home directory."""
+        netrc_path = Path.home() / '.netrc'
+        if not netrc_path.is_file():            
+            print(f"{Fore.RED}No .netrc file found in your home directory. Will prompt login.\n")
+            return False
+        else: 
+            with netrc_path.open() as f:
+                content = f.read()
+                if 'machine urs.earthdata.nasa.gov' in content:
+                    return True
+                else:
+                    print(f"{Fore.RED}no machine name urs.earthdata.nasa.gov found .netrc file. Will prompt login.\n")
+                    return False
+
     
-    @classmethod
-    def planetary_computer(cls,
-                           collection_id):
-        """Get the Microsoft Planetary Computer STAC API."""
-        return cls.apis.planetary_computer
 
 

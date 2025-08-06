@@ -16,3 +16,4 @@ dependencies:
         - planetary-computer
         - rasterio
         - importlib-metadata
+        - sentineleof

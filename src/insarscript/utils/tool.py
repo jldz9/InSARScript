@@ -4,6 +4,7 @@
 import getpass
 import requests
 import time
+from collections import defaultdict
 from pathlib import Path
 from pprint import pformat
 from types import SimpleNamespace
@@ -295,6 +296,18 @@ Check documentation for how to setup .netrc file.\n""")
             return
         else:
             print(f"{Fore.GREEN}Search completed successfully. A total of {len(self.results)} results found. Use .download() to download the results.\n")
+        grouped = defaultdict(list)
+        for result in self.results:
+            key = (result.properties['pathNumber'], result.properties['frameNumber'])
+            grouped[key].append(result)
+        self.results = grouped
+        if len(grouped) > 1: 
+            print(f"{Fore.YELLOW}The AOI crosses multiple stacks, will try to create subfolders under {self.output_dir} for each stack")
+        self.download_dir = self.output_dir.joinpath('data')
+        self.download_dir.mkdir(exist_ok=True, parents=True)
+        for key in self.results.keys():
+            self.download_dir.joinpath(f'p{key[0]}_f{key[1]}').mkdir(exist_ok=True, parents=True)
+
 
     def download(self):
         """
@@ -305,45 +318,37 @@ Check documentation for how to setup .netrc file.\n""")
         if not hasattr(self, 'results'):
             raise ValueError(f"{Fore.RED}No search results found. Please run search() first.")
         
-        if not self.results:
-            print(f"{Fore.YELLOW}No results found for the given search parameters.")
-            return
-        
+     
         print(f"Downloading results to {self.output_dir}...")
-        for i, result in enumerate(self.results, start=1):
-            print(f"Downloading {i}/{len(self.results)}: {result.properties['fileID']}")
+        for key, results in self.results.items():
+            download_path = self.download_dir.joinpath(f'p{key[0]}_f{key[1]}')
+            print(f'Downloading stacks for path {key[0]} frame {key[1]} to {download_path}')
+            for i, result in enumerate(results, start=1):
+                print(f"Downloading {i}/{len(results)}: {result.properties['fileID']}")
+                try: 
+                    start_time = time.time()
+                    result.download(path=download_path, session=self._session)
+                    elapsed = time.time() - start_time
 
-            try: 
-                start_time = time.time()
-                result.download(path=self.output_dir, session=self._session)
-                elapsed = time.time() - start_time
+                    size_mb = result.properties['bytes'] / (1024 * 1024)  # Convert bytes to MB
+                    speed = size_mb / elapsed if elapsed > 0 else 0
 
-                size_mb = result.properties['bytes'] / (1024 * 1024)  # Convert bytes to MB
-                speed = size_mb / elapsed if elapsed > 0 else 0
-
-                print(f"{Fore.GREEN}✔ Downloaded {size_mb:.2f} MB in {elapsed:.2f} sec ({speed:.2f} MB/s)\n")
-                success_count += 1
-            except asf.ASFDownloadError as e:
-                print(f"{Fore.RED}✘ DOWNLOAD FAILED for {result.properties['fileID']}. Reason: {e}")
-                failure_count += 1
-            except ConnectionError as e:
-                print(f"{Fore.RED}✘ CONNECTION FAILED for {result.properties['fileID']}. Check your network. Reason: {e}")
-                self.failure_count += 1
-            except (IOError, OSError) as e:
-                print(f"{Fore.RED}✘ FILE SYSTEM ERROR for {result.properties['fileID']}. Check permissions for '{self.output_dir}'. Reason: {e}")
-                self.failure_count += 1
-            except Exception as e:
-                print(f"{Fore.RED}✘ AN UNEXPECTED ERROR occurred for {result.properties['fileID']}. Reason: {e}")
-                self.failure_count += 1
-            finally:
-                 print("")
-        
-        print("-" * 50)
-        print(f"Download summary:")
-        print(f"{Fore.GREEN}  Successfully downloaded: {success_count} file(s)")
-        if failure_count > 0:
-            print(f"{Fore.RED}  Failed to download:    {failure_count} file(s)")
-        print("-" * 50)
+                    print(f"{Fore.GREEN}✔ Downloaded {size_mb:.2f} MB in {elapsed:.2f} sec ({speed:.2f} MB/s)\n")
+                    success_count += 1
+                except asf.ASFDownloadError as e:
+                    print(f"{Fore.RED}✘ DOWNLOAD FAILED for {result.properties['fileID']}. Reason: {e}")
+                    failure_count += 1
+                except ConnectionError as e:
+                    print(f"{Fore.RED}✘ CONNECTION FAILED for {result.properties['fileID']}. Check your network. Reason: {e}")
+                    self.failure_count += 1
+                except (IOError, OSError) as e:
+                    print(f"{Fore.RED}✘ FILE SYSTEM ERROR for {result.properties['fileID']}. Check permissions for '{self.output_dir}'. Reason: {e}")
+                    self.failure_count += 1
+                except Exception as e:
+                    print(f"{Fore.RED}✘ AN UNEXPECTED ERROR occurred for {result.properties['fileID']}. Reason: {e}")
+                    self.failure_count += 1
+                finally:
+                    print("")
         
 class S1_SLC(ASFDownloader):
     """A class to search and download Sentinel-1 data using ASF Search API."""
@@ -436,19 +441,21 @@ IF you wish to download oribit files from ASF and skip CDSE, use .download(force
                         print(f"{Fore.GREEN}Credentials saved to {netrc_path}. You can now download orbit from CDSE without entering credentials again.\n")
                         break
             print(f"Downloading orbit files for SLCs...")
-            for i, result in enumerate(self.results, start=1):
-                print(f"Searching orbit files for {i}/{len(self.results)}: {result.properties['fileID']}")
-                scene_info = result.properties['sceneName'].replace("__", "_").split("_")
-                info = download_eofs(
-                    orbit_dts = [scene_info[4]],
-                    missions=[scene_info[0]],
-                    save_dir=self.output_dir.as_posix(),
-                    force_asf=force_asf
-                )
-                if len(info) > 0:
-                    print(f"{Fore.GREEN}Orbit files for {result.properties['sceneName']}downloaded successfully.")
-                else:
-                    print(f"{Fore.YELLOW}No orbit files found for the given parameters.")
+            for key, results in self.results.items():
+                download_path = self.download_dir.joinpath(f'p{key[0]}_f{key[1]}')
+                for i, result in enumerate(results, start=1):
+                    print(f"Searching orbit files for {i}/{len(results)}: {result.properties['fileID']}")
+                    scene_info = result.properties['sceneName'].replace("__", "_").split("_")
+                    info = download_eofs(
+                        orbit_dts = [scene_info[4]],
+                        missions=[scene_info[0]],
+                        save_dir=download_path.as_posix(),
+                        force_asf=force_asf
+                    )
+                    if len(info) > 0:
+                        print(f"{Fore.GREEN}Orbit files for {result.properties['sceneName']}downloaded successfully.")
+                    else:
+                        print(f"{Fore.YELLOW}No orbit files found for the given parameters.")
     
     def _check_cdse_credentials(self, username: str, password: str) -> bool:
         url = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"

@@ -9,7 +9,7 @@ from insarscript.utils.tool import S1_SLC
 
 a = S1_SLC(
     platform=['Sentinel-1A', 'Sentinel-1B'],
-    maxResults=20,
+    maxResults=5,
     AscendingflightDirection=True,
     bbox = [-113.18, 37.77, -112.44, 38.10],
     start='2017-01-01',

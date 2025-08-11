@@ -5,11 +5,11 @@ sys.path.append(Path(__file__).parent.parent.joinpath('src').as_posix())
 
 import asf_search as asf
 
-from insarscript.utils.tool import S1_SLC
+
+from insarscript.core import S1_SLC
 
 a = S1_SLC(
     platform=['Sentinel-1A', 'Sentinel-1B'],
-    maxResults=5,
     AscendingflightDirection=True,
     bbox = [-113.18, 37.77, -112.44, 38.10],
     start='2017-01-01',
@@ -18,6 +18,10 @@ a = S1_SLC(
     output_dir = '~/S1'
 )
 a.search()
-a.download()
+a.footprint()
+a.pick([20],[123,118])
+a.footprint()
+a.results
+#a.download()
 
 

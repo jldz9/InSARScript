@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import getpass
 import requests
+import subprocess
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -9,7 +10,9 @@ from pathlib import Path
 
 import asf_search as asf
 import contextily as ctx
+import dem_stitcher
 import matplotlib.pyplot as plt
+import rasterio as rio
 from asf_search.exceptions import ASFAuthenticationError
 from colorama import Fore
 from eof.download import download_eofs
@@ -59,7 +62,7 @@ class ASFDownloader:
         Initialize the Downloader with search parameters. Options was adapted from asf_search searching api. 
         You may check https://docs.asf.alaska.edu/asf_search/searching/ for more info, below only list customized parameters.
 
-        :param bbox: Bounding box coordinates in the format [min_lon, min_lat, max_lon, max_lat]. Will then convert to WKT format. to filled as intersectsWith parameter in asf_search.
+        :param bbox: Bounding box coordinates in the format [west_lon, south_lat, east_lon, north_lat]. Will then convert to WKT format. to filled as intersectsWith parameter in asf_search.
         :param output_dir: Directory where downloaded files will be saved. Relative path will be resolved to current workdir.
         """
         kwargs = {k: v for k, v in locals().items() if k != "self" and k != "bbox" and k != "output_dir"}
@@ -154,10 +157,8 @@ Check documentation for how to setup .netrc file.\n""")
         
         if len(grouped) > 1: 
             print(f"{Fore.YELLOW}The AOI crosses multiple stacks, you can use .footprint() to see footprints and .pick(path, frame) to specific the stack of scence you would like to download. If .download() will try to create subfolders under {self.output_dir} for each stack")
-        self.download_dir = self.output_dir.joinpath('data')
-        self.download_dir.mkdir(exist_ok=True, parents=True)
-        for key in self.results.keys():
-            self.download_dir.joinpath(f'p{key[0]}_f{key[1]}').mkdir(exist_ok=True, parents=True)
+            self.download_dir = self.output_dir.joinpath('data')
+            self.download_dir.mkdir(exist_ok=True, parents=True)
         return self.results
     
     def footprint(self):
@@ -222,7 +223,25 @@ Check documentation for how to setup .netrc file.\n""")
             return self.results
         else: 
             raise ValueError(f"path and frame needs to be under same type, either both int or both list of int")
-
+    def dem(self):
+        """Download DEM for co-registration uses"""
+        for key, results in self.results.items():
+            download_path = self.download_dir.joinpath(f'p{key[0]}_f{key[1]}')
+            download_path.mkdir(exist_ok=True, parents=True)
+            geom = shape(results[0].geometry)
+            west_lon, south_lat, east_lon, north_lat =  geom.bounds
+            bbox = [ west_lon, south_lat, east_lon, north_lat]
+            X, p = dem_stitcher.stitch_dem(
+                bbox, 
+                dem_name='glo_30',
+                dst_area_or_point='Point',
+                dst_ellipsoidal_height=True
+            )
+            
+            with rio.open(download_path/f'dem_p{key[0]}_f{key[1]}.tif', 'w', **p) as ds:
+                    ds.write(X,1)
+                    ds.update_tags(AREA_OR_POINT='Point')
+        return
     def download(self):
         """
         Download the search results to the specified output directory.
@@ -236,6 +255,7 @@ Check documentation for how to setup .netrc file.\n""")
         print(f"Downloading results to {self.output_dir}...")
         for key, results in self.results.items():
             download_path = self.download_dir.joinpath(f'p{key[0]}_f{key[1]}')
+            download_path.mkdir(parents=True, exist_ok=True)
             print(f'Downloading stacks for path {key[0]} frame {key[1]} to {download_path}')
             for i, result in enumerate(results, start=1):
                 print(f"Downloading {i}/{len(results)}: {result.properties['fileID']}")
@@ -254,13 +274,13 @@ Check documentation for how to setup .netrc file.\n""")
                     failure_count += 1
                 except ConnectionError as e:
                     print(f"{Fore.RED}✘ CONNECTION FAILED for {result.properties['fileID']}. Check your network. Reason: {e}")
-                    self.failure_count += 1
+                    failure_count += 1
                 except (IOError, OSError) as e:
                     print(f"{Fore.RED}✘ FILE SYSTEM ERROR for {result.properties['fileID']}. Check permissions for '{self.output_dir}'. Reason: {e}")
-                    self.failure_count += 1
+                    failure_count += 1
                 except Exception as e:
                     print(f"{Fore.RED}✘ AN UNEXPECTED ERROR occurred for {result.properties['fileID']}. Reason: {e}")
-                    self.failure_count += 1
+                    failure_count += 1
                 finally:
                     print("")
         

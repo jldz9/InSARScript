@@ -4,10 +4,11 @@
 import os
 import sys
 import subprocess
+import logging
+logging.basicConfig(level=logging.WARNING)
 from pathlib import Path
 
 from colorama import just_fix_windows_console, init
-just_fix_windows_console()
 init(autoreset=True)
 from colorama import Fore, Style, Back
 
@@ -45,8 +46,7 @@ else:
     isce_home = os.environ['ISCE_HOME']
     application_path = isce_home + '/applications'
     bin_path = isce_home + '/bin'
-    sys.path.append(application_path)
-    sys.path.append(bin_path)
+    os.environ['PATH'] = f"{os.environ.get('PATH','')}{os.pathsep}{application_path}{os.pathsep}{bin_path}"
 
 # ---------------------MintPy Configuration---------------------------
 # Configuration followed the MintPy post-installation setip 

@@ -17,3 +17,5 @@ dependencies:
         - rasterio
         - importlib-metadata
         - sentineleof
+        - contextily
+        - dem-stitcher

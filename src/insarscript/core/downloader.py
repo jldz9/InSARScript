@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 import getpass
 import requests
-import subprocess
 import time
 from collections import defaultdict
 from pathlib import Path
-
 
 import asf_search as asf
 import contextily as ctx
@@ -19,7 +18,7 @@ from eof.download import download_eofs
 from pyproj import Transformer
 from shapely.geometry import box, shape
 from shapely.ops import transform
-# pyright: reportAttributeAccessIssue=false
+
 class ASFDownloader: 
     """Simplify searching and downloading satellite data using ASF Search API."""
 
@@ -133,7 +132,7 @@ Check documentation for how to setup .netrc file.\n""")
                     print(f"{Fore.RED}no machine name urs.earthdata.nasa.gov found .netrc file. Will prompt login.\n")
                     return False
                 
-    def search(self):
+    def search(self) -> dict:
         """
         Search for data using the ASF Search API with the provided parameters.
         Returns a list of search results.
@@ -142,31 +141,30 @@ Check documentation for how to setup .netrc file.\n""")
         search_opts = {k: v for k, v in self.kwargs.items() if v is not None}
         self.results = asf.search(**search_opts)
         if not self.results:
-            print(f"{Fore.YELLOW}No results found for the given search parameters.")
-            return
+            raise ValueError(f'{Fore.RED}Search does not return any result, please check input parameters or Internet connection')
         else:
-            print(f"{Fore.GREEN}Search completed successfully. A total of {len(self.results)} results found. Use .download() to download the results.\n")
+            print(f"{Fore.GREEN} A total of {len(self.results)} results found. \n")
         grouped = defaultdict(list)
         for result in self.results:
             key = (result.properties['pathNumber'], result.properties['frameNumber'])
             grouped[key].append(result)
-        self.results = grouped
-
-        if len(grouped) == 0:
-            raise ValueError(f'{Fore.RED}The search does not return any result, check input parameters or Internet connection')
         
+        self.download_dir = self.output_dir.joinpath('data')
+        self.download_dir.mkdir(exist_ok=True, parents=True)
+        self.results = grouped
         if len(grouped) > 1: 
-            print(f"{Fore.YELLOW}The AOI crosses multiple stacks, you can use .footprint() to see footprints and .pick(path, frame) to specific the stack of scence you would like to download. If .download() will try to create subfolders under {self.output_dir} for each stack")
-            self.download_dir = self.output_dir.joinpath('data')
-            self.download_dir.mkdir(exist_ok=True, parents=True)
-        return self.results
+            print(f"{Fore.YELLOW}The AOI crosses multiple stacks, you can use .footprint() to check footprints and .pick(path, frame) to specific the stack of scence you would like to download. If use .download() directly will create subfolders under {self.output_dir} for each stack")
+        
+        return grouped
+           
+        
     
     def footprint(self):
         """
         Print the search result footprint and AOI use matplotlib
         """
         if not hasattr(self, 'results'):
-            raise ValueError(f"{Fore.RED}No search results found. Please run search() first.")
+            raise ValueError(f"{Fore.RED}Please run .search() first.")
         transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
         N = len(self.results)
         cmap = plt.cm.get_cmap('hsv', N+1)
@@ -201,7 +199,7 @@ Check documentation for how to setup .netrc file.\n""")
         ax.set_axis_off()
         plt.show()
         
-    def pick(self, path: int | list[int], frame: int | list[int]):
+    def pick(self, path: int | list[int], frame: int | list[int]) -> dict:
         """
         Give a path and frame to choose specific stack of scenes
         """
@@ -223,6 +221,7 @@ Check documentation for how to setup .netrc file.\n""")
             return self.results
         else: 
             raise ValueError(f"path and frame needs to be under same type, either both int or both list of int")
+    
     def dem(self):
         """Download DEM for co-registration uses"""
         for key, results in self.results.items():
@@ -241,7 +240,8 @@ Check documentation for how to setup .netrc file.\n""")
             with rio.open(download_path/f'dem_p{key[0]}_f{key[1]}.tif', 'w', **p) as ds:
                     ds.write(X,1)
                     ds.update_tags(AREA_OR_POINT='Point')
-        return
+        return X, p
+    
     def download(self):
         """
         Download the search results to the specified output directory.
@@ -344,8 +344,6 @@ class S1_SLC(ASFDownloader):
                          end=self.end, 
                          output_dir=output_dir,
                          maxResults=self.maxResults)
-    def search(self):
-        super().search()
 
     def download(self, force_asf: bool = False):
         super().download()

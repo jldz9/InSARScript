@@ -3,14 +3,15 @@
 
 import os
 import sys
-import subprocess
 import logging
-logging.basicConfig(level=logging.WARNING)
 from pathlib import Path
 
-from colorama import just_fix_windows_console, init
+from colorama import init
 init(autoreset=True)
 from colorama import Fore, Style, Back
+
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 
 # For Sentinal-1 InSAR processing, ISCE2 and MintPy are used by default.

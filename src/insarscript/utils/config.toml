@@ -13,9 +13,12 @@ BUFFER_SIZE = 10 # meter
 DEBUG = false
 BAND_MODE = "BGR"
 
-[PREPROCESS.RESAMPLE]
-ENABLE = false
-RESOLUTION = 0.1 # meter
+[PREPROCESS.SELECT_PAIRS]
+DT_TARGETS = [6, 12, 24, 36, 48, 72, 96]  ## The prefered temporal spacings to make interfergrams
+DT_TOL = 3  ## The tolerance in days
+PB_MAX = 150 ## The maximum perpendicular baseline [m]
+MIN_DEGREE = 2 ## Each acquisition must have greater than $MIN_DEGREE links 
+MIN_COHERENCE = 0.25 ## Drop pairs with mean coherence smaller than $MIN_COHERENCE
 
 [PREPROCESS.TRANSFORM]
 RANDOM_CROP_HEIGHT = 512

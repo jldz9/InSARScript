@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import json
+import time
 from dataclasses import dataclass, field
 
+from asf_search.exceptions import ASFSearchError
 from asf_search import ASFProduct
 from collections import defaultdict
 from colorama import Fore, Style
@@ -35,7 +37,16 @@ def select_pairs(search_results: list[ASFProduct],
     for ref in prods:
         rid = ref.properties['sceneName']
         print(f'looking for paris for {rid}')
-        for sec in ref.stack():
+        for attempt in range(1, 11):
+            try:
+                stacks = ref.stack()
+                break
+            except ASFSearchError as e: 
+                if attempt == 10:
+                    raise 
+                time.sleep(0.5 * 2**(attempt-1))
+                
+        for sec in stacks:
             sid = sec.properties['sceneName']
             if sid not in ids or sid == rid:
                 continue

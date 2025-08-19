@@ -186,7 +186,7 @@ Check documentation for how to setup .netrc file.\n""")
             label_x = maxx - 0.01 * (maxx - minx)
             label_y = maxy - 0.01 * (maxy - miny)
             plt.text(label_x, label_y,
-             f"Path: {key[0]}\nFrame: {key[1]}",
+             f"Path: {key[0]}\nFrame: {key[1]}\nStack: {len(results)}",
              horizontalalignment='right', verticalalignment='top',
              fontsize=12, color=cmap(i), fontweight='bold',
              bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle='round,pad=0.3'))

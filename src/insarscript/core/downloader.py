@@ -99,16 +99,16 @@ Check documentation for how to setup .netrc file.\n""")
         self._has_asf_netrc = self._check_netrc(keyword='machine urs.earthdata.nasa.gov')
         if not self._has_asf_netrc:
             while True:
-                self._username = input("Enter your ASF username: ")
-                self._password = getpass.getpass("Enter your ASF password: ")
+                _username = input("Enter your ASF username: ")
+                _password = getpass.getpass("Enter your ASF password: ")
                 try:
-                    self._session = asf.ASFSession().auth_with_creds(self._username, self._password)
+                    self._session = asf.ASFSession().auth_with_creds(_username, _password)
                 except ASFAuthenticationError:
                     print(f"{Fore.RED}Authentication failed. Please check your credentials and try again.\n")
                     continue
                 print(f"{Fore.GREEN}Authentication successful.\n")
                 netrc_path = Path.home() / ".netrc"
-                asf_entry = f"\nmachine urs.earthdata.nasa.gov\n    login {self._username}\n    password {self._password}\n"
+                asf_entry = f"\nmachine urs.earthdata.nasa.gov\n    login {_username}\n    password {_password}\n"
                 with open(netrc_path, 'a') as f:
                     f.write(asf_entry)
                 print(f"{Fore.GREEN}Credentials saved to {netrc_path}. You can now use the downloader without entering credentials again.\n")
@@ -129,7 +129,7 @@ Check documentation for how to setup .netrc file.\n""")
                 if keyword in content:
                     return True
                 else:
-                    print(f"{Fore.RED}no machine name urs.earthdata.nasa.gov found .netrc file. Will prompt login.\n")
+                    print(f"{Fore.RED}no machine name {keyword} found .netrc file. Will prompt login.\n")
                     return False
                 
     def search(self) -> dict:

@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import json
 import time
+import getpass
 from dataclasses import dataclass, field
 
 from asf_search.exceptions import ASFSearchError
@@ -10,6 +11,7 @@ from collections import defaultdict
 from colorama import Fore, Style
 from dateutil.parser import isoparse
 from hyp3_sdk import HyP3, Batch
+from hyp3_sdk.exceptions import AuthenticationError
 from pathlib import Path
 
 def select_pairs(search_results: list[ASFProduct], 
@@ -114,7 +116,27 @@ class Hyp3InSAR:
         ):
 
         batch=Batch()
-        self.client = HyP3()
+        self._has_asf_netrc = self._check_netrc(keyword='machine urs.earthdata.nasa.gov')
+        if not self._has_asf_netrc:
+            while True:
+                _username = input("Enter your ASF username: ")
+                _password = getpass.getpass("Enter your ASF password: ")
+                try:
+                    self.client = HyP3(username=_username, password=_password)
+                except AuthenticationError:
+                    print(f"{Fore.RED}Authentication failed. Please check your credentials and try again.\n")
+                    continue
+                print(f"{Fore.GREEN}Authentication successful.\n")
+                netrc_path = Path.home() / ".netrc"
+                hyp3_entry = f"\nmachine urs.earthdata.nasa.gov\n    login {self._username}\n    password {self._password}\n"
+                with open(netrc_path, 'a') as f:
+                    f.write(hyp3_entry)
+                print(f"{Fore.GREEN}Credentials saved to {netrc_path}.\n")
+                break
+        else:
+            self.client = HyP3()
+            print(f"{Fore.GREEN}Credential from .netrc was found for authentication.\n")
+
         for ref_id, sec_id in pairs:
             job = self.client.submit_insar_job(
                 granule1=ref_id,
@@ -171,4 +193,19 @@ class Hyp3InSAR:
         data = json.loads(Path(path).read_text())
         print('Batch file loaded')
         return cls(out_dir=data["out_dir"], name_prefix=data["name_prefix"], job_ids=data["job_ids"])
+    
+    def _check_netrc(self, keyword: str) -> bool:
+        """Check if .netrc file exists in the home directory."""
+        netrc_path = Path.home() / '.netrc'
+        if not netrc_path.is_file():            
+            print(f"{Fore.RED}No .netrc file found in your home directory. Will prompt login.\n")
+            return False
+        else: 
+            with netrc_path.open() as f:
+                content = f.read()
+                if keyword in content:
+                    return True
+                else:
+                    print(f"{Fore.RED}no machine name {keyword} found .netrc file. Will prompt login.\n")
+                    return False
 

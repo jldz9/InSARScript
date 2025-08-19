@@ -12,6 +12,7 @@ from colorama import Fore, Style, Back
 
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
+from insarscript._version import __version__
 
 
 # For Sentinal-1 InSAR processing, ISCE2 and MintPy are used by default.

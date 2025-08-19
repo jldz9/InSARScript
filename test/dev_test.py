@@ -8,17 +8,15 @@ from insarscript.core import S1_SLC, select_pairs, Hyp3InSAR
 
 
 a = S1_SLC(
-    platform=['Sentinel-1A', 'Sentinel-1B'],
-    AscendingflightDirection=True,
-    maxResults=5,
-    bbox = [-113.18, 37.77, -112.44, 38.10],
+    platform=['Sentinel-1A', 'Sentinel-1B', 'Sentinel-1C'],
+    AscendingflightDirection=False,
+    bbox = [126.451, 45.272, 127.747, 45.541],
     start='2017-01-01',
-    end='2019-12-30',
-    download_orbit=True,
     output_dir = '~/S1'
 )
-#results = a.search()
-#pairs = select_pairs(results[(20,123)])
+results = a.search()
+
+pairs = select_pairs(results[(105,441)])
 
 runner2 = Hyp3InSAR.load('/home/jldz9/S1/batch.json')
 

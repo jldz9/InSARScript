@@ -95,8 +95,8 @@ def select_pairs(search_results: list[ASFProduct],
 
 @dataclass
 class Hyp3InSAR:
-    # Login, should have Earthdata urs.earthdata.nasa.gov in .netrc, will ask for login if not exist
-    client = HyP3()
+    # User should have Earthdata urs.earthdata.nasa.gov in .netrc
+    
     job_ids: list[str] = field(default_factory=list)
     out_dir:str ="products_hyp3",
     name_prefix:str ="ifg",
@@ -114,7 +114,7 @@ class Hyp3InSAR:
         ):
 
         batch=Batch()
-
+        self.client = HyP3()
         for ref_id, sec_id in pairs:
             job = self.client.submit_insar_job(
                 granule1=ref_id,

@@ -19,3 +19,5 @@ dependencies:
         - sentineleof
         - contextily
         - dem-stitcher
+        - hyp3-sdk
+        - python-box

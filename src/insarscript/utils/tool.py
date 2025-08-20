@@ -6,7 +6,7 @@ from pprint import pformat
 from types import SimpleNamespace
 
 import tomllib, tomli_w
-from box import Box
+from box import Box as Config
 
 def get_config(config_path=None):
 
@@ -18,7 +18,7 @@ def get_config(config_path=None):
         try:
             with open(config_path, 'rb') as f:
                 toml = tomllib.load(f)
-                cfg = Box(toml)
+                cfg = Config(toml)
                 return cfg
         except Exception as e:
                 raise ValueError(f"Error loading config file with error {e}, is this a valid config file in TOML format?")

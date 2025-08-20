@@ -13,7 +13,6 @@ dependencies:
         - asf_search
         - colorama
         - tomli_w
-        - planetary-computer
         - rasterio
         - importlib-metadata
         - sentineleof
@@ -21,3 +20,5 @@ dependencies:
         - dem-stitcher
         - hyp3-sdk
         - python-box
+        - openmeteo-requests
+        - requests-cache retry-requests

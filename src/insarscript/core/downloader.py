@@ -20,7 +20,9 @@ from shapely.geometry import box, shape
 from shapely.ops import transform
 
 class ASFDownloader: 
-    """Simplify searching and downloading satellite data using ASF Search API."""
+    """
+    Simplify searching and downloading satellite data using ASF Search API.
+    """
 
     def __init__(self,
             dataset: str | list[str] |None = None,
@@ -157,8 +159,6 @@ Check documentation for how to setup .netrc file.\n""")
         
         return grouped
            
-        
-    
     def footprint(self):
         """
         Print the search result footprint and AOI use matplotlib
@@ -250,8 +250,6 @@ Check documentation for how to setup .netrc file.\n""")
         failure_count = 0
         if not hasattr(self, 'results'):
             raise ValueError(f"{Fore.RED}No search results found. Please run search() first.")
-        
-     
         print(f"Downloading results to {self.output_dir}...")
         for key, results in self.results.items():
             download_path = self.download_dir.joinpath(f'p{key[0]}_f{key[1]}')
@@ -283,9 +281,10 @@ Check documentation for how to setup .netrc file.\n""")
                     failure_count += 1
                 finally:
                     print("")
-        
+
 class S1_SLC(ASFDownloader):
-    """A class to search and download Sentinel-1 data using ASF Search API."""
+    """
+    A class to search and download Sentinel-1 data using ASF Search API."""
     platform_dft = [asf.PLATFORM.SENTINEL1A, asf.PLATFORM.SENTINEL1B, asf.PLATFORM.SENTINEL1C]
     instrument_dft = asf.INSTRUMENT.C_SAR
     beamMode_dft = asf.BEAMMODE.IW

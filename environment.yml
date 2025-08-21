@@ -21,4 +21,5 @@ dependencies:
         - hyp3-sdk
         - python-box
         - openmeteo-requests
-        - requests-cache retry-requests
+        - requests-cache
+        - retry-requests

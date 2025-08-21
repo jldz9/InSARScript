@@ -25,3 +25,16 @@ def get_config(config_path=None):
     else:
         raise FileNotFoundError(f"Config file not found under {config_path}")
 
+def gw_dis_quick_look(
+    bbox : list[float] = [45.36, 126.48, 45.54, 126.65],
+    processor: str = "hyp3",
+    year: int | list[int]= [2019,2020]
+):
+     """
+     Quick look for ground displacement due to ground water extration.
+     This method will generate a few quick look interferograms:
+     4 pairs of year-wide interferograms that cover temporal baseline of ~360 days 
+        e.g.: June 2024 - June 2025
+     1 pair of season interferogram 
+     """
+     print("Todo")

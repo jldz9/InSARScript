@@ -83,6 +83,10 @@ class ASFDownloader:
             setattr(self, k, v)
 
         # Ensure output path is absolute path
+        if flightDirection == asf.FLIGHT_DIRECTION.ASCENDING:
+            flight_dir = "asc"
+        elif flightDirection == asf.FLIGHT_DIRECTION.DESCENDING:
+            flight_dir = "des"
         output_dir = Path(output_dir).expanduser().resolve() if output_dir else None # type: ignore
         if output_dir is None:
             self.output_dir = Path.cwd() / "tmp"
@@ -90,6 +94,7 @@ class ASFDownloader:
             self.output_dir = Path.cwd() / self.output_dir
         else: 
             self.output_dir = Path(output_dir).expanduser().resolve()
+        self.output_dir = self.output_dir / flight_dir
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         print(f"Download directory set to: {self.output_dir}")
         
@@ -141,18 +146,23 @@ Check documentation for how to setup .netrc file.\n""")
         """
         print(f"Searching for SLCs....")
         search_opts = {k: v for k, v in self.kwargs.items() if v is not None}
-        self.results = asf.search(**search_opts)
+        for attempt in range(1, 11):
+            try:
+                self.results = asf.search(**search_opts)
+                break
+            except Exception as e:
+                print(f"{Fore.RED}Search failed: {e}")
+                if attempt == 10:
+                    raise
+                time.sleep(2 ** attempt)    
         if not self.results:
             raise ValueError(f'{Fore.RED}Search does not return any result, please check input parameters or Internet connection')
         else:
-            print(f"{Fore.GREEN} A total of {len(self.results)} results found. \n")
+            print(f"{Fore.GREEN} -- A total of {len(self.results)} results found. \n")
         grouped = defaultdict(list)
         for result in self.results:
             key = (result.properties['pathNumber'], result.properties['frameNumber'])
             grouped[key].append(result)
-        
-        self.download_dir = self.output_dir.joinpath('data')
-        self.download_dir.mkdir(exist_ok=True, parents=True)
         self.results = grouped
         if len(grouped) > 1: 
             print(f"{Fore.YELLOW}The AOI crosses multiple stacks, you can use .footprint() to check footprints and .pick(path, frame) to specific the stack of scence you would like to download. If use .download() directly will create subfolders under {self.output_dir} for each stack")
@@ -225,7 +235,7 @@ Check documentation for how to setup .netrc file.\n""")
     def dem(self):
         """Download DEM for co-registration uses"""
         for key, results in self.results.items():
-            download_path = self.download_dir.joinpath(f'p{key[0]}_f{key[1]}')
+            download_path = self.output_dir.joinpath(f'dem/p{key[0]}_f{key[1]}')
             download_path.mkdir(exist_ok=True, parents=True)
             geom = shape(results[0].geometry)
             west_lon, south_lat, east_lon, north_lat =  geom.bounds
@@ -246,6 +256,8 @@ Check documentation for how to setup .netrc file.\n""")
         """
         Download the search results to the specified output directory.
         """
+        self.download_dir = self.output_dir.joinpath('data')
+        self.download_dir.mkdir(exist_ok=True, parents=True)
         success_count = 0
         failure_count = 0
         if not hasattr(self, 'results'):
@@ -313,10 +325,10 @@ class S1_SLC(ASFDownloader):
         """
         if platform is None:
            self.platform = self.platform_dft
-        if isinstance(platform, str):
+        elif isinstance(platform, str):
             if platform in ['Sentinel-1A', 'Sentinel-1B', 'Sentinel-1C']:
                 self.platform = platform
-        if isinstance(platform, list):
+        elif isinstance(platform, list):
             if all( x in ['Sentinel-1A', 'Sentinel-1B', 'Sentinel-1C'] for x in platform): 
                 self.platform = platform
         else:

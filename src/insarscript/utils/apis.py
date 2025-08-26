@@ -1,3 +1,4 @@
+'''
 import openmeteo_requests
 import pandas as pd
 import requests_cache
@@ -63,4 +64,4 @@ def get_snow_data(
     chart = pd.concat(responses, ignore_index=True)
     return chart
         
-
+'''

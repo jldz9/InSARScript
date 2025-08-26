@@ -3,7 +3,6 @@
 import json
 import time
 import getpass
-from dataclasses import dataclass, field
 
 from asf_search.exceptions import ASFSearchError
 from asf_search import ASFProduct
@@ -15,12 +14,13 @@ from hyp3_sdk.exceptions import AuthenticationError
 from pathlib import Path
 
 def select_pairs(search_results: list[ASFProduct], 
-                 dt_targets:tuple[int] =(6, 12, 24, 36, 48, 72, 96) ,
-                 dt_tol:int=3,
-                 dt_max:int=120,
-                 pb_max:int=150,
-
-                 min_degree:int=3):
+                dt_targets:tuple[int] =(6, 12, 24, 36, 48, 72, 96) ,
+                dt_tol:int=3,
+                dt_max:int=120,
+                pb_max:int=150,
+                min_degree:int=3,
+                force_connect: bool = True,
+                connect_outside_results: bool = False):
     
     """
     Select interfergrom pairs based on temporalBaseline and perpendicularBaseline'
@@ -30,6 +30,8 @@ def select_pairs(search_results: list[ASFProduct],
     :param dt_max: The maximum temporal baseline [days]
     :param pb_max: The maximum perpendicular baseline [m]
     :param min_degree: The minimum number of connections
+    :param force_connect: if connections are less than min_degree with given dt_targets, will force to use pb_max to search for additional pairs. Be aware this could leads to low quality pairs.
+    :param connect_outside_results: if True, will connect pairs even if they are not in the provided search results and add into pairs.
     """
     prods = sorted(search_results, key=lambda p: p.properties['startTime'])
     ids = {p.properties['sceneName'] for p in prods}
@@ -68,52 +70,73 @@ def select_pairs(search_results: list[ASFProduct],
     pairs = {e for e, (dt, bp) in B.items() if pass_rules(dt, bp)}
 
     # 3) Enforce connectivity: degree ≥ MIN_DEGREE (add nearest-time links under PB cap)
+    if force_connect is True:
+        neighbors = defaultdict(set)
 
-    neighbors = defaultdict(set)
+        for a, b in pairs:
+            neighbors[a].add(b)
+            neighbors[b].add(a)
 
-    for a, b in pairs:
-        neighbors[a].add(b)
-        neighbors[b].add(a)
-
-    names = [p.properties['sceneName'] for p in prods]
-    for n in names:
-        if len(neighbors[n]) >= min_degree:
-            continue
-        cands = sorted((m for m in names if m != n), key=lambda m: abs((isoparse(id_time[m]) - isoparse(id_time[n])).days))
-        for m in cands:
-            a, b = sorted((n, m), key=lambda k: id_time[k])
-            dtbp = B.get((a, b))
-            if not dtbp:
-                continue
-            _, bp = dtbp
-            if bp > pb_max:
-                continue
-            if (a, b) not in pairs:
-                pairs.add((a, b))
-                neighbors[a].add(b); neighbors[b].add(a)
+        names = [p.properties['sceneName'] for p in prods]
+        for n in names:
             if len(neighbors[n]) >= min_degree:
-                break
+                continue
+            cands = sorted((m for m in names if m != n), key=lambda m: abs((isoparse(id_time[m]) - isoparse(id_time[n])).days))
+            for m in cands:
+                a, b = sorted((n, m), key=lambda k: id_time[k])
+                dtbp = B.get((a, b))
+                if not dtbp:
+                    continue
+                _, bp = dtbp
+                if bp > pb_max:
+                    continue
+                if (a, b) not in pairs:
+                    pairs.add((a, b))
+                    neighbors[a].add(b); neighbors[b].add(a)
+                if len(neighbors[n]) >= min_degree:
+                    break
+    
     return sorted(pairs)
 
-@dataclass
+
 class Hyp3InSAR:
     # User should have Earthdata urs.earthdata.nasa.gov in .netrc
-    
-    job_ids: list[str] = field(default_factory=list)
-    out_dir:str ="products_hyp3",
-    name_prefix:str ="ifg",
 
-    def submit(self,
-        pairs,
-        include_look_vectors:bool = False, 
-        include_inc_map:bool =False,
-        looks:str='20x4',
-        include_dem :bool= False,
-        include_wrapped_pahse :bool= False,
-        apply_water_mask :bool= True,
-        include_displacement_maps:bool=True,
-        phase_filter_parameter :float= 0.6
-        ):
+    def __init__(self,
+                pairs: list[str, str] | tuple[str, str] | list[tuple[str, str]],
+                include_look_vectors:bool = False, 
+                include_inc_map:bool =False,
+                looks:str='20x4',
+                include_dem :bool= False,
+                include_wrapped_pahse :bool= False,
+                apply_water_mask :bool= True,
+                include_displacement_maps:bool=True,
+                phase_filter_parameter :float= 0.6,
+                out_dir:str ="products_hyp3",
+                job_name_prefix:str ="ifg"
+                ):
+        """
+
+        :param pairs: A single pair of (reference, secondary) granule ids or a list of tuples contains (reference, secondary) granule ids.
+        """
+        self.job_ids: list[str] = []
+        self.out_dir: str = out_dir
+        self.include_look_vectors: bool = include_look_vectors
+        self.include_inc_map: bool = include_inc_map
+        self.looks: str = looks
+        self.include_dem: bool = include_dem
+        self.include_wrapped_phase: bool = include_wrapped_pahse
+        self.apply_water_mask: bool = apply_water_mask
+        self.include_displacement_maps: bool = include_displacement_maps
+        self.phase_filter_parameter: float = phase_filter_parameter
+        self.pairs = pairs
+        self.job_name_prefix = job_name_prefix
+
+    def submit(self):
+        """
+        Submit InSAR job pairs to HyP3.
+
+        """
 
         batch=Batch()
         self._has_asf_netrc = self._check_netrc(keyword='machine urs.earthdata.nasa.gov')
@@ -137,19 +160,24 @@ class Hyp3InSAR:
             self.client = HyP3()
             print(f"{Fore.GREEN}Credential from .netrc was found for authentication.\n")
 
-        for ref_id, sec_id in pairs:
+        if isinstance(self.pairs, (list, tuple)) and all(isinstance(p, str) for p in self.pairs):
+            self.pairs = [(self.pairs[0], self.pairs[1])]
+        elif isinstance(self.pairs, (list, tuple)) and all(isinstance(p, tuple) for p in self.pairs):
+            self.pairs = self.pairs
+
+        for (ref_id, sec_id) in self.pairs:
             job = self.client.submit_insar_job(
                 granule1=ref_id,
                 granule2=sec_id,
-                name= f'{self.name_prefix}_{ref_id.split('_')[5]}_{sec_id.split('_')[5]}',
-                include_look_vectors=include_look_vectors,
-                include_inc_map = include_inc_map,
-                looks =looks,
-                include_dem=include_dem,
-                include_wrapped_phase=include_wrapped_pahse,
-                apply_water_mask=apply_water_mask,
-                include_displacement_maps=include_displacement_maps,
-                phase_filter_parameter=phase_filter_parameter
+                name= f'{self.job_name_prefix}_{ref_id.split('_')[5]}_{sec_id.split('_')[5]}',
+                include_look_vectors=self.include_look_vectors,
+                include_inc_map = self.include_inc_map,
+                looks = self.looks,
+                include_dem=self.include_dem,
+                include_wrapped_phase=self.include_wrapped_phase,
+                apply_water_mask=self.apply_water_mask,
+                include_displacement_maps=self.include_displacement_maps,
+                phase_filter_parameter=self.phase_filter_parameter
             )
             batch += job
         self.job_ids.extend([j.job_id for j in batch.jobs])
@@ -172,10 +200,14 @@ class Hyp3InSAR:
                 b += job
         for job in b.jobs:
             print(f'{Style.BRIGHT}Name:{Style.RESET_ALL}{job.name} {Style.BRIGHT}Job ID:{Style.RESET_ALL}{job.job_id} {Style.BRIGHT}Job type:{Style.RESET_ALL}{job.job_type} {Style.BRIGHT}Status:{Style.RESET_ALL}{job.status_code}')
-        return b
+        self.batch = b
+        return self.batch
          
     def download(self, batch: Batch | None = None, *, subdir: str | None = None) -> Path:
-        b = self.refresh(batch)
+        if batch is None:
+            b = self.refresh()
+        else:
+            b = self.refresh(batch)
         out = Path(self.out_dir if subdir is None else Path(self.out_dir, subdir))
         out.mkdir(parents=True, exist_ok=True)
         b.filter_jobs(succeeded=True).download_files(location=str(out))
@@ -183,7 +215,7 @@ class Hyp3InSAR:
 
     def save(self, path: str = "hyp3_jobs.json") -> str:
         """ ---- persistence (resume later) ----"""
-        payload = {"job_ids": self.job_ids, "out_dir": self.out_dir, "name_prefix": self.name_prefix}
+        payload = {"job_ids": self.job_ids, "out_dir": self.out_dir, "job_name": [j.name for j in self.batch.jobs]}
         Path(path).write_text(json.dumps(payload, indent=2))
         print(f'Batch file saved under {path}, you may resume using Hyp3InSAR.load(path: "file path")')
         return path
@@ -208,4 +240,5 @@ class Hyp3InSAR:
                 else:
                     print(f"{Fore.RED}no machine name {keyword} found .netrc file. Will prompt login.\n")
                     return False
+        
 

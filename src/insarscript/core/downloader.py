@@ -4,6 +4,7 @@
 import getpass
 import requests
 import time
+import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -96,7 +97,7 @@ class ASFDownloader:
             self.output_dir = Path(output_dir).expanduser().resolve()
         self.output_dir = self.output_dir / flight_dir
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
-        print(f"Download directory set to: {self.output_dir}")
+        print(f"Prcess directory is set to: {self.output_dir}")
         
 
         print(f"""
@@ -122,7 +123,6 @@ Check documentation for how to setup .netrc file.\n""")
                 break
         else:
             self._session = asf.ASFSession()
-            print(f"{Fore.GREEN}Credential from .netrc was found for authentication.\n")
        
     def _check_netrc(self, keyword: str) -> bool:
         """Check if .netrc file exists in the home directory."""
@@ -165,10 +165,17 @@ Check documentation for how to setup .netrc file.\n""")
             grouped[key].append(result)
         self.results = grouped
         if len(grouped) > 1: 
-            print(f"{Fore.YELLOW}The AOI crosses multiple stacks, you can use .footprint() to check footprints and .pick(path, frame) to specific the stack of scence you would like to download. If use .download() directly will create subfolders under {self.output_dir} for each stack")
+            print(f"{Fore.YELLOW}The AOI crosses {len(grouped)} stacks, you can use .overview or .footprint() to check footprints and .pick(path, frame) to specific the stack of scence you would like to download. If use .download() directly will create subfolders under {self.output_dir} for each stack")
         
         return grouped
-           
+    @property
+    def overview(self):
+        if not hasattr(self, 'results'):
+            raise ValueError(f"{Fore.RED}Please run .search() first.")
+        ow = {key:len(item) for key, item in self.results.items()}
+        for key, item in ow.items():
+            print(f"Sence: Path {key[0]} Frame {key[1]}, Amount: {item}")
+
     def footprint(self):
         """
         Print the search result footprint and AOI use matplotlib

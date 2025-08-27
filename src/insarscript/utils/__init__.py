@@ -1,2 +1,2 @@
-from .tool import get_config, quick_look_dis
+from .tool import *
 #from .apis import get_snow_data

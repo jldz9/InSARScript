@@ -13,14 +13,13 @@ import pandas as pd
 import numpy as np
 import time
 from dateutil.parser import isoparse
-
+'''
 a = S1_SLC(
     platform=['Sentinel-1A', 'Sentinel-1B'],
     AscendingflightDirection=False,
-    bbox = [125.481, 44.312, 125.531, 44.361],
+    bbox = [125.737, 41.179, 127.800, 44.106],
     start='2017-01-01',
     output_dir = '~/S1',
-    maxResults=5
 )
 results = a.search()
 
@@ -28,11 +27,18 @@ a.dem()
 
 a.download()
 '''
+'''
 quick_look_dis(
-    bbox=[125.481, 44.312, 125.531, 44.416],
-    year=[2020, 2021],
-    flight_direction="des",
+    bbox=[125.737, 41.179, 127.800, 44.106],
+    year=[2020],
+    flight_direction="asc",
     processor="hyp3",
-    output_dir="~/S1/quick_look"
+    output_dir="~/JiLin/quick_look"
 )
 '''
+import json
+from pathlib import Path
+from insarscript.utils import  hyp3_batch_check
+batch_files_dir = '~/JiLin/quick_look'
+
+hyp3_batch_check(batch_files_dir, download=True)

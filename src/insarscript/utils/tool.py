@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import time
+import json
 from pathlib import Path
 from pprint import pformat
 from dateutil.parser import isoparse
@@ -66,8 +67,7 @@ def quick_look_dis(
 
     for y in year:
         print(f"{Fore.GREEN}Processing year: {y}")
-        process_path = Path(output_dir+f"/{y}/{flight_direction.lower()}")
-        process_path.mkdir(parents=True, exist_ok=True)
+        process_path = output_dir.joinpath(f"{y}")
         slc_early = S1_SLC(
             AscendingflightDirection=AscendingflightDirection,
             bbox=bbox,
@@ -89,16 +89,17 @@ def quick_look_dis(
 
      
         for key, r in slc.items():
-            slc_path = process_path/f"SLC_p{key[0]}f{key[1]}"
-            slc_path.mkdir(parents=True, exist_ok=True)
+            
             if len(r) <= 2:
                 print(f"{Fore.YELLOW}Not enough ascending SLCs found for Path{key[0]} Frame{key[1]}, skip.")
                 continue
+            slc_path = process_path/f"quicklook_p{key[0]}f{key[1]}"
+            slc_path.mkdir(parents=True, exist_ok=True)
             pairs = select_pairs(
                 r,
                 dt_targets=(12,24,60,84,96,108,360),
                 dt_tol=3,
-                dt_max=400,
+                dt_max=400, 
                 pb_max=150,
                 min_degree=1,
                 force_connect=False
@@ -168,11 +169,22 @@ def quick_look_dis(
             elif processor == "ISCE":
                 print("ISCE processor is not yet implemented, please use Hyp3.")
 
-def batch_download(
-        batch_files_dir: str
+def hyp3_batch_check(
+        batch_files_dir: str,
+        download : bool = False
 ):
     """
     Download a batch of hyp3 files from a directory.
+
     """
-    #TODO recursive search all .json files in the directory and batch load them to download and monitor, remove already downloaded and  mark download failed and unready jobs
-    pass
+    batch_path = Path(batch_files_dir).expanduser()
+    json_files = batch_path.rglob('*.json')
+
+    for file in json_files:
+        job = Hyp3InSAR.load(file)
+        b = json.loads(file.read_text())
+        print(f'Overview for job {Path(b['out_dir'])}')
+        if download is False:
+            job.refresh()
+        if download is True:
+            job.download()

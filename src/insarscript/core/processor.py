@@ -103,7 +103,7 @@ class Hyp3InSAR:
     # User should have Earthdata urs.earthdata.nasa.gov in .netrc
 
     def __init__(self,
-                pairs: list[str, str] | tuple[str, str] | list[tuple[str, str]],
+                pairs: list[str, str] | tuple[str, str] | list[tuple[str, str]] | None = None, 
                 include_look_vectors:bool = False, 
                 include_inc_map:bool =False,
                 looks:str='20x4',
@@ -113,13 +113,14 @@ class Hyp3InSAR:
                 include_displacement_maps:bool=True,
                 phase_filter_parameter :float= 0.6,
                 out_dir:str ="products_hyp3",
-                job_name_prefix:str ="ifg"
+                job_name_prefix:str ="ifg",
+                job_ids:list[str] = []
                 ):
         """
 
         :param pairs: A single pair of (reference, secondary) granule ids or a list of tuples contains (reference, secondary) granule ids.
         """
-        self.job_ids: list[str] = []
+        self.job_ids = job_ids
         self.out_dir: str = out_dir
         self.include_look_vectors: bool = include_look_vectors
         self.include_inc_map: bool = include_inc_map
@@ -132,13 +133,6 @@ class Hyp3InSAR:
         self.pairs = pairs
         self.job_name_prefix = job_name_prefix
 
-    def submit(self):
-        """
-        Submit InSAR job pairs to HyP3.
-
-        """
-
-        batch=Batch()
         self._has_asf_netrc = self._check_netrc(keyword='machine urs.earthdata.nasa.gov')
         if not self._has_asf_netrc:
             while True:
@@ -158,8 +152,13 @@ class Hyp3InSAR:
                 break
         else:
             self.client = HyP3()
-            print(f"{Fore.GREEN}Credential from .netrc was found for authentication.\n")
 
+    def submit(self):
+        """
+        Submit InSAR job pairs to HyP3.
+
+        """
+        batch=Batch()
         if isinstance(self.pairs, (list, tuple)) and all(isinstance(p, str) for p in self.pairs):
             self.pairs = [(self.pairs[0], self.pairs[1])]
         elif isinstance(self.pairs, (list, tuple)) and all(isinstance(p, tuple) for p in self.pairs):
@@ -203,15 +202,24 @@ class Hyp3InSAR:
         self.batch = b
         return self.batch
          
-    def download(self, batch: Batch | None = None, *, subdir: str | None = None) -> Path:
+    def download(self, batch: Batch | None = None) -> Path:
         if batch is None:
             b = self.refresh()
         else:
             b = self.refresh(batch)
-        out = Path(self.out_dir if subdir is None else Path(self.out_dir, subdir))
+        out = Path(self.out_dir)
         out.mkdir(parents=True, exist_ok=True)
-        b.filter_jobs(succeeded=True).download_files(location=str(out))
-        return out
+        exist = out.rglob("*.zip")
+        exist_name = [p.name for p in exist]
+        succeeded = b.filter_jobs(succeeded=True)
+        for i, job in enumerate(succeeded):
+
+            if all(j['filename'] in exist_name for j in job.files):
+                print(f'{Fore.YELLOW}{job.name} exist under {out}, will skip download')
+                continue
+
+            job.download_files(location=str(out))
+        return
 
     def save(self, path: str = "hyp3_jobs.json") -> str:
         """ ---- persistence (resume later) ----"""
@@ -223,8 +231,7 @@ class Hyp3InSAR:
     @classmethod
     def load(cls, path: str = "hyp3_jobs.json") -> "Hyp3InSAR":
         data = json.loads(Path(path).read_text())
-        print('Batch file loaded')
-        return cls(out_dir=data["out_dir"], name_prefix=data["name_prefix"], job_ids=data["job_ids"])
+        return cls(out_dir=data["out_dir"], job_ids=data["job_ids"])
     
     def _check_netrc(self, keyword: str) -> bool:
         """Check if .netrc file exists in the home directory."""

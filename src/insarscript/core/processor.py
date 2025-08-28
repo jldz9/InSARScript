@@ -20,7 +20,7 @@ def select_pairs(search_results: list[ASFProduct],
                 pb_max:int=150,
                 min_degree:int=3,
                 force_connect: bool = True,
-                connect_outside_results: bool = False):
+                restrict_within_list: bool = True):
     
     """
     Select interfergrom pairs based on temporalBaseline and perpendicularBaseline'
@@ -31,8 +31,10 @@ def select_pairs(search_results: list[ASFProduct],
     :param pb_max: The maximum perpendicular baseline [m]
     :param min_degree: The minimum number of connections
     :param force_connect: if connections are less than min_degree with given dt_targets, will force to use pb_max to search for additional pairs. Be aware this could leads to low quality pairs.
-    :param connect_outside_results: if True, will connect pairs even if they are not in the provided search results and add into pairs.
+    :param restrict_within_list: if True, will connect pairs even if they are not in the provided search results list and add into pairs.
     """
+    if len(search_results) < 2 and restrict_within_list is True:
+        raise ValueError(f'Need at least 2 products to form pairs, got {len(search_results)}, if you want to connect outside the search results, set restrict_within_list=False')
     prods = sorted(search_results, key=lambda p: p.properties['startTime'])
     ids = {p.properties['sceneName'] for p in prods}
     id_time = {p.properties['sceneName']: p.properties['startTime'] for p in prods}
@@ -105,9 +107,9 @@ class Hyp3InSAR:
     def __init__(self,
                 pairs: list[str, str] | tuple[str, str] | list[tuple[str, str]] | None = None, 
                 include_look_vectors:bool = False, 
-                include_inc_map:bool =False,
+                include_inc_map:bool =True,
                 looks:str='20x4',
-                include_dem :bool= False,
+                include_dem :bool= True,
                 include_wrapped_pahse :bool= False,
                 apply_water_mask :bool= True,
                 include_displacement_maps:bool=True,
@@ -229,9 +231,17 @@ class Hyp3InSAR:
         return path
     
     @classmethod
-    def load(cls, path: str = "hyp3_jobs.json") -> "Hyp3InSAR":
+    def load(cls, path: str = "hyp3_jobs.json", save_path : str | None = None) -> "Hyp3InSAR":
         data = json.loads(Path(path).read_text())
-        return cls(out_dir=data["out_dir"], job_ids=data["job_ids"])
+        if save_path is not None:
+            save_path = Path(save_path).expanduser().resolve()
+            
+        elif Path(data['out_dir']).is_absolute():
+            save_path = Path(data['out_dir']).expanduser().resolve()
+        else:
+            raise ValueError(f'Please provide a valid save_path to load the jobs, got {save_path}')
+        save_path.mkdir(parents=True, exist_ok=True)
+        return cls(out_dir=save_path.as_posix(), job_ids=data["job_ids"])
     
     def _check_netrc(self, keyword: str) -> bool:
         """Check if .netrc file exists in the home directory."""

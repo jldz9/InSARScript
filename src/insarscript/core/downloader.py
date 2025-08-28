@@ -169,14 +169,14 @@ Check documentation for how to setup .netrc file.\n""")
         
         return grouped
     @property
-    def overview(self):
+    def count(self):
         if not hasattr(self, 'results'):
             raise ValueError(f"{Fore.RED}Please run .search() first.")
         ow = {key:len(item) for key, item in self.results.items()}
         for key, item in ow.items():
             print(f"Sence: Path {key[0]} Frame {key[1]}, Amount: {item}")
 
-    def footprint(self):
+    def footprint(self, save_path: str | None = None):
         """
         Print the search result footprint and AOI use matplotlib
         """
@@ -214,7 +214,12 @@ Check documentation for how to setup .netrc file.\n""")
         
         ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik)
         ax.set_axis_off()
-        plt.show()
+        if save_path is not None:
+            save_path = Path(save_path).expanduser().resolve()
+            plt.savefig(save_path.as_posix(), dpi=300, bbox_inches='tight')
+            print(f"Footprint figure saved to {save_path}")
+        else:
+            plt.show()
         
     def pick(self, path: int | list[int], frame: int | list[int]) -> dict:
         """
@@ -239,10 +244,14 @@ Check documentation for how to setup .netrc file.\n""")
         else: 
             raise ValueError(f"path and frame needs to be under same type, either both int or both list of int")
     
-    def dem(self):
+    def dem(self, save_path: str | None = None):
         """Download DEM for co-registration uses"""
+        if save_path is not None:
+            output_dir = Path(save_path).expanduser().resolve()
+        else: 
+            output_dir = self.output_dir
         for key, results in self.results.items():
-            download_path = self.output_dir.joinpath(f'dem/p{key[0]}_f{key[1]}')
+            download_path = output_dir.joinpath(f'dem/p{key[0]}_f{key[1]}')
             download_path.mkdir(exist_ok=True, parents=True)
             geom = shape(results[0].geometry)
             west_lon, south_lat, east_lon, north_lat =  geom.bounds
@@ -259,17 +268,21 @@ Check documentation for how to setup .netrc file.\n""")
                     ds.update_tags(AREA_OR_POINT='Point')
         return X, p
     
-    def download(self):
+    def download(self, save_path: str | None = None):
         """
         Download the search results to the specified output directory.
         """
-        self.download_dir = self.output_dir.joinpath('data')
+        if save_path is not None:
+            output_dir = Path(save_path).expanduser().resolve()
+        else:
+            output_dir = self.output_dir
+        self.download_dir = output_dir.joinpath('data')
         self.download_dir.mkdir(exist_ok=True, parents=True)
         success_count = 0
         failure_count = 0
         if not hasattr(self, 'results'):
             raise ValueError(f"{Fore.RED}No search results found. Please run search() first.")
-        print(f"Downloading results to {self.output_dir}...")
+        print(f"Downloading results to {output_dir}...")
         for key, results in self.results.items():
             download_path = self.download_dir.joinpath(f'p{key[0]}_f{key[1]}')
             download_path.mkdir(parents=True, exist_ok=True)
@@ -293,7 +306,7 @@ Check documentation for how to setup .netrc file.\n""")
                     print(f"{Fore.RED}✘ CONNECTION FAILED for {result.properties['fileID']}. Check your network. Reason: {e}")
                     failure_count += 1
                 except (IOError, OSError) as e:
-                    print(f"{Fore.RED}✘ FILE SYSTEM ERROR for {result.properties['fileID']}. Check permissions for '{self.output_dir}'. Reason: {e}")
+                    print(f"{Fore.RED}✘ FILE SYSTEM ERROR for {result.properties['fileID']}. Check permissions for '{output_dir}'. Reason: {e}")
                     failure_count += 1
                 except Exception as e:
                     print(f"{Fore.RED}✘ AN UNEXPECTED ERROR occurred for {result.properties['fileID']}. Reason: {e}")
@@ -363,8 +376,8 @@ class S1_SLC(ASFDownloader):
                          output_dir=output_dir,
                          maxResults=self.maxResults)
 
-    def download(self, force_asf: bool = False):
-        super().download()
+    def download(self, force_asf: bool = False, save_path: str | None = None):
+        super().download(save_path=save_path)
         if self.download_orbit:
             print(f"""
 Orbit files can be downloaded from both ASF and Copernicus Data Space Ecosystem (CDSE) servers. Generally CDSE release orbit files a few hours to days earlier.

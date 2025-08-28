@@ -89,7 +89,6 @@ def quick_look_dis(
 
      
         for key, r in slc.items():
-            
             if len(r) <= 2:
                 print(f"{Fore.YELLOW}Not enough ascending SLCs found for Path{key[0]} Frame{key[1]}, skip.")
                 continue

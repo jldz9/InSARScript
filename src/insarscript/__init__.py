@@ -14,6 +14,9 @@ logging.getLogger('matplotlib').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 logging.getLogger("rasterio").setLevel(logging.WARNING)
 logging.getLogger("botocore").setLevel(logging.WARNING)
+logging.getLogger('asf_search').disabled = True
+logging.getLogger('tzlocal').disabled = True
+logging.basicConfig(level=logging.CRITICAL)
 from insarscript._version import __version__
 
 

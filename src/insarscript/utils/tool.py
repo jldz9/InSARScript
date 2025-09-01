@@ -181,17 +181,18 @@ def quick_look_dis(
 
 def hyp3_batch_check(
         batch_files_dir: str,
-        download : bool = False
+        download : bool = False,
+        earthdata_credentials_pool: dict | None = None
 ):
     """
     Download a batch of hyp3 files from a directory.
 
     """
-    batch_path = Path(batch_files_dir).expanduser()
+    batch_path = Path(batch_files_dir).expanduser().resolve()
     json_files = batch_path.rglob('*.json')
 
     for file in json_files:
-        job = Hyp3InSAR.load(file)
+        job = Hyp3InSAR.load(file, earthdata_credentials_pool=earthdata_credentials_pool)
         b = json.loads(file.read_text())
         print(f'Overview for job {Path(b['out_dir'])}')
         if download is False:
@@ -199,14 +200,14 @@ def hyp3_batch_check(
         if download is True:
             job.download()
 
-def earth_credit_pool(credit_pool_path:str) -> dict:
+def earth_credit_pool(earthdata_credentials_pool_path:str) -> dict:
     """
     Load Earthdata credit pool from a file.
     """
-    credit_pool_path = Path(credit_pool_path).expanduser().resolve()
-    credit_pool = {}
-    with open(credit_pool_path, 'r') as f:
+    earthdata_credentials_pool_path = Path(earthdata_credentials_pool_path).expanduser().resolve()
+    earthdata_credentials_pool = {}
+    with open(earthdata_credentials_pool_path, 'r') as f:
         for line in f:
             key, value = line.strip().split(':')
-            credit_pool[key] = value
-    return credit_pool
+            earthdata_credentials_pool[key] = value
+    return earthdata_credentials_pool

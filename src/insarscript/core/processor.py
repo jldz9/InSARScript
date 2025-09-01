@@ -12,7 +12,7 @@ from collections import defaultdict
 from colorama import Fore, Style
 from dateutil.parser import isoparse
 from hyp3_sdk import HyP3, Batch
-from hyp3_sdk.exceptions import AuthenticationError
+from hyp3_sdk.exceptions import AuthenticationError, HyP3Error
 from pathlib import Path
 
 def select_pairs(search_results: list[ASFProduct], 
@@ -61,8 +61,8 @@ def select_pairs(search_results: list[ASFProduct],
             a, b = sorted((rid, sid), key=lambda k: id_time[k])
             if (a,b) in B:
                 continue
-            dt = abs(sec.properties['temporalBaseline'])
-            bp = abs(sec.properties['perpendicularBaseline'])
+            dt = abs(10000 if sec.properties['temporalBaseline'] is None else sec.properties['temporalBaseline'])
+            bp = abs(10000 if sec.properties['perpendicularBaseline'] is None else sec.properties['perpendicularBaseline'])
             
             B[(a,b)] = (dt, bp)
 
@@ -218,13 +218,14 @@ class Hyp3InSAR:
                         phase_filter_parameter=self.phase_filter_parameter
                     )
                     batchs[self._username_pool[self._pool_index]] += job
+                    print(f"{Fore.GREEN} Pair ({ref_id} - {sec_id}) submitted successfully.")
                     break
-                except requests.exceptions.HTTPError as e:
-                    if e.response.status_code == 429 or e.response.status_code == 403:
+                except HyP3Error as e:
+                        print(f"{Fore.YELLOW}Rate limit exceeded on {self._username_pool[self._pool_index]}")
                         if self._auth_pool is True:
                             self._pool_index = (self._pool_index + 1) % len(self._username_pool)
                             self.client = HyP3(username=self._username_pool[self._pool_index], password=self._password_pool[self._pool_index])
-                            print(f"{Fore.YELLOW}Rate limit exceeded on {self._username_pool[self._pool_index]}, switching to next credentials: {self._username_pool[self._pool_index]}\n")
+                            print(f"{Fore.GREEN}Switching to next credentials: {self._username_pool[self._pool_index]}\n")
                             time.sleep(1)
                             if attempt == len(self._username_pool)-1:
                                 raise RuntimeError(f'All credentials in the pool have been rate limited, please try later.')
@@ -244,15 +245,17 @@ class Hyp3InSAR:
             if not self.job_ids:
                 raise ValueError(f'No jobs exist and no batch provided, did you submitted a job?')
             for username, job_ids in self.job_ids.items():
-                for id in job_ids:
-                    job = self.client.get_job_by_id(id)
-                    b[username] += job
+                self.client = HyP3(username=username, password=self._password_pool[self._username_pool.index(username)])
+                all_jobs = self.client.find_jobs()
+                jobs = Batch([j for j in all_jobs if j.job_id in job_ids])
+                b[username] += jobs
         else:
             # normalize to latest state from server
             for username, batch in batchs.items():
-                for j in batch.jobs:
-                    job = self.client.get_job_by_id(j.job_id)
-                    b[username] += job
+                self.client = HyP3(username=username, password=self._password_pool[self._username_pool.index(username)])
+                all_jobs = self.client.find_jobs()
+                jobs = Batch([j for j in all_jobs if j.job_id in [job.job_id for job in batch.jobs]])
+                b[username] += jobs
         for username, batch in b.items():
             print(f'Username: {username}')
             for job in batch.jobs:
@@ -299,18 +302,15 @@ class Hyp3InSAR:
         return path
     
     @classmethod
-    def load(cls, path: str = "hyp3_jobs.json", save_path : str | None = None) -> "Hyp3InSAR":
+    def load(cls, path: str = "hyp3_jobs.json", save_path : str | None = None, earthdata_credentials_pool: dict | None = None) -> "Hyp3InSAR":
         data = json.loads(Path(path).read_text())
         if save_path is not None:
             save_path = Path(save_path).expanduser().resolve()
-            
-        elif Path(data['out_dir']).is_absolute():
-            save_path = Path(data['out_dir']).expanduser().resolve()
         else:
-            raise ValueError(f'Please provide a valid save_path to load the jobs, got {save_path}')
+            save_path = Path(data['out_dir']).expanduser().resolve()
         save_path.mkdir(parents=True, exist_ok=True)
-        return cls(out_dir=save_path.as_posix(), job_ids=data["job_ids"])
-    
+        return cls(out_dir=save_path.as_posix(), job_ids=data["job_ids"], earthdata_credentials_pool=earthdata_credentials_pool)
+
     def _check_netrc(self, keyword: str) -> bool:
         """Check if .netrc file exists in the home directory."""
         netrc_path = Path.home() / '.netrc'

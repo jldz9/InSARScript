@@ -30,7 +30,7 @@ a.dem()
 
 a.download()
 
-'''
+
 quick_look_dis(
     bbox=[116.52, 38.75, 117.125, 39.455],
     year=[2020],
@@ -40,49 +40,47 @@ quick_look_dis(
     path=69,
     frame=124
 )
-'''
 
-import json
-from pathlib import Path
-from insarscript.utils import  hyp3_batch_check
-batch_files_dir = '~/JiLin/quick_look'
 
-hyp3_batch_check(batch_files_dir, download=True)
 
-from insarscript.utils import earth_credit_pool
-
-pool = earth_credit_pool('~/.credit_pool')
 print(pool)
-
+'''
+'''
 tianjin = S1_SLC(
     platform=['Sentinel-1A', 'Sentinel-1B', 'Sentinel-1C'],
     AscendingflightDirection=True,
     bbox = [116.52, 38.75, 117.125, 39.455],
     start='2014-01-01',
     end='2025-12-31',
-    output_dir = '~/CHN_Tianjin',
+    output_dir = '~/glb_dis/insar/tianjin',
     path=69,
     frame=124
 )
 
 tianjin.footprint()
-tianjin.summary
-result_tianjing_d = tianjin.pick(47,461)
-
-tianjin_a = S1_SLC(
-    platform=['Sentinel-1A', 'Sentinel-1B', 'Sentinel-1C'],
-    AscendingflightDirection=True,
-    bbox = [116.52, 38.75, 117.125, 39.455],
-    start='2017-01-01',
-    output_dir = '~/CHN_Tianjin',
-)
-
-tianjin_a.search()
-tianjin_a.footprint()
+tianjin.summary(ls = True)
+results = tianjin.search()
+pairs = select_pairs(results[(69,124)])
+print(f"Total {len(pairs)} pairs selected for interferogram generation")
 
 
-hyp3_batch_check(
-    batch_files_dir='~/glb_dis',
-    download=True
-)
+import pickle
+with open('/home/jldz9/data.pkl', 'rb') as f:
+    pairs = pickle.load(f)
+tianjin_hyp3 = Hyp3InSAR(pairs=pairs,
+                         out_dir="~/glb_dis/insar/tianjin/hyp3",
+                         earthdata_credentials_pool=pool)
+tianjin_hyp3.submit()
+tianjin_hyp3.save(path="~/glb_dis/insar/tianjin/hyp3/full_p69f124_2.json")
 '''
+
+import json
+from pathlib import Path
+from insarscript.utils import  hyp3_batch_check
+from insarscript.utils import earth_credit_pool
+
+pool = earth_credit_pool('~/.credit_pool')
+batch_files_dir = '~/glb_dis/insar/tianjin/hyp3'
+
+hyp3_batch_check(batch_files_dir, earthdata_credentials_pool=pool)
+

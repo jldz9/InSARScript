@@ -117,7 +117,7 @@ class Hyp3InSAR:
                 phase_filter_parameter :float= 0.6,
                 out_dir:str ="products_hyp3",
                 job_name_prefix:str ="ifg",
-                job_ids:dict[list] = defaultdict(list),
+                job_ids: dict[str, list[str]] | None = None,
                 earthdata_credentials_pool: dict[str, str] | None = None
                 ):
         """
@@ -147,7 +147,10 @@ class Hyp3InSAR:
         self.phase_filter_parameter: float = phase_filter_parameter
         self.pairs = pairs
         self.job_name_prefix = job_name_prefix
-        self.job_ids = job_ids
+        self.job_ids = defaultdict(list)
+        if job_ids is not None:
+            for user, ids in job_ids.items():
+                self.job_ids[user].extend(ids)
         self._authorize(pool=earthdata_credentials_pool)
 
     def _authorize(self, pool: dict[str, str] = None):
@@ -287,7 +290,9 @@ class Hyp3InSAR:
 
     def save(self, path: str = "hyp3_jobs.json") -> str:
         """ ---- persistence (resume later) ----"""
-
+        path = Path(path).expanduser().resolve()
+        if path.is_file():
+            path.unlink()
         payload = {"job_ids": self.job_ids, "out_dir": self.out_dir}
         Path(path).write_text(json.dumps(payload, indent=2))
         print(f'Batch file saved under {path}, you may resume using Hyp3InSAR.load(path: "file path")')

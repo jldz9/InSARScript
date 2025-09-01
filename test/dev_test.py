@@ -30,7 +30,7 @@ a.dem()
 
 a.download()
 
-
+'''
 quick_look_dis(
     bbox=[116.52, 38.75, 117.125, 39.455],
     year=[2020],
@@ -40,7 +40,7 @@ quick_look_dis(
     path=69,
     frame=124
 )
-
+'''
 
 import json
 from pathlib import Path
@@ -79,9 +79,10 @@ tianjin_a = S1_SLC(
 
 tianjin_a.search()
 tianjin_a.footprint()
-'''
+
 
 hyp3_batch_check(
     batch_files_dir='~/glb_dis',
     download=True
 )
+'''

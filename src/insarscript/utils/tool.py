@@ -32,10 +32,13 @@ def get_config(config_path=None):
 
 def quick_look_dis(
     bbox : list[float] = [126.451, 45.272, 127.747, 45.541],
+    path: int | None = None,
+    frame: int | None = None,
     year: int | list[int]= [2019,2020],
     flight_direction: str = "ascending",
     processor: str = "hyp3",
-    output_dir = "out"  
+    output_dir = "out",
+    credit_pool: dict = None
 ):
     """
     Quick look for slow ground displacement.
@@ -63,24 +66,29 @@ def quick_look_dis(
     else:
         raise ValueError("Invalid flight_direction parameter, should be 'ascending' or 'descending'")
 
-    output_dir = Path(output_dir).expanduser().resolve()
+    output_dir = Path(output_dir).joinpath('quick_look').expanduser().resolve()
 
     for y in year:
         print(f"{Fore.GREEN}Processing year: {y}")
         process_path = output_dir.joinpath(f"{y}")
+
         slc_early = S1_SLC(
             AscendingflightDirection=AscendingflightDirection,
             bbox=bbox,
             start=str(y)+ "-06-01",
             end=str(y)+ "-09-12",
-            output_dir=process_path.as_posix()
+            output_dir=process_path.as_posix(),
+            path=path,
+            frame=frame
         )
         slc_later = S1_SLC(
             AscendingflightDirection=AscendingflightDirection,
             bbox=bbox,
             start=str(y+1)+ "-06-01",
             end=str(y+1)+ "-09-12",
-            output_dir=process_path.as_posix()
+            output_dir=process_path.as_posix(),
+            path=path,
+            frame=frame
         )
         result_slc_early = slc_early.search()
         
@@ -142,7 +150,8 @@ def quick_look_dis(
 
                 coherence_job = Hyp3InSAR(
                     pairs=coherence,
-                    out_dir=coherence_path.as_posix()
+                    out_dir=coherence_path.as_posix(),
+                    earthdata_credentials_pool=credit_pool
                 )
                 coherence_job.submit()
                 coherence_job.save(coherence_path.as_posix()+f"/hyp3_coherence_p{key[0]}f{key[1]}.json")
@@ -150,7 +159,8 @@ def quick_look_dis(
                 time.sleep(1)
                 season_job = Hyp3InSAR(
                     pairs=season,
-                    out_dir=season_path.as_posix()
+                    out_dir=season_path.as_posix(),
+                    earthdata_credentials_pool=credit_pool
                 )
                 season_job.submit()
                 season_job.save(season_path.as_posix()+f"/hyp3_season_p{key[0]}f{key[1]}.json")
@@ -158,7 +168,8 @@ def quick_look_dis(
                 time.sleep(1)
                 long_job = Hyp3InSAR(
                     pairs=long,
-                    out_dir=long_path.as_posix()
+                    out_dir=long_path.as_posix(),
+                    earthdata_credentials_pool=credit_pool
                 )
                 long_job.submit()
                 long_job.save(long_path.as_posix()+f"/hyp3_long_p{key[0]}f{key[1]}.json")
@@ -187,3 +198,15 @@ def hyp3_batch_check(
             job.refresh()
         if download is True:
             job.download()
+
+def earth_credit_pool(credit_pool_path:str) -> dict:
+    """
+    Load Earthdata credit pool from a file.
+    """
+    credit_pool_path = Path(credit_pool_path).expanduser().resolve()
+    credit_pool = {}
+    with open(credit_pool_path, 'r') as f:
+        for line in f:
+            key, value = line.strip().split(':')
+            credit_pool[key] = value
+    return credit_pool

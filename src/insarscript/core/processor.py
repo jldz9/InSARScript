@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import json
+import netrc
 import time
 import getpass
+import requests
 
 from asf_search.exceptions import ASFSearchError
 from asf_search import ASFProduct
@@ -102,8 +104,7 @@ def select_pairs(search_results: list[ASFProduct],
 
 
 class Hyp3InSAR:
-    # User should have Earthdata urs.earthdata.nasa.gov in .netrc
-
+    
     def __init__(self,
                 pairs: list[str, str] | tuple[str, str] | list[tuple[str, str]] | None = None, 
                 include_look_vectors:bool = False, 
@@ -116,13 +117,25 @@ class Hyp3InSAR:
                 phase_filter_parameter :float= 0.6,
                 out_dir:str ="products_hyp3",
                 job_name_prefix:str ="ifg",
-                job_ids:list[str] = []
+                job_ids:dict[list] = defaultdict(list),
+                earthdata_credentials_pool: dict[str, str] | None = None
                 ):
         """
-
+        Hyp3 processor for interferogram generation.
         :param pairs: A single pair of (reference, secondary) granule ids or a list of tuples contains (reference, secondary) granule ids.
+        :param include_look_vectors: Whether to include look vectors in the output.
+        :param include_inc_map: Whether to include incidence map in the output.
+        :param looks: The looks to use for the output.
+        :param include_dem: Whether to include DEM in the output.
+        :param include_wrapped_phase: Whether to include wrapped phase in the output.
+        :param apply_water_mask: Whether to apply water mask in the output.
+        :param include_displacement_maps: Whether to include displacement maps in the output.
+        :param phase_filter_parameter: The phase filter parameter to use.
+        :param out_dir: The output directory for the results.
+        :param job_name_prefix: The job name prefix to use.
+        :param job_ids: A list of job IDs to use.
+        :param earthdata_credentials_pool: A dictionary containing a pool of Earthdata credentials with format {'username': 'passowrd'}
         """
-        self.job_ids = job_ids
         self.out_dir: str = out_dir
         self.include_look_vectors: bool = include_look_vectors
         self.include_inc_map: bool = include_inc_map
@@ -134,14 +147,20 @@ class Hyp3InSAR:
         self.phase_filter_parameter: float = phase_filter_parameter
         self.pairs = pairs
         self.job_name_prefix = job_name_prefix
+        self.job_ids = job_ids
+        self._authorize(pool=earthdata_credentials_pool)
 
+    def _authorize(self, pool: dict[str, str] = None):
+        """Authorize the HyP3 client.
+        param pool: A dictionary containing a pool of Earthdata credentials with format {'username': 'passowrd'}
+        """
         self._has_asf_netrc = self._check_netrc(keyword='machine urs.earthdata.nasa.gov')
         if not self._has_asf_netrc:
             while True:
-                _username = input("Enter your ASF username: ")
-                _password = getpass.getpass("Enter your ASF password: ")
+                self._username = input("Enter your ASF username: ")
+                self._password = getpass.getpass("Enter your ASF password: ")
                 try:
-                    self.client = HyP3(username=_username, password=_password)
+                    self.client = HyP3(username=self._username, password=self._password)
                 except AuthenticationError:
                     print(f"{Fore.RED}Authentication failed. Please check your credentials and try again.\n")
                     continue
@@ -154,78 +173,122 @@ class Hyp3InSAR:
                 break
         else:
             self.client = HyP3()
+            self._username,_,self._password = netrc.netrc(Path.home()/".netrc").authenticators('urs.earthdata.nasa.gov')
+        if pool is not None and isinstance(pool, dict) and len(pool) > 0:
+            self._username_pool = list(pool.keys())
+            self._password_pool = list(pool.values())
+            self._username_pool.insert(0, self._username)
+            self._password_pool.insert(0, self._password)
+            self._auth_pool = True
+            self._pool_index = 0
+        else:
+            self._auth_pool = False
+            self._username_pool = [self._username]
+            self._password_pool = [self._password]
+            self._pool_index = 0
 
     def submit(self):
         """
         Submit InSAR job pairs to HyP3.
 
         """
-        batch=Batch()
+        batchs = defaultdict(Batch)
         if isinstance(self.pairs, (list, tuple)) and all(isinstance(p, str) for p in self.pairs):
             self.pairs = [(self.pairs[0], self.pairs[1])]
         elif isinstance(self.pairs, (list, tuple)) and all(isinstance(p, tuple) for p in self.pairs):
             self.pairs = self.pairs
 
         for (ref_id, sec_id) in self.pairs:
-            job = self.client.submit_insar_job(
-                granule1=ref_id,
-                granule2=sec_id,
-                name= f'{self.job_name_prefix}_{ref_id.split('_')[5]}_{sec_id.split('_')[5]}',
-                include_look_vectors=self.include_look_vectors,
-                include_inc_map = self.include_inc_map,
-                looks = self.looks,
-                include_dem=self.include_dem,
-                include_wrapped_phase=self.include_wrapped_phase,
-                apply_water_mask=self.apply_water_mask,
-                include_displacement_maps=self.include_displacement_maps,
-                phase_filter_parameter=self.phase_filter_parameter
-            )
-            batch += job
-        self.job_ids.extend([j.job_id for j in batch.jobs])
-        self.batch = batch
-        return batch
+            for attempt in range(len(self._username_pool)):
+                try:
+                    job = self.client.submit_insar_job(
+                        granule1=ref_id,
+                        granule2=sec_id,
+                        name= f'{self.job_name_prefix}_{ref_id.split('_')[5]}_{sec_id.split('_')[5]}',
+                        include_look_vectors=self.include_look_vectors,
+                        include_inc_map = self.include_inc_map,
+                        looks = self.looks,
+                        include_dem=self.include_dem,
+                        include_wrapped_phase=self.include_wrapped_phase,
+                        apply_water_mask=self.apply_water_mask,
+                        include_displacement_maps=self.include_displacement_maps,
+                        phase_filter_parameter=self.phase_filter_parameter
+                    )
+                    batchs[self._username_pool[self._pool_index]] += job
+                    break
+                except requests.exceptions.HTTPError as e:
+                    if e.response.status_code == 429 or e.response.status_code == 403:
+                        if self._auth_pool is True:
+                            self._pool_index = (self._pool_index + 1) % len(self._username_pool)
+                            self.client = HyP3(username=self._username_pool[self._pool_index], password=self._password_pool[self._pool_index])
+                            print(f"{Fore.YELLOW}Rate limit exceeded on {self._username_pool[self._pool_index]}, switching to next credentials: {self._username_pool[self._pool_index]}\n")
+                            time.sleep(1)
+                            if attempt == len(self._username_pool)-1:
+                                raise RuntimeError(f'All credentials in the pool have been rate limited, please try later.')
+                            continue
+                        elif self._auth_pool is False:
+                            raise
+        for user_name, batch in batchs.items():
+            for job in batch.jobs:
+                self.job_ids[user_name].append(job.job_id)
+        self.batchs = batchs
+        return batchs
     
-    def refresh(self, batch=None):
+    def refresh(self, batchs:dict[Batch]|None=None):
         """Refresh job statuses from HyP3 for the provided batch or the stored job_ids."""
-        b = Batch()
-        if batch is None:
+        b = defaultdict(Batch)
+        if batchs is None:
             if not self.job_ids:
-                raise ValueError(f'No Job exist and no batch provided, did you submitted a job?')
-            for j in self.job_ids:
-                job = self.client.get_job_by_id(j)
-                b += job
+                raise ValueError(f'No jobs exist and no batch provided, did you submitted a job?')
+            for username, job_ids in self.job_ids.items():
+                for id in job_ids:
+                    job = self.client.get_job_by_id(id)
+                    b[username] += job
         else:
             # normalize to latest state from server
-            for j in batch.jobs:
-                job = self.client.get_job_by_id(j.job_id)
-                b += job
-        for job in b.jobs:
-            print(f'{Style.BRIGHT}Name:{Style.RESET_ALL}{job.name} {Style.BRIGHT}Job ID:{Style.RESET_ALL}{job.job_id} {Style.BRIGHT}Job type:{Style.RESET_ALL}{job.job_type} {Style.BRIGHT}Status:{Style.RESET_ALL}{job.status_code}')
-        self.batch = b
-        return self.batch
-         
-    def download(self, batch: Batch | None = None) -> Path:
-        if batch is None:
+            for username, batch in batchs.items():
+                for j in batch.jobs:
+                    job = self.client.get_job_by_id(j.job_id)
+                    b[username] += job
+        for username, batch in b.items():
+            print(f'Username: {username}')
+            for job in batch.jobs:
+                print(f'{Style.BRIGHT}Name:{Style.RESET_ALL}{job.name} {Style.BRIGHT}Job ID:{Style.RESET_ALL}{job.job_id} {Style.BRIGHT}Job type:{Style.RESET_ALL}{job.job_type} {Style.BRIGHT}Status:{Style.RESET_ALL}{job.status_code}')
+        self.batchs = b
+        return self.batchs
+
+    def download(self, batchs: dict[Batch] | None = None) -> Path:
+        if batchs is None:
             b = self.refresh()
         else:
-            b = self.refresh(batch)
+            b = self.refresh(batchs)
         out = Path(self.out_dir)
         out.mkdir(parents=True, exist_ok=True)
         exist = out.rglob("*.zip")
         exist_name = [p.name for p in exist]
-        succeeded = b.filter_jobs(succeeded=True)
-        for i, job in enumerate(succeeded):
-
-            if all(j['filename'] in exist_name for j in job.files):
-                print(f'{Fore.YELLOW}{job.name} exist under {out}, will skip download')
+        for username, batch in b.items():
+            succeeded = [job for job in batch.jobs if job.status_code == "SUCCEEDED"]
+            failed = [job for job in batch.jobs if job.status_code == "FAILED"]
+            if len(failed) > 0:
+                print(f'{Fore.YELLOW}Failed jobs found for {username}')
+                for f_job in failed:
+                    print(f'Failed jobs: {f_job.job_id}')
+            if len(succeeded) == 0:
+                print(f'{Fore.YELLOW}No succeeded jobs found for {username}, will skip download')
                 continue
-
-            job.download_files(location=str(out))
+            elif len(succeeded) > 0:
+                for i, job in enumerate(succeeded):
+                    if all(j['filename'] in exist_name for j in job.files):
+                        print(f'{Fore.YELLOW}{job.name} exist under {out}, will skip download')
+                        continue
+                    self.client = HyP3(username=username, password=self._password_pool[self._username_pool.index(username)])
+                    job.download_files(location=str(out))
         return
 
     def save(self, path: str = "hyp3_jobs.json") -> str:
         """ ---- persistence (resume later) ----"""
-        payload = {"job_ids": self.job_ids, "out_dir": self.out_dir, "job_name": [j.name for j in self.batch.jobs]}
+
+        payload = {"job_ids": self.job_ids, "out_dir": self.out_dir}
         Path(path).write_text(json.dumps(payload, indent=2))
         print(f'Batch file saved under {path}, you may resume using Hyp3InSAR.load(path: "file path")')
         return path

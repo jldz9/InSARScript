@@ -4,7 +4,7 @@
 import getpass
 import requests
 import time
-import os
+from dateutil.parser import isoparse
 from collections import defaultdict
 from pathlib import Path
 
@@ -96,7 +96,6 @@ class ASFDownloader:
         else: 
             self.output_dir = Path(output_dir).expanduser().resolve()
         self.output_dir = self.output_dir / flight_dir
-        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         print(f"Prcess directory is set to: {self.output_dir}")
         
 
@@ -168,20 +167,25 @@ Check documentation for how to setup .netrc file.\n""")
             print(f"{Fore.YELLOW}The AOI crosses {len(grouped)} stacks, you can use .overview or .footprint() to check footprints and .pick(path, frame) to specific the stack of scence you would like to download. If use .download() directly will create subfolders under {self.output_dir} for each stack")
         
         return grouped
-    @property
-    def count(self):
+ 
+    def summary(self, ls=False):
         if not hasattr(self, 'results'):
-            raise ValueError(f"{Fore.RED}Please run .search() first.")
-        ow = {key:len(item) for key, item in self.results.items()}
-        for key, item in ow.items():
-            print(f"Sence: Path {key[0]} Frame {key[1]}, Amount: {item}")
+            self.search()
+        count = {key:len(item) for key, item in self.results.items()}
+        time_range = {key: (min(isoparse(i.properties['startTime']) for i in item), max(isoparse(i.properties['startTime']) for i in item)) for key, item in self.results.items()}
+        for key, item in count.items():
+            print(f"Sence: Path {key[0]} Frame {key[1]}, Amount: {item}, time: {time_range[key][0].date()} --> {time_range[key][1].date()}")
+            if ls:
+                for scene in self.results[key]:
+                    print(f"    {scene.properties['sceneName']}  {isoparse(scene.properties['startTime']).date()}")
+
 
     def footprint(self, save_path: str | None = None):
         """
         Print the search result footprint and AOI use matplotlib
         """
         if not hasattr(self, 'results'):
-            raise ValueError(f"{Fore.RED}Please run .search() first.")
+            self.search()
         transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
         N = len(self.results)
         cmap = plt.cm.get_cmap('hsv', N+1)
@@ -233,12 +237,11 @@ Check documentation for how to setup .netrc file.\n""")
             return self.results
         elif isinstance(path, list) and isinstance(frame, list):
             new_dict = defaultdict(list)
-            for i in path: 
-                for j in frame:
-                    value = self.results.get((i, j))
-                    if value is None: 
-                        continue
-                    new_dict[(i, j)].extend(value)
+            for (i, j) in zip(path,frame): 
+                value = self.results.get((i, j))
+                if value is None: 
+                    continue
+                new_dict[(i, j)].extend(value)
             self.results = new_dict
             return self.results
         else: 
@@ -325,6 +328,8 @@ class S1_SLC(ASFDownloader):
     def __init__(self, 
                  platform: str | list[str] | None = None,
                  AscendingflightDirection: bool = True,
+                 path: str | None = None,
+                 frame: str | None = None,
                  bbox: list[float] | None = [-113.18, 37.77, -112.44, 38.10],
                  start: str = "2018-01-01", 
                  end: str = "2019-12-31", 
@@ -362,12 +367,16 @@ class S1_SLC(ASFDownloader):
         self.end = end
         self.download_orbit = download_orbit
         self.maxResults = maxResults
+        self.path = path
+        self.frame = frame
         
         super().__init__(
                          platform= self.platform,
                          instrument=self.instrument_dft,
                          beamMode=self.beamMode_dft,
                          flightDirection=self.flightDirection,
+                         frame=self.frame,
+                         relativeOrbit=self.path,
                          polarization=self.polarization_dft,
                          processingLevel=self.processingLevel_dft,
                          bbox=bbox, 

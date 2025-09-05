@@ -182,6 +182,7 @@ def quick_look_dis(
 def hyp3_batch_check(
         batch_files_dir: str,
         download : bool = False,
+        retry : bool = False,
         earthdata_credentials_pool: dict | None = None
 ):
     """
@@ -195,10 +196,11 @@ def hyp3_batch_check(
         job = Hyp3InSAR.load(file, earthdata_credentials_pool=earthdata_credentials_pool)
         b = json.loads(file.read_text())
         print(f'Overview for job {Path(b['out_dir'])}')
-        if download is False:
-            job.refresh()
+        batchs = job.refresh()
         if download is True:
             job.download()
+        if retry and len(job.failed_jobs)>0:
+            job.retry()
 
 def earth_credit_pool(earthdata_credentials_pool_path:str) -> dict:
     """

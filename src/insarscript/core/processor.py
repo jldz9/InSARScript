@@ -4,7 +4,7 @@ import json
 import netrc
 import time
 import getpass
-import requests
+from pathlib import Path
 
 from asf_search.exceptions import ASFSearchError
 from asf_search import ASFProduct
@@ -13,7 +13,7 @@ from colorama import Fore, Style
 from dateutil.parser import isoparse
 from hyp3_sdk import HyP3, Batch
 from hyp3_sdk.exceptions import AuthenticationError, HyP3Error
-from pathlib import Path
+from tqdm import tqdm
 
 def select_pairs(search_results: list[ASFProduct], 
                 dt_targets:tuple[int] =(6, 12, 24, 36, 48, 72, 96) ,
@@ -107,7 +107,7 @@ class Hyp3InSAR:
     
     def __init__(self,
                 pairs: list[str, str] | tuple[str, str] | list[tuple[str, str]] | None = None, 
-                include_look_vectors:bool = False, 
+                include_look_vectors:bool = True,
                 include_inc_map:bool =True,
                 looks:str='20x4',
                 include_dem :bool= True,
@@ -193,15 +193,14 @@ class Hyp3InSAR:
     def submit(self):
         """
         Submit InSAR job pairs to HyP3.
-
         """
         batchs = defaultdict(Batch)
         if isinstance(self.pairs, (list, tuple)) and all(isinstance(p, str) for p in self.pairs):
-            self.pairs = [(self.pairs[0], self.pairs[1])]
+            pairs = [(self.pairs[0], self.pairs[1])]
         elif isinstance(self.pairs, (list, tuple)) and all(isinstance(p, tuple) for p in self.pairs):
-            self.pairs = self.pairs
+            pairs = self.pairs
 
-        for (ref_id, sec_id) in self.pairs:
+        for (ref_id, sec_id) in tqdm(pairs, desc="Submitting jobs"):
             for attempt in range(len(self._username_pool)):
                 try:
                     job = self.client.submit_insar_job(
@@ -218,13 +217,19 @@ class Hyp3InSAR:
                         phase_filter_parameter=self.phase_filter_parameter
                     )
                     batchs[self._username_pool[self._pool_index]] += job
+                    time.sleep(0.5)
                     print(f"{Fore.GREEN} Pair ({ref_id} - {sec_id}) submitted successfully.")
                     break
                 except HyP3Error as e:
                         print(f"{Fore.YELLOW}Rate limit exceeded on {self._username_pool[self._pool_index]}")
                         if self._auth_pool is True:
                             self._pool_index = (self._pool_index + 1) % len(self._username_pool)
-                            self.client = HyP3(username=self._username_pool[self._pool_index], password=self._password_pool[self._pool_index])
+                            for retry in range(3):
+                                try:
+                                    self.client = HyP3(username=self._username_pool[self._pool_index], password=self._password_pool[self._pool_index])
+                                    break
+                                except AuthenticationError:
+                                    continue
                             print(f"{Fore.GREEN}Switching to next credentials: {self._username_pool[self._pool_index]}\n")
                             time.sleep(1)
                             if attempt == len(self._username_pool)-1:
@@ -232,15 +237,60 @@ class Hyp3InSAR:
                             continue
                         elif self._auth_pool is False:
                             raise
-        for user_name, batch in batchs.items():
+        self.job_ids = defaultdict(list)
+        for username, batch in batchs.items():
             for job in batch.jobs:
-                self.job_ids[user_name].append(job.job_id)
+                self.job_ids[username].append(job.job_id)
         self.batchs = batchs
         return batchs
     
+    def retry(self):
+        """
+        Sometime Hyp3 jobs fail due to various reasons, this function will retry failed jobs in the stored batchs.
+        """
+        if not hasattr(self, 'failed_jobs') or self.batchs is None:
+            raise ValueError(f'No batchs exist, did you submitted a job?')
+        if len(self.failed_jobs) == 0:
+            print(f'No failed jobs found.')
+            return
+        bool_params = [
+            "include_look_vectors",
+            "include_inc_map",
+            "include_dem",
+            "include_wrapped_phase",
+            "include_los_displacement",
+            "include_displacement_maps",
+            "apply_water_mask",
+        ]
+        for key in bool_params:
+            values = [job.job_parameters[key] for job in self.failed_jobs]
+            if all(values):
+                setattr(self, key, True)
+            elif not any(values):   # all False
+                setattr(self, key, False)
+            else:
+                raise ValueError(
+                    f"Inconsistent {key} in failed jobs, "
+                    "please create a new Hyp3InSAR instance with the pairs and correct parameters to resubmit."
+                )
+        looks = [job.job_parameters["looks"] for job in self.failed_jobs]
+        if all(l == looks[0] for l in looks):
+            self.looks = looks[0]
+        else:
+            raise ValueError("Inconsistent looks in failed jobs.")
+        self.pairs = [(job.job_parameters['granules'][0], job.job_parameters['granules'][1]) for job in self.failed_jobs]
+        _ = self.submit()
+        retry_path = self.out_dir+'/hyp3_retry_jobs.json'
+        if Path(retry_path).is_file():
+            timestamp = time.strftime("%Y%m%dT%H%M%S", time.localtime())
+            retry_path = self.out_dir+f'/hyp3_retry_jobs_{timestamp}.json'
+            print(f"{Fore.YELLOW}hyp3_retry_jobs.json already exists, saving to {retry_path} instead.")
+        self.save(retry_path)
+
     def refresh(self, batchs:dict[Batch]|None=None):
         """Refresh job statuses from HyP3 for the provided batch or the stored job_ids."""
         b = defaultdict(Batch)
+        failed_jobs = []
         if batchs is None:
             if not self.job_ids:
                 raise ValueError(f'No jobs exist and no batch provided, did you submitted a job?')
@@ -258,9 +308,16 @@ class Hyp3InSAR:
                 b[username] += jobs
         for username, batch in b.items():
             print(f'Username: {username}')
+            f = [job for job in batch.jobs if job.status_code == "FAILED"]
+            if len(f) > 0:
+                print(f'{Fore.YELLOW}Failed jobs found for {username}, please use .retry() to resubmit failed jobs')
+                failed_jobs += f
+                for f_job in f:
+                    print(f'Failed jobs: {f_job.job_id}')
             for job in batch.jobs:
                 print(f'{Style.BRIGHT}Name:{Style.RESET_ALL}{job.name} {Style.BRIGHT}Job ID:{Style.RESET_ALL}{job.job_id} {Style.BRIGHT}Job type:{Style.RESET_ALL}{job.job_type} {Style.BRIGHT}Status:{Style.RESET_ALL}{job.status_code}')
         self.batchs = b
+        self.failed_jobs = failed_jobs
         return self.batchs
 
     def download(self, batchs: dict[Batch] | None = None) -> Path:
@@ -274,11 +331,6 @@ class Hyp3InSAR:
         exist_name = [p.name for p in exist]
         for username, batch in b.items():
             succeeded = [job for job in batch.jobs if job.status_code == "SUCCEEDED"]
-            failed = [job for job in batch.jobs if job.status_code == "FAILED"]
-            if len(failed) > 0:
-                print(f'{Fore.YELLOW}Failed jobs found for {username}')
-                for f_job in failed:
-                    print(f'Failed jobs: {f_job.job_id}')
             if len(succeeded) == 0:
                 print(f'{Fore.YELLOW}No succeeded jobs found for {username}, will skip download')
                 continue
@@ -303,7 +355,8 @@ class Hyp3InSAR:
     
     @classmethod
     def load(cls, path: str = "hyp3_jobs.json", save_path : str | None = None, earthdata_credentials_pool: dict | None = None) -> "Hyp3InSAR":
-        data = json.loads(Path(path).read_text())
+        path = Path(path).expanduser().resolve()
+        data = json.loads(path.read_text())
         if save_path is not None:
             save_path = Path(save_path).expanduser().resolve()
         else:

@@ -78,9 +78,13 @@ import json
 from pathlib import Path
 from insarscript.utils import  hyp3_batch_check
 from insarscript.utils import earth_credit_pool
+from insarscript.core import Hyp3InSAR
 
 pool = earth_credit_pool('~/.credit_pool')
 batch_files_dir = '~/glb_dis/insar/tianjin/hyp3'
 
-hyp3_batch_check(batch_files_dir, earthdata_credentials_pool=pool)
+#jobs = Hyp3InSAR.load(path=batch_files_dir, earthdata_credentials_pool=pool)
+#jobs.refresh()
+
+hyp3_batch_check(batch_files_dir, earthdata_credentials_pool=pool, download=False, retry=True)
 

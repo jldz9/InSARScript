@@ -73,7 +73,7 @@ tianjin_hyp3 = Hyp3InSAR(pairs=pairs,
 tianjin_hyp3.submit()
 tianjin_hyp3.save(path="~/glb_dis/insar/tianjin/hyp3/full_p69f124_2.json")
 '''
-
+'''
 import json
 from pathlib import Path
 from insarscript.utils import  hyp3_batch_check
@@ -86,5 +86,62 @@ batch_files_dir = '~/glb_dis/insar/tianjin/hyp3'
 #jobs = Hyp3InSAR.load(path=batch_files_dir, earthdata_credentials_pool=pool)
 #jobs.refresh()
 
-hyp3_batch_check(batch_files_dir, earthdata_credentials_pool=pool, download=False, retry=True)
+#hyp3_batch_check(batch_files_dir, earthdata_credentials_pool=pool, download=False, retry=True)
 
+
+
+
+
+# prep_gamma_test
+
+gamma_path = Path('~/glb_dis/insar/tianjin/hyp3').expanduser().resolve()
+
+from insarscript.core import Hyp3GAMMA
+mintpy = Hyp3GAMMA(workdir='~/glb_dis/insar/tianjin/mintpy', hyp3_dir = gamma_path)
+mintpy.unzip_hyp3()
+mintpy.collect_files()
+mintpy.clip_to_overlap()
+mintpy.get_high_coh_mask()
+mintpy.run()
+
+'''
+from collections import defaultdict
+import pandas as pd
+p = Path('~/glb_dis/insar/tianjin/mintpy/tmp').expanduser().resolve()
+sar = list(p.rglob('*unw_phase.tif'))
+results = []
+import rasterio 
+import matplotlib.pyplot as plt
+from pyproj import Transformer
+import contextily as ctx
+from shapely import box
+from shapely.ops import transform
+transformer = Transformer.from_crs("EPSG:32650", "EPSG:3857", always_xy=True)
+N = len(list(sar))
+cmap = plt.cm.get_cmap('hsv', N+1)
+fig, ax = plt.subplots(1, 1, figsize=(10,10))
+
+
+for i,s in enumerate(sar): 
+    print(s)
+    with rasterio.open(str(s)) as ds:
+       bounds = ds.bounds 
+       center_lon = (bounds.left+bounds.right)/2
+       center_lat = (bounds.bottom + bounds.top)/2
+       geom = transform(transformer.transform, box(bounds.left, bounds.bottom, bounds.right, bounds.top))
+       x,y = geom.exterior.xy
+       ax.plot(x,y, linewidth=2,color=cmap(i))
+       tmp = {
+           'name': s.name,
+           'width': ds.width,
+           'height': ds.height,
+           'longitude':center_lon,
+           'latitude': center_lat,
+       }
+       results.append(tmp)
+ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik)
+ax.set_axis_off()
+plt.savefig('test.png')
+
+df = pd.DataFrame(results)
+       

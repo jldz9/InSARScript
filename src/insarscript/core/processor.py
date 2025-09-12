@@ -102,23 +102,22 @@ def select_pairs(search_results: list[ASFProduct],
     
     return sorted(pairs)
 
-
 class Hyp3InSAR:
-    
+    """Hyp3 processor for interferogram generation online."""
     def __init__(self,
-                pairs: list[str, str] | tuple[str, str] | list[tuple[str, str]] | None = None, 
-                include_look_vectors:bool = True,
-                include_inc_map:bool =True,
+                pairs: list[str, str] | tuple[str, str] | list[tuple[str, str]] | None=None, 
+                include_look_vectors:bool=True,
+                include_inc_map:bool=True,
                 looks:str='20x4',
-                include_dem :bool= True,
-                include_wrapped_pahse :bool= False,
-                apply_water_mask :bool= True,
+                include_dem :bool=True,
+                include_wrapped_pahse :bool=False,
+                apply_water_mask :bool=True,
                 include_displacement_maps:bool=True,
-                phase_filter_parameter :float= 0.6,
-                out_dir:str ="products_hyp3",
-                job_name_prefix:str ="ifg",
-                job_ids: dict[str, list[str]] | None = None,
-                earthdata_credentials_pool: dict[str, str] | None = None
+                phase_filter_parameter :float=0.6,
+                out_dir:str="products_hyp3",
+                job_name_prefix:str="ifg",
+                job_ids: dict[str, list[str]] | None=None,
+                earthdata_credentials_pool: dict[str, str] | None=None
                 ):
         """
         Hyp3 processor for interferogram generation.
@@ -151,9 +150,9 @@ class Hyp3InSAR:
         if job_ids is not None:
             for user, ids in job_ids.items():
                 self.job_ids[user].extend(ids)
-        self._authorize(pool=earthdata_credentials_pool)
+        self._hyp3_authorize(pool=earthdata_credentials_pool)
 
-    def _authorize(self, pool: dict[str, str] = None):
+    def _hyp3_authorize(self, pool: dict[str, str] = None):
         """Authorize the HyP3 client.
         param pool: A dictionary containing a pool of Earthdata credentials with format {'username': 'passowrd'}
         """

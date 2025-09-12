@@ -35,6 +35,16 @@ sqlite_version = sqlite3.sqlite_version
 if v(sqlite_version) < v('3.44'):
     print(f"{Fore.RED}SQLite version {sqlite_version} is not supported. Please install SQLite version >= 3.44.")
 
+# ---------------------Make Sure PROJ_LIB exist----------------------------
+# proj.db is required when gdal tried to read the CRS, PROJ_LIB offen missing during installation. 
+
+if os.environ.get('PROJ_LIB') is None:
+    if os.environ.get('CONDA_PREFIX') is None:
+        raise RuntimeError('Conda is not correctly installed, $CONDA_PREFIX does not exist')
+    else: 
+        os.environ["PROJ_LIB"] = os.environ['CONDA_PREFIX']+'/share/proj'
+        if not Path(os.environ["PROJ_LIB"]).is_dir():
+            raise RuntimeError('Proj does not installed correctly.')
 
 # ---------------------ISCE2 Configuration---------------------
 # If ISCE and Mintpy are proper installed, ISCE_HOME should exist in the environment
@@ -78,7 +88,35 @@ os.environ["VRT_SHARED_SOURCE"] = "0"
 os.environ["HDF5_DISABLE_VERSION_CHECK"] = "2"
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
+# ---------------------Check runing environment -----------
+if 'SLURM_MEM_PER_NODE' in os.environ:
+    print('--------------------SLURM environment-----------------------')
+    _memory_gb = int(int(os.environ['SLURM_MEM_PER_NODE'])/1024)
+    _cpu_core = int(os.environ['SLURM_CPUS_PER_TASK'])
+    _manager = 'slurm'
+    
+elif 'PBS_NUM_PPN' in os.environ:
+    print('--------------------PBS environment-----------------------')
+    _memory_gb = int(int(os.environ['PBS_MEM']))
+    _cpu_core = int(os.environ['PBS_NUM_PPN'])
+    _manager = 'pbs'
+elif 'LSB_JOB_NUMPROC' in os.environ:
+    print('--------------------LSF environment-----------------------')
+    _memory_gb = int(int(os.environ['LSB_JOB_MEMLIMIT'])/1024)
+    _cpu_core = int(os.environ['LSB_JOB_NUMPROC '])
+    _manager = 'lsf'
+else:
+    print('--------------------Local environment---------------------')
+    _memory_gb, _, __ = map(int, os.popen('free -t -m').readlines()[-1].split()[1:])
+    _cpu_core = os.cpu_count()
+    _manager = 'local'
 
+_env = {
+        "memory": _memory_gb,
+        "cpu": _cpu_core,
+        "manager": _manager
+
+    }
 # ---------------------package imports---------------------
 
 from insarscript.utils import tool, apis

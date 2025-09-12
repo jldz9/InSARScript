@@ -97,8 +97,10 @@ class ASFDownloader:
             self.output_dir = Path(output_dir).expanduser().resolve()
         self.output_dir = self.output_dir / flight_dir
         print(f"Prcess directory is set to: {self.output_dir}")
-        
 
+        self._asf_authorize()
+        
+    def _asf_authorize(self):
         print(f"""
 This downloader relies on the ASF API. Please ensure you to create an account at https://search.asf.alaska.edu/. 
 If a .netrc file is not provide under your home directory, you will be prompt to enter your ASF username and password. 

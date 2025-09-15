@@ -8,7 +8,7 @@ sys.path.append(Path(__file__).parent.parent.joinpath('src').as_posix())
 from dateutil.parser import isoparse
 import asf_search as asf
 from insarscript.core import S1_SLC, select_pairs, Hyp3InSAR
-from insarscript.utils import quick_look_dis, hyp3_batch_check
+from insarscript.utils import quick_look_dis, hyp3_batch_check, earth_credit_pool
 #import openmeteo_requests
 import pandas as pd
 #import requests_cache
@@ -49,16 +49,26 @@ print(pool)
 tianjin = S1_SLC(
     platform=['Sentinel-1A', 'Sentinel-1B', 'Sentinel-1C'],
     AscendingflightDirection=True,
-    bbox = [116.52, 38.75, 117.125, 39.455],
-    start='2014-01-01',
-    end='2025-12-31',
+    bbox = [120.721, 40.878, 123.484, 41.511],#,
+    start='2020-01-01',
+    end='2020-12-31',
     output_dir = '~/glb_dis/insar/tianjin',
-    path=69,
-    frame=124
 )
 
-tianjin.footprint()
+tianjin.footprint(save_path='~/test2.png')
 tianjin.summary(ls = True)
+pool = earth_credit_pool('~/.credit_pool')
+quick_look_dis(
+    bbox = [114.75, 36.21, 118.29, 39.95],
+    flight_direction = "asc",
+    year=2020,
+    output_dir="~/glb_dis/insar/tianjin",
+    credit_pool=pool,
+)
+'''
+
+'''
+
 results = tianjin.search()
 pairs = select_pairs(results[(69,124)])
 print(f"Total {len(pairs)} pairs selected for interferogram generation")
@@ -94,17 +104,20 @@ batch_files_dir = '~/glb_dis/insar/tianjin/hyp3'
 
 # prep_gamma_test
 
-gamma_path = Path('~/glb_dis/insar/tianjin/hyp3').expanduser().resolve()
+gamma_path = Path('~/glb_dis/insar/tianjin/quick_look/2020/quicklook_p105f456').expanduser().resolve()
 
 from insarscript.core import Hyp3GAMMA
-mintpy = Hyp3GAMMA(workdir='~/glb_dis/insar/tianjin/mintpy', hyp3_dir = gamma_path)
+mintpy = Hyp3GAMMA(workdir='/scratch/quicklook_p105f456', hyp3_dir = gamma_path)
 mintpy.unzip_hyp3()
 mintpy.collect_files()
 mintpy.clip_to_overlap()
 mintpy.get_high_coh_mask()
 mintpy.run()
-
 '''
+'''
+
+
+---------------------------Quick look interferogram footprint 
 from collections import defaultdict
 import pandas as pd
 p = Path('~/glb_dis/insar/tianjin/mintpy/tmp').expanduser().resolve()
@@ -144,4 +157,40 @@ ax.set_axis_off()
 plt.savefig('test.png')
 
 df = pd.DataFrame(results)
-       
+'''   
+
+
+#hyp3_batch_check('~/glb_dis/insar/tianjin/quick_look', download=True)
+def main():
+    from insarscript.utils import generate_slurm_script
+    workdir = Path('~/glb_dis/insar/tianjin/quick_look/2020').expanduser().resolve()
+    paths = [p for p in workdir.glob('*') if p.is_dir()]
+
+    for path in paths:
+        generate_slurm_script(job_name=f'sbas_{path.name}',
+                              output_file=f'{path.name}_%j.out',
+                              error_file=f'{path.name}_%j.err',
+                              cpus_per_task=8, 
+                              mem="16G",
+                              conda_env='dev',
+                              filename=f'{path.name}.slurm',
+                              command="export PYTHONPATH=~/InSARScript/src\n"
+                              "python << 'EOF'\n" \
+                              "from pathlib import Path\n" \
+                              "from insarscript.core import Hyp3InSAR\n" \
+                              "from insarscript.core import Hyp3GAMMA\n" \
+                              f"hyp3file = Path('{path}').glob('*.json')\n" \
+                              f"file = Hyp3InSAR.load(list(hyp3file)[0])\n"\
+                              "file.download()\n"\
+                              f"mintpy = Hyp3GAMMA(hyp3_dir ='{path}')\n"\
+                              "mintpy.unzip_hyp3()\n"\
+                              "mintpy.collect_files()\n"\
+                              "mintpy.clip_to_overlap()\n"\
+                              "mintpy.get_high_coh_mask()\n"\
+                              "mintpy.run()\n"\
+                              "mintpy.clear()\n"\
+                              "EOF"
+        )
+
+if __name__ == "__main__":
+    main()

@@ -21,6 +21,7 @@ def select_pairs(search_results: list[ASFProduct],
                 dt_max:int=120,
                 pb_max:int=150,
                 min_degree:int=3,
+                max_degree:int=999,
                 force_connect: bool = True,
                 restrict_within_list: bool = True):
     
@@ -32,6 +33,7 @@ def select_pairs(search_results: list[ASFProduct],
     :param dt_max: The maximum temporal baseline [days]
     :param pb_max: The maximum perpendicular baseline [m]
     :param min_degree: The minimum number of connections
+    :param max_degree: The maximum number of connections
     :param force_connect: if connections are less than min_degree with given dt_targets, will force to use pb_max to search for additional pairs. Be aware this could leads to low quality pairs.
     :param restrict_within_list: if True, will connect pairs even if they are not in the provided search results list and add into pairs.
     """
@@ -99,6 +101,21 @@ def select_pairs(search_results: list[ASFProduct],
                     neighbors[a].add(b); neighbors[b].add(a)
                 if len(neighbors[n]) >= min_degree:
                     break
+
+        for n in names:
+            while len(neighbors[n]) > max_degree:
+                # Rank this node’s pairs by "badness" = (dt, pb), descending
+                ranked = sorted(
+                    [(m, *B.get(tuple(sorted((n, m))), (99999, 99999))) for m in neighbors[n]],
+                    key=lambda x: (x[1], x[2]),  # sort by dt, then pb
+                    reverse=True
+                )
+                worst, _, _ = ranked[0]  # worst neighbor
+                a, b = sorted((n, worst), key=lambda k: id_time[k])
+                if (a, b) in pairs:
+                    pairs.remove((a, b))
+                neighbors[a].discard(b)
+                neighbors[b].discard(a)
     
     return sorted(pairs)
 
@@ -216,7 +233,7 @@ class Hyp3InSAR:
                         phase_filter_parameter=self.phase_filter_parameter
                     )
                     batchs[self._username_pool[self._pool_index]] += job
-                    time.sleep(0.5)
+                    time.sleep(0.1)
                     print(f"{Fore.GREEN} Pair ({ref_id} - {sec_id}) submitted successfully.")
                     break
                 except HyP3Error as e:
@@ -230,7 +247,7 @@ class Hyp3InSAR:
                                 except AuthenticationError:
                                     continue
                             print(f"{Fore.GREEN}Switching to next credentials: {self._username_pool[self._pool_index]}\n")
-                            time.sleep(1)
+                            time.sleep(0.1)
                             if attempt == len(self._username_pool)-1:
                                 raise RuntimeError(f'All credentials in the pool have been rate limited, please try later.')
                             continue
@@ -286,7 +303,7 @@ class Hyp3InSAR:
             print(f"{Fore.YELLOW}hyp3_retry_jobs.json already exists, saving to {retry_path} instead.")
         self.save(retry_path)
 
-    def refresh(self, batchs:dict[Batch]|None=None):
+    def refresh(self, batchs:dict|None=None):
         """Refresh job statuses from HyP3 for the provided batch or the stored job_ids."""
         b = defaultdict(Batch)
         failed_jobs = []
@@ -334,7 +351,7 @@ class Hyp3InSAR:
                 print(f'{Fore.YELLOW}No succeeded jobs found for {username}, will skip download')
                 continue
             elif len(succeeded) > 0:
-                for i, job in enumerate(succeeded):
+                for job in tqdm(succeeded, desc="Downloading:", position=0):
                     if all(j['filename'] in exist_name for j in job.files):
                         print(f'{Fore.YELLOW}{job.name} exist under {out}, will skip download')
                         continue

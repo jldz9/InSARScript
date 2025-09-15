@@ -38,19 +38,11 @@ def quick_look_dis(
     flight_direction: str = "ascending",
     processor: str = "hyp3",
     output_dir = "out",
-    credit_pool: dict = None
+    credit_pool: dict | None = None
 ):
     """
     Quick look for slow ground displacement.
-    This method will generate a few quick look interferograms:
-    4 pairs of year-wide interferograms that cover temporal baseline of ~360 days during summer time (June, July, August, early September before harvest)
-    e.g.: June 2024 - June 2025
-    3 pairs of 60-120 days season interferogram from June to early September
-    June -> Aug
-    July -> Sep
-    June -> Sep
-
-    2 pairs of 12-36 days short term for coherence check
+    This method will generate quick overlook through given area
     
     """
     if isinstance(year, int):
@@ -72,108 +64,43 @@ def quick_look_dis(
         print(f"{Fore.GREEN}Processing year: {y}")
         process_path = output_dir.joinpath(f"{y}")
 
-        slc_early = S1_SLC(
+        slc = S1_SLC(
             AscendingflightDirection=AscendingflightDirection,
             bbox=bbox,
-            start=str(y)+ "-06-01",
-            end=str(y)+ "-09-12",
+            start=str(y)+ "-01-01",
+            end=str(y)+ "-12-31",
             output_dir=process_path.as_posix(),
             path=path,
             frame=frame
         )
-        slc_later = S1_SLC(
-            AscendingflightDirection=AscendingflightDirection,
-            bbox=bbox,
-            start=str(y+1)+ "-06-01",
-            end=str(y+1)+ "-09-12",
-            output_dir=process_path.as_posix(),
-            path=path,
-            frame=frame
-        )
-        result_slc_early = slc_early.search()
-        
-        result_slc_late = slc_later.search()
-        slc = {k: result_slc_early.get(k, []) + result_slc_late.get(k, []) for k in set(result_slc_early) | set(result_slc_late)}
-
-     
-        for key, r in slc.items():
-            if len(r) <= 2:
-                print(f"{Fore.YELLOW}Not enough ascending SLCs found for Path{key[0]} Frame{key[1]}, skip.")
+        result_slc = slc.search()
+        for key, r in result_slc.items():
+            if len(r) <= 10:
+                print(f"{Fore.YELLOW}Not enough SLCs found for Path{key[0]} Frame{key[1]}, skip.")
                 continue
             slc_path = process_path/f"quicklook_p{key[0]}f{key[1]}"
             slc_path.mkdir(parents=True, exist_ok=True)
             pairs = select_pairs(
                 r,
-                dt_targets=(12,24,60,84,96,108,360),
+                dt_targets=(12,24,36,48,72,96),
                 dt_tol=3,
-                dt_max=400, 
-                pb_max=150,
-                min_degree=1,
-                force_connect=False
+                dt_max=120, 
+                pb_max=200,
+                min_degree=2,
+                max_degree=5,
+                force_connect=True
                 )
-            long = []
-            season = []
-            coherence = []
-            for pair in pairs:
-                early_time = isoparse(pair[0].split('_')[5])
-                later_time = isoparse(pair[1].split('_')[5])
-                if (later_time-early_time).days < 24:
-                    coherence.append(pair)
-                if 60<(later_time-early_time).days <120:
-                    season.append(pair)
-                if (later_time-early_time).days > 180:
-                    long.append(pair)
-            if len(coherence)>2:
-                coherence = coherence[:2]
-            elif len(coherence)==0:
-                print(f"{Fore.YELLOW}No coherence pairs found for Path{key[0]} Frame{key[1]}, skip.")
-                continue
-            if len(season)>3:
-                season = season[:3]
-            elif len(season)==0:
-                print(f"{Fore.YELLOW}No season pairs found for Path{key[0]} Frame{key[1]}, skip.")
-                continue
-            if len(long)>4:
-                long = long[:4]
-            elif len(long)==0:
-                print(f"{Fore.YELLOW}No long pairs found for Path{key[0]} Frame{key[1]}, skip.")
-                continue
-
-            coherence_path = slc_path/f"coherence_p{key[0]}f{key[1]}"
-            season_path = slc_path/f"season_p{key[0]}f{key[1]}"
-            long_path = slc_path/f"long_p{key[0]}f{key[1]}"
-            coherence_path.mkdir(parents=True, exist_ok=True)
-            season_path.mkdir(parents=True, exist_ok=True)
-            long_path.mkdir(parents=True, exist_ok=True)
+            
             if processor == "hyp3":
-                print("Will use Hyp3 to process online")
-
-                coherence_job = Hyp3InSAR(
-                    pairs=coherence,
-                    out_dir=coherence_path.as_posix(),
-                    earthdata_credentials_pool=credit_pool
-                )
-                coherence_job.submit()
-                coherence_job.save(coherence_path.as_posix()+f"/hyp3_coherence_p{key[0]}f{key[1]}.json")
-                print(f"Submitted coherence job for Path{key[0]} Frame{key[1]}, Job file saved under {coherence_path.as_posix()+f'/hyp3_coherence_p{key[0]}f{key[1]}.json'}")
-                time.sleep(1)
-                season_job = Hyp3InSAR(
-                    pairs=season,
-                    out_dir=season_path.as_posix(),
-                    earthdata_credentials_pool=credit_pool
-                )
-                season_job.submit()
-                season_job.save(season_path.as_posix()+f"/hyp3_season_p{key[0]}f{key[1]}.json")
-                print(f"Submitted season job for Path{key[0]} Frame{key[1]}, Job file saved under {season_path.as_posix()+f'/hyp3_season_p{key[0]}f{key[1]}.json'}")
-                time.sleep(1)
+                print("---------Using HyP3 online processor-----------")
                 long_job = Hyp3InSAR(
-                    pairs=long,
-                    out_dir=long_path.as_posix(),
+                    pairs=pairs,
+                    out_dir=slc_path.as_posix(),
                     earthdata_credentials_pool=credit_pool
                 )
                 long_job.submit()
-                long_job.save(long_path.as_posix()+f"/hyp3_long_p{key[0]}f{key[1]}.json")
-                print(f"Submitted long job for Path{key[0]} Frame{key[1]}, Job file saved under {long_path.as_posix()+f'/hyp3_long_p{key[0]}f{key[1]}.json'}")
+                long_job.save(slc_path.as_posix()+f"/quicklook_hyp3_p{key[0]}f{key[1]}.json")
+                print(f"Submitted long job for Path{key[0]} Frame{key[1]}, Job file saved under {slc_path.as_posix()+f'/hyp3_long_p{key[0]}f{key[1]}.json'}")
                 time.sleep(1)
 
             elif processor == "ISCE":
@@ -196,8 +123,9 @@ def hyp3_batch_check(
         job = Hyp3InSAR.load(file, earthdata_credentials_pool=earthdata_credentials_pool)
         b = json.loads(file.read_text())
         print(f'Overview for job {Path(b['out_dir'])}')
-        batchs = job.refresh()
-        if download is True:
+        if not download :
+            batchs = job.refresh()
+        if download :
             job.download()
         if retry and len(job.failed_jobs)>0:
             job.retry()
@@ -213,3 +141,86 @@ def earth_credit_pool(earthdata_credentials_pool_path:str) -> dict:
             key, value = line.strip().split(':')
             earthdata_credentials_pool[key] = value
     return earthdata_credentials_pool
+
+
+
+def generate_slurm_script(
+    job_name="my_job",
+    output_file="job_%j.out",    # %j = jobID
+    error_file="job_%j.err",
+    time="04:00:00",
+    partition="all",
+    nodes=1,
+    ntasks=1,
+    cpus_per_task=1,
+    mem="4G",
+    gpus=None,                   # e.g., "1" or "2" or "1g"
+    array=None,                  # e.g., "0-9" or "1-100%10"
+    dependency=None,             # e.g., "afterok:123456"
+    mail_user=None,
+    mail_type="ALL",             # BEGIN, END, FAIL, ALL
+    account=None,
+    qos=None,
+    modules=None,                # list of modules to load
+    conda_env=None,              # name of conda env to activate
+    export_env=None,             # dict of env variables
+    command="echo Hello SLURM!",
+    filename="job.slurm"
+):
+    """
+    Generate a full SLURM batch script with many options.
+    """
+
+    lines = ["#!/bin/bash"]
+
+    # Basic job setup
+    lines.append(f"#SBATCH --job-name={job_name}")
+    lines.append(f"#SBATCH --output={output_file}")
+    lines.append(f"#SBATCH --error={error_file}")
+    lines.append(f"#SBATCH --time={time}")
+    lines.append(f"#SBATCH --partition={partition}")
+    lines.append(f"#SBATCH --nodes={nodes}")
+    lines.append(f"#SBATCH --ntasks={ntasks}")
+    lines.append(f"#SBATCH --cpus-per-task={cpus_per_task}")
+    lines.append(f"#SBATCH --mem={mem}")
+
+    # Optional extras
+    if gpus:
+        lines.append(f"#SBATCH --gres=gpu:{gpus}")
+    if array:
+        lines.append(f"#SBATCH --array={array}")
+    if dependency:
+        lines.append(f"#SBATCH --dependency={dependency}")
+    if mail_user:
+        lines.append(f"#SBATCH --mail-user={mail_user}")
+        lines.append(f"#SBATCH --mail-type={mail_type}")
+    if account:
+        lines.append(f"#SBATCH --account={account}")
+    if qos:
+        lines.append(f"#SBATCH --qos={qos}")
+
+    lines.append("")  # blank line
+
+    # Environment setup
+    if modules:
+        for mod in modules:
+            lines.append(f"module load {mod}")
+    if conda_env:
+        lines.append(f"source activate {conda_env}")
+    if export_env:
+        for k, v in export_env.items():
+            lines.append(f"export {k}={v}")
+
+    lines.append("")  # blank line
+
+    # Execution
+    lines.append("echo \"Starting job on $(date)\"")
+    lines.append(command)
+    lines.append("echo \"Job finished on $(date)\"")
+
+    script_content = "\n".join(lines)
+
+    with open(filename, "w") as f:
+        f.write(script_content)
+
+    return filename 

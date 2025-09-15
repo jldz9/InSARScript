@@ -29,15 +29,18 @@ class Mintpy:
     def __init__(self, 
                  workdir: str,
                  reference_point : list[int] | None=  None,
-                 reference_mask: str = "stack"):
+                 reference_mask: str = "stack", 
+                 debug = False):
         self.cfg = readfile.read_template(Path(mintpy.defaults.__file__).parent/'smallbaselineApp.cfg')
         self.workdir = Path(workdir).expanduser().resolve()
         self._cds_authorize()
         self.workdir.mkdir(parents=True, exist_ok=True)
-        self.cfg['mintpy.troposphericDelay.method'] = 'no'
+        self.tmp_dir = self.workdir/'tmp'
+        
         self.cfg['mintpy.compute.numWorker'] = _env['cpu']
-        self.cfg['mintpy.compute.cluster'] = _env['manager']
+        self.cfg['mintpy.compute.cluster'] = 'local' #_env['manager']
         self.cfg['mintpy.compute.maxMemory'] = _env['memory']
+        self.debug = debug
 
     def _cds_authorize(self):
         if self._check_cdsapirc:
@@ -81,31 +84,30 @@ class Hyp3GAMMA(Mintpy):
     
     def __init__(self, 
                  hyp3_dir: str, 
-                 workdir: str,):
-        super().__init__(workdir=workdir)
+                 workdir: str | None = None,
+                 debug = False):
+        
         self.hyp3_dir = Path(hyp3_dir).expanduser().resolve()
+        if workdir is None:
+            workdir = self.hyp3_dir.as_posix()
+        super().__init__(workdir=workdir, debug=debug)
+        
+        
         self.useful_keys = ['unw_phase.tif', 'corr.tif', 'lv_theta.tif', 'lv_phi.tif', 'water_mask.tif', 'dem.tif']
-
-    def prep_hyp3_gamma(self):
-
-        self.unzip_hyp3()
-        self.collect_files()
-        self.clip_to_overlap()
-        self.get_high_coh_mask()
 
     def unzip_hyp3(self):
         print(f'{Style.BRIGHT}Step 1: Unzip all downloaded hyp3 gamma files')
-        hyp3_results = self.hyp3_dir.rglob('*.zip')
-        self.tmp_dir = self.workdir/'tmp'
+        hyp3_results = list(self.hyp3_dir.rglob('*.zip'))
         self.tmp_dir.mkdir(parents=True, exist_ok=True)
-        for zip_file in tqdm(hyp3_results, desc="Unzipping hyp3 gamma files"):
+        for zip_file in tqdm(hyp3_results, desc=f"Unzipping hyp3 gamma files"):
             if (self.tmp_dir/zip_file.stem).is_dir():
                 print(f'{Fore.YELLOW}{zip_file.stem} exist, skip')
                 continue
             else:
-                print(f'Unzipping {zip_file}')
+                print(f'{zip_file}')
                 with zipfile.ZipFile(zip_file, 'r') as zip_ref:
                     zip_ref.extractall(self.tmp_dir)
+        
     def collect_files(self):
         print(f'{Style.BRIGHT}Step 2: Collect all necessary files')
         useful_files = defaultdict(list)
@@ -123,6 +125,7 @@ class Hyp3GAMMA(Mintpy):
             raise FileNotFoundError(f'{Fore.RED}Error: No metadata .txt file found from hyp3 product, it is required for Mintpy processing')
         useful_files['meta'] = meta
         self.useful_files = useful_files
+        print('Complete!')
 
     def clip_to_overlap(self):
         print(f'{Style.BRIGHT}Step 3: Prepare common overlap using gdal')
@@ -139,14 +142,13 @@ class Hyp3GAMMA(Mintpy):
             ds = None
         common_overlap = (max(ulx_list), min(uly_list), min(lrx_list), max(lry_list)) # (ulx, uly, lrx, lry)
         self.common_overlap = common_overlap
-
         print(f'{Style.BRIGHT}Step 4: Clip all files to common overlap')
         self.clip_dir = self.workdir/'clip'
         self.clip_dir.mkdir(parents=True, exist_ok=True)
         clip_files = defaultdict(list)
-        for key, files in tqdm(self.useful_files.items(), desc=f'Group', bar_format='{desc}: {n}/{total}'):
+        for key, files in tqdm(self.useful_files.items(), desc=f'Group', position=0, leave=True):
             if key in [u.split('.')[0] for u in self.useful_keys] and len(files) > 0:
-                for file in tqdm(files, desc="Clipping jobs"):
+                for file in tqdm(files, desc="Clipping jobs", position=1, leave=False):
                     dst_file = self.clip_dir/f'{file.stem}_clip.tif'
                     if dst_file.is_file():
                         print(f'{Fore.YELLOW}{dst_file.name} exist, skip')
@@ -163,12 +165,11 @@ class Hyp3GAMMA(Mintpy):
                     if (self.clip_dir/file.name).is_file():
                         continue
                     shutil.copy(file, self.clip_dir/file.name)
-
         self.clip_files = clip_files
 
-    def get_high_coh_mask(self, min_corr = 0.5):
+    def get_high_coh_mask(self, min_corr = 0.85):
         print(f'{Style.BRIGHT}Step 5: Generate stack-wide high-coherence mask')
-        self.mask_file = self.workdir/"stack_mask.tif"
+        self.mask_file = self.workdir/"stack_corr_mask.tif"
         if self.mask_file.is_file(): 
             print(f'{self.mask_file} exist, skip')
 
@@ -197,11 +198,17 @@ class Hyp3GAMMA(Mintpy):
         self.cfg['mintpy.load.unwFile'] = (self.clip_dir/'*_unw_phase_clip.tif').as_posix()
         self.cfg['mintpy.load.corFile'] = (self.clip_dir/'*_corr_clip.tif').as_posix()
         self.cfg['mintpy.load.demFile'] = (self.clip_dir/'*_dem_clip.tif').as_posix()
-        self.cfg['mintpy.reference.maskFile'] = self.mask_file.as_posix()
+        if not hasattr(self, 'mask_file'):
+            self.cfg['mintpy.reference.maskFile'] = 'auto'
+        else:
+            self.cfg['mintpy.reference.maskFile'] = self.mask_file.as_posix()
+        self.cfg['mintpy.deramp'] = 'linear'
+        self.cfg['mintpy.topographicResidual'] = 'yes'
+        self.cfg['mintpy.troposphericDelay.method'] = 'pyaps'
 
         for key, minpy_key  in zip(['lv_theta.tif', 'lv_phi.tif', 'water_mask.tif'],['mintpy.load.incAngleFile', 'mintpy.load.azAngleFile','mintpy.load.waterMaskFile']) :
             if key.split('.')[0] in self.clip_files.keys():
-                self.cfg[minpy_key] = self.clip_dir.joinpath(f'*_{key}').as_posix()
+                self.cfg[minpy_key] = self.clip_dir.joinpath(f'*_{key.split('.')[0]}_clip.tif').as_posix()
             else:
                 print(f'*_{key} does not exist, will skip in config')
         cfg_file = self.workdir/'mintpy.cfg'
@@ -216,5 +223,12 @@ class Hyp3GAMMA(Mintpy):
                 f.write(f'{key} = {val_str}\n')
         app = TimeSeriesAnalysis(cfg_file.as_posix(), self.workdir)
         app.open()
-        app.run(steps=['load_data', 'modify_network', 'reference_point', 'invert_network','correct_topography','residual_RMS','reference_date','velocity','geocode', 'google_earth'])
+        app.run(steps=['load_data', 'modify_network', 'reference_point', 'invert_network','correct_troposphere','deramp','correct_topography','residual_RMS','reference_date','velocity','geocode', 'google_earth'])
+    
+    def clear(self):
+        if not self.debug:
+            shutil.rmtree(self.tmp_dir)
+            shutil.rmtree(self.clip_dir)
+            print('tmp files cleaned')
+
         

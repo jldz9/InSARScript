@@ -36,9 +36,10 @@ class Mintpy:
         self._cds_authorize()
         self.workdir.mkdir(parents=True, exist_ok=True)
         self.tmp_dir = self.workdir/'tmp'
+        self.clip_dir = self.workdir/'clip'
         
         self.cfg['mintpy.compute.numWorker'] = _env['cpu']
-        self.cfg['mintpy.compute.cluster'] = 'local' #_env['manager']
+        self.cfg['mintpy.compute.cluster'] = 'auto' #_env['manager']
         self.cfg['mintpy.compute.maxMemory'] = _env['memory']
         self.debug = debug
 
@@ -91,8 +92,6 @@ class Hyp3GAMMA(Mintpy):
         if workdir is None:
             workdir = self.hyp3_dir.as_posix()
         super().__init__(workdir=workdir, debug=debug)
-        
-        
         self.useful_keys = ['unw_phase.tif', 'corr.tif', 'lv_theta.tif', 'lv_phi.tif', 'water_mask.tif', 'dem.tif']
 
     def unzip_hyp3(self):
@@ -118,13 +117,12 @@ class Hyp3GAMMA(Mintpy):
             if len(files) == 0 and key in ['unw_phase.tif', 'corr.tif', 'dem.tif']:
                 raise FileNotFoundError(f'{Fore.RED}Error: No {key} found from hyp3 product, it is required for Mintpy processing')
             useful_files[key.split('.')[0]] = files 
-
         meta = self.tmp_dir.rglob('*.txt')
         meta = [m for m in meta if 'README' not in m.name]
         if len(meta) == 0:
             raise FileNotFoundError(f'{Fore.RED}Error: No metadata .txt file found from hyp3 product, it is required for Mintpy processing')
         useful_files['meta'] = meta
-        self.useful_files = useful_files
+        self.useful_files = useful_files  
         print('Complete!')
 
     def clip_to_overlap(self):
@@ -166,6 +164,8 @@ class Hyp3GAMMA(Mintpy):
                         continue
                     shutil.copy(file, self.clip_dir/file.name)
         self.clip_files = clip_files
+        if not self.debug:
+            shutil.rmtree(self.tmp_dir)
 
     def get_high_coh_mask(self, min_corr = 0.85):
         print(f'{Style.BRIGHT}Step 5: Generate stack-wide high-coherence mask')
@@ -201,16 +201,17 @@ class Hyp3GAMMA(Mintpy):
         if not hasattr(self, 'mask_file'):
             self.cfg['mintpy.reference.maskFile'] = 'auto'
         else:
-            self.cfg['mintpy.reference.maskFile'] = self.mask_file.as_posix()
+            self.cfg['mintpy.reference.maskFile'] = (self.workdir/"stack_corr_mask.tif").as_posix()
         self.cfg['mintpy.deramp'] = 'linear'
         self.cfg['mintpy.topographicResidual'] = 'yes'
         self.cfg['mintpy.troposphericDelay.method'] = 'pyaps'
 
         for key, minpy_key  in zip(['lv_theta.tif', 'lv_phi.tif', 'water_mask.tif'],['mintpy.load.incAngleFile', 'mintpy.load.azAngleFile','mintpy.load.waterMaskFile']) :
-            if key.split('.')[0] in self.clip_files.keys():
+            if len(list(self.clip_dir.rglob(f'*_{key.split('.')[0]}_clip.tif'))) >0:
                 self.cfg[minpy_key] = self.clip_dir.joinpath(f'*_{key.split('.')[0]}_clip.tif').as_posix()
             else:
                 print(f'*_{key} does not exist, will skip in config')
+                continue
         cfg_file = self.workdir/'mintpy.cfg'
         with cfg_file.open('w') as f:
             for key, value in self.cfg.items():
@@ -231,4 +232,10 @@ class Hyp3GAMMA(Mintpy):
             shutil.rmtree(self.clip_dir)
             print('tmp files cleaned')
 
+    def save_gdal(self):
+        from mintpy.cli.save_gdal import main
         
+        inps = [
+            (self.workdir/'velocity.h5').as_posix()
+        ]
+        main(inps)

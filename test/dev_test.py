@@ -164,7 +164,12 @@ df = pd.DataFrame(results)
 def main():
     from insarscript.utils import generate_slurm_script
     workdir = Path('~/glb_dis/insar/tianjin/quick_look/2020').expanduser().resolve()
-    paths = [p for p in workdir.glob('*') if p.is_dir()]
+    #paths = [p for p in workdir.glob('*') if p.is_dir()]
+    paths = [#Path('/home/C838053462/glb_dis/insar/tianjin/quick_look/2020/quicklook_p142f111')]
+             #Path('/home/C838053462/glb_dis/insar/tianjin/quick_look/2020/quicklook_p142f116')]
+             #Path('/home/C838053462/glb_dis/insar/tianjin/quick_look/2020/quicklook_p142f121')]
+             Path('/home/C838053462/glb_dis/insar/tianjin/quick_look/2020/quicklook_p142f126'),
+             Path('/home/C838053462/glb_dis/insar/tianjin/quick_look/2020/quicklook_p3f455')]
 
     for path in paths:
         generate_slurm_script(job_name=f'sbas_{path.name}',
@@ -179,16 +184,8 @@ def main():
                               "from pathlib import Path\n" \
                               "from insarscript.core import Hyp3InSAR\n" \
                               "from insarscript.core import Hyp3GAMMA\n" \
-                              f"hyp3file = Path('{path}').glob('*.json')\n" \
-                              f"file = Hyp3InSAR.load(list(hyp3file)[0])\n"\
-                              "file.download()\n"\
                               f"mintpy = Hyp3GAMMA(hyp3_dir ='{path}')\n"\
-                              "mintpy.unzip_hyp3()\n"\
-                              "mintpy.collect_files()\n"\
-                              "mintpy.clip_to_overlap()\n"\
-                              "mintpy.get_high_coh_mask()\n"\
                               "mintpy.run()\n"\
-                              "mintpy.clear()\n"\
                               "EOF"
         )
 

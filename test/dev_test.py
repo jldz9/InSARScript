@@ -16,20 +16,18 @@ import pandas as pd
 import numpy as np
 import time
 from dateutil.parser import isoparse
-'''
+
 a = S1_SLC(
-    platform=['Sentinel-1A', 'Sentinel-1B'],
+    platform=['Sentinel-1A', 'Sentinel-1B', 'Sentinel-1C'],
     AscendingflightDirection=False,
-    bbox = [125.737, 41.179, 127.800, 44.106],
-    start='2017-01-01',
+    bbox = [-50.71, -24.3, -44.08, -20.82],
+    start='2020-01-01',
+    end='2020-12-31',
     output_dir = '~/S1',
 )
 results = a.search()
-
-a.dem()
-
-a.download()
-
+a.footprint(save_path='./footprint.png')
+'''
 
 quick_look_dis(
     bbox=[116.52, 38.75, 117.125, 39.455],
@@ -159,7 +157,7 @@ plt.savefig('test.png')
 df = pd.DataFrame(results)
 '''   
 
-
+'''
 #hyp3_batch_check('~/glb_dis/insar/tianjin/quick_look', download=True)
 def main():
     from insarscript.utils import generate_slurm_script
@@ -191,3 +189,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+'''

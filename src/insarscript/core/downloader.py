@@ -166,7 +166,7 @@ Check documentation for how to setup .netrc file.\n""")
             grouped[key].append(result)
         self.results = grouped
         if len(grouped) > 1: 
-            print(f"{Fore.YELLOW}The AOI crosses {len(grouped)} stacks, you can use .overview or .footprint() to check footprints and .pick(path, frame) to specific the stack of scence you would like to download. If use .download() directly will create subfolders under {self.output_dir} for each stack")
+            print(f"{Fore.YELLOW}The AOI crosses {len(grouped)} stacks, you can use .summary() or .footprint() to check footprints and .pick((path_frame)) to specific the stack of scence you would like to download. If use .download() directly will create subfolders under {self.output_dir} for each stack")
         
         return grouped
  
@@ -227,23 +227,23 @@ Check documentation for how to setup .netrc file.\n""")
         else:
             plt.show()
         
-    def pick(self, path: int | list[int], frame: int | list[int]) -> dict:
+    def pick(self, path_frame = tuple | list[tuple]) -> dict:
         """
-        Give a path and frame to choose specific stack of scenes
+        Give a path and frame to choose specific stack of scenes or a list of path and frame, e.g path_frame = [(25,351), (25,352), (25,353)]
         """
-        if isinstance(path, int) and isinstance(frame, int):
-            value = self.results.get((path, frame))
+        if isinstance(path_frame, tuple):
             new_dict = defaultdict(list)
-            new_dict[(path, frame)].extend(value) #type: ignore
+            value = self.results.get(path_frame)
+            new_dict[path_frame].extend(value) #type: ignore
             self.results = new_dict
             return self.results
-        elif isinstance(path, list) and isinstance(frame, list):
+        elif isinstance(path_frame, list):
             new_dict = defaultdict(list)
-            for (i, j) in zip(path,frame): 
-                value = self.results.get((i, j))
+            for p_f in path_frame: 
+                value = self.results.get(p_f)
                 if value is None: 
                     continue
-                new_dict[(i, j)].extend(value)
+                new_dict[p_f].extend(value)
             self.results = new_dict
             return self.results
         else: 

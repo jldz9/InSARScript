@@ -8,6 +8,7 @@ from dateutil.parser import isoparse
 
 
 import tomllib, tomli_w
+from tqdm import tqdm
 from box import Box as Config
 from colorama import Fore
 
@@ -31,11 +32,13 @@ def get_config(config_path=None):
         raise FileNotFoundError(f"Config file not found under {config_path}")
 
 def quick_look_dis(
+    results: dict | None = None,
     bbox : list[float] = [126.451, 45.272, 127.747, 45.541],
     path: int | None = None,
     frame: int | None = None,
-    year: int | list[int]= [2019,2020],
-    flight_direction: str = "ascending",
+    start: str= '2020-01-01',
+    end : str = '2020-12-31',
+    AscendingflightDirection: bool = True,
     processor: str = "hyp3",
     output_dir = "out",
     credit_pool: dict | None = None
@@ -43,68 +46,54 @@ def quick_look_dis(
     """
     Quick look for slow ground displacement.
     This method will generate quick overlook through given area
+    :param results: The search result from ASF search output from ASFDownloader, should be a dict with {(path, frame): [asf_search.Products..,asf_search.Products..]}, if the result was provided, this program will skip searching process
     
     """
-    if isinstance(year, int):
-        year = [year]
-    elif isinstance(year, list):
-        year = year
-    else:
-        raise TypeError("Invalid type for year parameter, should be int of a list of ints, e.g. 2020 or [2020, 2021]")
-    if flight_direction.lower() in ["asc", "ascending"]:
-        AscendingflightDirection = True
-    elif flight_direction.lower() in ["desc", "descending","des"]:
-        AscendingflightDirection = False
-    else:
-        raise ValueError("Invalid flight_direction parameter, should be 'ascending' or 'descending'")
-
     output_dir = Path(output_dir).joinpath('quick_look').expanduser().resolve()
-
-    for y in year:
-        print(f"{Fore.GREEN}Processing year: {y}")
-        process_path = output_dir.joinpath(f"{y}")
-
+    if results is not None and isinstance(results, dict):
+        result_slc = results
+    else:
         slc = S1_SLC(
             AscendingflightDirection=AscendingflightDirection,
             bbox=bbox,
-            start=str(y)+ "-01-01",
-            end=str(y)+ "-12-31",
-            output_dir=process_path.as_posix(),
+            start=start,
+            end=end,
+            output_dir=output_dir.as_posix(),
             path=path,
             frame=frame
         )
         result_slc = slc.search()
-        for key, r in result_slc.items():
-            if len(r) <= 10:
-                print(f"{Fore.YELLOW}Not enough SLCs found for Path{key[0]} Frame{key[1]}, skip.")
-                continue
-            slc_path = process_path/f"quicklook_p{key[0]}f{key[1]}"
-            slc_path.mkdir(parents=True, exist_ok=True)
-            pairs = select_pairs(
-                r,
-                dt_targets=(12,24,36,48,72,96),
-                dt_tol=3,
-                dt_max=120, 
-                pb_max=200,
-                min_degree=2,
-                max_degree=5,
-                force_connect=True
-                )
-            
-            if processor == "hyp3":
-                print("---------Using HyP3 online processor-----------")
-                long_job = Hyp3InSAR(
-                    pairs=pairs,
-                    out_dir=slc_path.as_posix(),
-                    earthdata_credentials_pool=credit_pool
-                )
-                long_job.submit()
-                long_job.save(slc_path.as_posix()+f"/quicklook_hyp3_p{key[0]}f{key[1]}.json")
-                print(f"Submitted long job for Path{key[0]} Frame{key[1]}, Job file saved under {slc_path.as_posix()+f'/hyp3_long_p{key[0]}f{key[1]}.json'}")
-                time.sleep(1)
+    for key, r in tqdm(result_slc.items(), desc=f'Submiting Jobs', position=0, leave=True):
+        if len(r) <= 10:
+            print(f"{Fore.YELLOW}Not enough SLCs found for Path{key[0]} Frame{key[1]}, skip.")
+            continue
+        slc_path = output_dir/f"quicklook_p{key[0]}f{key[1]}"
+        slc_path.mkdir(parents=True, exist_ok=True)
+        pairs = select_pairs(
+            r,
+            dt_targets=(12,24,36,48,72,96),
+            dt_tol=3,
+            dt_max=120, 
+            pb_max=200,
+            min_degree=2,
+            max_degree=4,
+            force_connect=True
+            )
+        
+        if processor == "hyp3":
+            print("---------Using HyP3 online processor-----------")
+            long_job = Hyp3InSAR(
+                pairs=pairs,
+                out_dir=slc_path.as_posix(),
+                earthdata_credentials_pool=credit_pool
+            )
+            long_job.submit()
+            long_job.save(slc_path.as_posix()+f"/quicklook_hyp3_p{key[0]}f{key[1]}.json")
+            print(f"Submitted long job for Path{key[0]} Frame{key[1]}, Job file saved under {slc_path.as_posix()+f'/hyp3_long_p{key[0]}f{key[1]}.json'}")
+            time.sleep(1)
 
-            elif processor == "ISCE":
-                print("ISCE processor is not yet implemented, please use Hyp3.")
+        elif processor == "ISCE":
+            print("ISCE processor is not yet implemented, please use Hyp3.")
 
 def hyp3_batch_check(
         batch_files_dir: str,

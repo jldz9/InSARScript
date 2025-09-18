@@ -14,6 +14,7 @@ import numpy as np
 import rasterio
 import pyaps3
 
+#from asf_search import A
 from colorama import Fore, Style
 from mintpy.utils import readfile
 from mintpy.smallbaselineApp import TimeSeriesAnalysis
@@ -212,7 +213,7 @@ class Hyp3GAMMA(Mintpy):
             else:
                 print(f'*_{key} does not exist, will skip in config')
                 continue
-        cfg_file = self.workdir/'mintpy.cfg'
+        cfg_file = self.workdir/'hyp3gamma.cfg'
         with cfg_file.open('w') as f:
             for key, value in self.cfg.items():
                 if isinstance(value, str):

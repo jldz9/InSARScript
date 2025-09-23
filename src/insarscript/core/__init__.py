@@ -1,3 +1,3 @@
 from .downloader import S1_SLC
-from .processor import select_pairs, Hyp3InSAR
-from .sbas import Mintpy, Hyp3GAMMA
+from .processor import select_pairs, Hyp3_GAMMA_Processor
+from .sbas import Mintpy, Hyp3_GAMMA_SBAS

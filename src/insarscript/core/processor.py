@@ -119,7 +119,7 @@ def select_pairs(search_results: list[ASFProduct],
     
     return sorted(pairs)
 
-class Hyp3InSAR:
+class Hyp3_GAMMA_Processor:
     """Hyp3 processor for interferogram generation online."""
     def __init__(self,
                 pairs: list[str, str] | tuple[str, str] | list[tuple[str, str]] | None=None, 
@@ -287,7 +287,7 @@ class Hyp3InSAR:
             else:
                 raise ValueError(
                     f"Inconsistent {key} in failed jobs, "
-                    "please create a new Hyp3InSAR instance with the pairs and correct parameters to resubmit."
+                    "please create a new Hyp3_GAMMA_Processor instance with the pairs and correct parameters to resubmit."
                 )
         looks = [job.job_parameters["looks"] for job in self.failed_jobs]
         if all(l == looks[0] for l in looks):
@@ -366,11 +366,11 @@ class Hyp3InSAR:
             path.unlink()
         payload = {"job_ids": self.job_ids, "out_dir": self.out_dir}
         Path(path).write_text(json.dumps(payload, indent=2))
-        print(f'Batch file saved under {path}, you may resume using Hyp3InSAR.load(path: "file path")')
+        print(f'Batch file saved under {path}, you may resume using Hyp3_GAMMA_Processor.load(path: "file path")')
         return path
     
     @classmethod
-    def load(cls, path: str = "hyp3_jobs.json", save_path : str | None = None, earthdata_credentials_pool: dict | None = None) -> "Hyp3InSAR":
+    def load(cls, path: str = "hyp3_jobs.json", save_path : str | None = None, earthdata_credentials_pool: dict | None = None) -> "Hyp3_GAMMA_Processor":
         path = Path(path).expanduser().resolve()
         data = json.loads(path.read_text())
         if save_path is not None:

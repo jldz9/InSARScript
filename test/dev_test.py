@@ -5,9 +5,8 @@ import sys
 from pathlib import Path
 sys.path.append(Path(__file__).parent.parent.joinpath('src').as_posix())
 
-from dateutil.parser import isoparse
+
 import asf_search as asf
-from insarscript.core import S1_SLC, select_pairs, Hyp3InSAR
 from insarscript.utils import quick_look_dis, hyp3_batch_check, earth_credit_pool
 #import openmeteo_requests
 import pandas as pd
@@ -15,8 +14,8 @@ import pandas as pd
 #from retry_requests import retry
 import numpy as np
 import time
-from dateutil.parser import isoparse
 
+'''
 a = S1_SLC(
     platform=['Sentinel-1A', 'Sentinel-1B', 'Sentinel-1C'],
     AscendingflightDirection=False,
@@ -27,7 +26,7 @@ a = S1_SLC(
 )
 results = a.search()
 a.footprint(save_path='./footprint.png')
-'''
+
 
 quick_look_dis(
     bbox=[116.52, 38.75, 117.125, 39.455],
@@ -157,18 +156,28 @@ plt.savefig('test.png')
 df = pd.DataFrame(results)
 '''   
 
-'''
+
 #hyp3_batch_check('~/glb_dis/insar/tianjin/quick_look', download=True)
+
 def main():
     from insarscript.utils import generate_slurm_script
-    workdir = Path('~/glb_dis/insar/tianjin/quick_look/2020').expanduser().resolve()
-    #paths = [p for p in workdir.glob('*') if p.is_dir()]
-    paths = [#Path('/home/C838053462/glb_dis/insar/tianjin/quick_look/2020/quicklook_p142f111')]
-             #Path('/home/C838053462/glb_dis/insar/tianjin/quick_look/2020/quicklook_p142f116')]
-             #Path('/home/C838053462/glb_dis/insar/tianjin/quick_look/2020/quicklook_p142f121')]
-             Path('/home/C838053462/glb_dis/insar/tianjin/quick_look/2020/quicklook_p142f126'),
-             Path('/home/C838053462/glb_dis/insar/tianjin/quick_look/2020/quicklook_p3f455')]
+    from insarscript.core import Hyp3_GAMMA_SBAS
+    workdir = Path('/local/insar/South_America').expanduser().resolve()
+    paths = [p for p in workdir.glob('*') if p.is_dir() and p.name in ['quicklook_p155f670', 'quicklook_p24f661', 'quicklook_p24f666','quicklook_p53f662','quicklook_p53f667','quicklook_p53f670','quicklook_p53f672','quicklook_p97f659','quicklook_p97f665']]
+    for path in paths:
+        try:
+            mintpy = Hyp3_GAMMA_SBAS(hyp3_dir=path.as_posix())
+            mintpy.prep_data()
+            mintpy.load_data()
+            mintpy.default_setting()
+            mintpy.run()
+            mintpy.clear()
+            mintpy.save_gdal()
+        except Exception as e:
+            print(f"Error processing {path.name}: {e}")
+            continue
 
+    '''
     for path in paths:
         generate_slurm_script(job_name=f'sbas_{path.name}',
                               output_file=f'{path.name}_%j.out',
@@ -176,17 +185,33 @@ def main():
                               cpus_per_task=8, 
                               mem="16G",
                               conda_env='dev',
+                              partition='day-long-cpu',
+                              nodelist='node001',
+                              time='5:00:00',
                               filename=f'{path.name}.slurm',
                               command="export PYTHONPATH=~/InSARScript/src\n"
                               "python << 'EOF'\n" \
-                              "from pathlib import Path\n" \
-                              "from insarscript.core import Hyp3InSAR\n" \
-                              "from insarscript.core import Hyp3GAMMA\n" \
-                              f"mintpy = Hyp3GAMMA(hyp3_dir ='{path}')\n"\
+                              "from insarscript.core import Hyp3_GAMMA_SBAS\n" \
+                              f"path = '{path.as_posix()}'\n" \
+                              f"mintpy = Hyp3_GAMMA_SBAS(hyp3_dir=path)\n"\
+                              "mintpy.prep_data()\n"\
+                              "mintpy.load_data()\n"\
+                              "mintpy.default_setting()\n"\
                               "mintpy.run()\n"\
                               "EOF"
         )
+    '''
+
+
 
 if __name__ == "__main__":
     main()
-'''
+
+"""
+def main():
+    from insarscript.core.sbas import Hyp3_GAMMA_SBAS
+    hyp3_sbas = Hyp3_GAMMA_SBAS(hyp3_dir = '/local/insar/South_America/quicklook_p126f671')
+
+    hyp3_sbas.run()
+"""
+

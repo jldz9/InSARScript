@@ -29,19 +29,26 @@ class Mintpy:
 
     def __init__(self, 
                  workdir: str,
-                 reference_point : list[int] | None=  None,
-                 reference_mask: str = "stack", 
+                 compression: str | None = None,
                  debug = False):
+        """ Initialize Mintpy class
+        :param workdir: The working directory for mintpy processing
+        :param compression: The compression method for output files, default None, options include 'gzip / lzf '
+        :param debug: If True, keep intermediate files, default False
+        """
+       
         self.cfg = readfile.read_template(Path(mintpy.defaults.__file__).parent/'smallbaselineApp.cfg')
         self.workdir = Path(workdir).expanduser().resolve()
-        self._cds_authorize()
         self.workdir.mkdir(parents=True, exist_ok=True)
         self.tmp_dir = self.workdir/'tmp'
         self.clip_dir = self.workdir/'clip'
+        self.cfgfile = self.workdir/'mintpy.cfg'
         
         self.cfg['mintpy.compute.numWorker'] = _env['cpu']
-        self.cfg['mintpy.compute.cluster'] = 'auto' #_env['manager']
+        self.cfg['mintpy.compute.cluster'] = 'local'
         self.cfg['mintpy.compute.maxMemory'] = _env['memory']
+        if compression is not None:
+            self.cfg['mintpy.load.compression'] = compression
         self.debug = debug
 
     def _cds_authorize(self):
@@ -81,20 +88,260 @@ class Mintpy:
                 else:
                     print(f"{Fore.RED}no api token found under .cdsapirc. Will prompt login.\n")
                     return False
-
-class Hyp3GAMMA(Mintpy):
+    def modify_network(self, 
+                    tempBaseMax : int | None = None,
+                    perpBaseMax : int | None = None,
+                    connNumMax : int | None = None,
+                    startDate : int | None = None,
+                    endDate : int | None = None,
+                    excludeDates : list[int] | None = None,
+                    excludeDate120 : list[int] | None = None,
+                    excludeIfgIndex : list[int] | None = None,
+                    referenceFile : str | None = None,
+                    coherenceBased: str | None = None,
+                    minCoherence: float | None = None,
+                    areaRatioBased : str | None = None,
+                    minAreaRatio: float | None = None,
+                    keepMinSpanTree: str | None = None,
+                    maskFile: str | None = None,
+                    aoiYX: list[str] | None = None,
+                    aoiLALO: list[str] | None = None):
     
+        kwargs = {k: v for k, v in locals().items() if k != "self" }
+        for key, value in kwargs.items():
+            if value is not None:
+                self.cfg[f'mintpy.network.{key}'] = value
+
+    def reference_point(self,
+                        yx: list[int] | None = None,
+                        lalo: list[float] | None = None,
+                        maskFile : str | None = None,
+                        coherenceFile : str | None = None,
+                        minCoherence : float | None = None):
+        
+        kwargs = {k: v for k, v in locals().items() if k != "self" }
+        for key, value in kwargs.items():
+            if value is not None:
+                self.cfg[f'mintpy.reference.{key}'] = value
+    
+    def correct_unwrap_error(self, 
+                             method : str | None = None,
+                             waterMaskFile : str | None = None,
+                             connCompMinArea : float | None = None,
+                             numSample: int | None = None,
+                             ramp: str | None = None,
+                             bridgePtsRadius: int | None = None):
+        kwargs = {k: v for k, v in locals().items() if k != "self" }
+        for key, value in kwargs.items():
+            if value is not None:
+                self.cfg[f'mintpy.unwrapError.{key}'] = value
+
+
+
+    def invert_network(self,
+                       weightFunc : str | None = None,
+                       waterMaskFile : str | None = None,
+                       minNormVelocity : str | None = None,
+                       maskDataset : str | None = None,
+                       maskThreshold : float | None = None,
+                       minRedundancy : float | None = None,
+                       minTempCoh: float | None = None,
+                       minNumPixel: int | None = None,
+                       shadowMask: str | None = None,):
+        kwargs = {k: v for k, v in locals().items() if k != "self" }
+        for key, value in kwargs.items():
+            if value is not None:
+                self.cfg[f'mintpy.networkInversion.{key}'] = value
+
+    def correct_SET(self,
+                    solidEarthTides: str | None = None):
+        if solidEarthTides is not None and solidEarthTides in ['yes', 'no']:
+            self.cfg['mintpy.solidEarthTides'] = solidEarthTides
+
+    def correct_ionosphere(self,
+                          method: str | None = None,
+                          excludeDate: list[int] | None = None,
+                          excludeDate12: list[int] | None = None):
+        kwargs = {k: v for k, v in locals().items() if k != "self" }
+        for key, value in kwargs.items():
+            if value is not None:
+                self.cfg[f'mintpy.ionosphericDelay.{key}'] = value
+
+    def correct_troposphere(self,
+                            method: str | None = None,
+                            weatherModel: str | None = None,
+                            weatherDir: str | None = None,
+                            polyOrder: int | None = None,
+                            looks : int | None = None,
+                            minCorrelation: float | None = None,
+                            gacosDir: str | None = None):
+        kwargs = {k: v for k, v in locals().items() if k != "self" }
+        for key, value in kwargs.items():
+            if value is not None:
+                self.cfg[f'mintpy.troposphericDelay.{key}'] = value
+            if key == 'method' and value == 'pyaps' or key == 'method' and value is None:
+                self._cds_authorize()
+                
+    def deramp(self,
+                method: str | None = None,
+                maskFile: str | None = None):
+        
+        if method is not None: 
+            self.cfg['mintpy.deramp'] = method
+        if maskFile is not None:
+            self.cfg['mintpy.deramp.maskFile'] = maskFile
+
+    def correct_topography(self,
+                          method: str | None = None,
+                          phaseVelocity  : str | None = None,
+                          stepDate: str | None = None,
+                          excludeDate: list[int] | None = None,
+                          pixelwiseGeometry: str | None = None):
+        
+
+        kwargs = {k: v for k, v in locals().items() if k != "self" and k != "method" }
+        for key, value in kwargs.items():
+            if value is not None:
+                self.cfg[f'mintpy.topographicResidual.{key}'] = value
+        if method is not None and method in ['yes', 'no']:
+            self.cfg['mintpy.topographicResidual'] = method
+
+    def residual_RMS(self,
+                     maskFile: str | None = None,
+                     deramp: str | None = None,
+                     cutoff: float | None = None):
+        kwargs = {k: v for k, v in locals().items() if k != "self" }
+        for key, value in kwargs.items():
+            if value is not None:
+                self.cfg[f'mintpy.residualRMS.{key}'] = value
+
+    def reference_date(self,
+                       date : str | int | None = None):
+        if date is not None:
+            self.cfg['mintpy.referenceDate'] = date
+
+    def velocity(self, 
+                 startDate: int | None = None,
+                 endDate: int | None = None,
+                 excludeDate: str|list[int] | None = None,
+                 polynomial: int | None = None,
+                 periodic: float| list[float] | None = None,
+                 stepDate: int | list[int] | None = None,
+                 exp: list[int] | None = None,
+                 log: list[int] | None = None,
+                 uncertaintyQuantification: str | None = None,
+                 timeSeriesCovFile: str | None = None,
+                 bootstrapCount: int | None = None):
+        kwargs = {k: v for k, v in locals().items() if k != "self" }
+        for key, value in kwargs.items():
+            if value is not None:
+                self.cfg[f'mintpy.timeFunc.{key}'] = value
+
+    def geocode(self,
+                method: str | None = None,
+                SNWE: list[float] | None = None,
+                laloStep: list[float] | None = None,
+                interpMethod: str | None = None,
+                fillValue: float | None = None):
+        kwargs = {k: v for k, v in locals().items() if k != "self" and k != "method" }
+        for key, value in kwargs.items():
+            if value is not None:
+                self.cfg[f'mintpy.geocode.{key}'] = value
+        if method is not None and method in ['yes', 'no']:
+            self.cfg['mintpy.geocode'] = method
+
+    def config_save(self,
+                     kmz: str | None = None,
+                     hdfEos5: str | None = None,
+                     hdfEos5_update: str | None = None,
+                     hdfEos5_subset: str | None = None):
+        if kmz is not None and kmz in ['yes', 'no']:
+            self.cfg['mintpy.save.kmz'] = kmz
+        if hdfEos5 is not None and hdfEos5 in ['yes', 'no']:
+            self.cfg['mintpy.save.hdfEos5'] = hdfEos5
+        if hdfEos5_update is not None and hdfEos5_update in ['yes', 'no']:
+            self.cfg['mintpy.save.hdfEos5.update'] = hdfEos5_update
+        if hdfEos5_subset is not None and hdfEos5_subset in ['yes', 'no']:
+            self.cfg['mintpy.save.hdfEos5.subset'] = hdfEos5_subset
+    
+    def config_plot(self,
+             method: str | None = None,
+             dpi: int | None = None,
+             maxMemory: int | None = None):
+        kwargs = {k: v for k, v in locals().items() if k != "self" and k != "method" }
+        for key, value in kwargs.items():
+            if value is not None:
+                self.cfg[f'mintpy.plot.{key}'] = value
+        if method is not None and method in ['yes', 'no']:
+            self.cfg['mintpy.plot'] = method
+
+
+    def run(self):
+        print(f'{Style.BRIGHT}Step 5: Run Timeseries analysis')
+        if (self.workdir/'smallbaselineApp.cfg').is_file():
+            cfg_file = self.workdir/'smallbaselineApp.cfg'
+        else:
+            cfg_file = self.workdir/'mintpy.cfg'
+            with cfg_file.open('w') as f:
+                for key, value in self.cfg.items():
+                    if isinstance(value, str):
+                        val_str = value
+                    elif isinstance(value, list):
+                        val_str = ','.join(map(str, value))
+                    else:
+                        val_str = str(value)
+                    f.write(f'{key} = {val_str}\n')
+        app = TimeSeriesAnalysis(cfg_file.as_posix(), self.workdir)
+        app.open()
+        app.run(steps=['load_data', 
+                       'modify_network', 
+                       'reference_point',
+                       'invert_network',
+                       'correct_LOD',
+                       'correct_SET',
+                       'correct_ionosphere',
+                       'correct_troposphere',
+                       'deramp',
+                       'correct_topography',
+                       'residual_RMS',
+                       'reference_date',
+                       'velocity',
+                       'geocode', 
+                       'google_earth',
+                       'hdfeos5'])
+        
+    def clear(self):
+        if not self.debug:
+            if self.tmp_dir.is_dir():
+                shutil.rmtree(self.tmp_dir)
+            if self.clip_dir.is_dir():
+                shutil.rmtree(self.clip_dir)
+            print('tmp files cleaned')
+
+    def save_gdal(self):
+        from mintpy.cli.save_gdal import main as save_gdal_main
+        
+        inps = [
+            (self.workdir/'velocity.h5').as_posix()
+        ]
+        save_gdal_main(inps)
+
+
+class Hyp3_GAMMA_SBAS(Mintpy):
     def __init__(self, 
                  hyp3_dir: str, 
                  workdir: str | None = None,
+                 compression: str | None = None,
                  debug = False):
         
         self.hyp3_dir = Path(hyp3_dir).expanduser().resolve()
         if workdir is None:
             workdir = self.hyp3_dir.as_posix()
-        super().__init__(workdir=workdir, debug=debug)
+       
+        super().__init__(workdir=workdir, compression=compression, debug=debug)
+        print(f'workdir: {self.workdir}')
         self.useful_keys = ['unw_phase.tif', 'corr.tif', 'lv_theta.tif', 'lv_phi.tif', 'water_mask.tif', 'dem.tif']
-
+       
     def unzip_hyp3(self):
         print(f'{Style.BRIGHT}Step 1: Unzip all downloaded hyp3 gamma files')
         hyp3_results = list(self.hyp3_dir.rglob('*.zip'))
@@ -142,7 +389,6 @@ class Hyp3GAMMA(Mintpy):
         common_overlap = (max(ulx_list), min(uly_list), min(lrx_list), max(lry_list)) # (ulx, uly, lrx, lry)
         self.common_overlap = common_overlap
         print(f'{Style.BRIGHT}Step 4: Clip all files to common overlap')
-        self.clip_dir = self.workdir/'clip'
         self.clip_dir.mkdir(parents=True, exist_ok=True)
         clip_files = defaultdict(list)
         for key, files in tqdm(self.useful_files.items(), desc=f'Group', position=0, leave=True):
@@ -167,76 +413,30 @@ class Hyp3GAMMA(Mintpy):
         self.clip_files = clip_files
         if not self.debug:
             shutil.rmtree(self.tmp_dir)
+    
+    def prep_data(self):
+        self.unzip_hyp3()
+        self.collect_files()
+        self.clip_to_overlap()
 
-    def get_high_coh_mask(self, min_corr = 0.85):
-        print(f'{Style.BRIGHT}Step 5: Generate stack-wide high-coherence mask')
-        self.mask_file = self.workdir/"stack_corr_mask.tif"
-        if self.mask_file.is_file(): 
-            print(f'{self.mask_file} exist, skip')
-
-        else:
-            clip_corr = sorted(self.clip_files['corr'])
-            if len(clip_corr) < 1: 
-                raise FileNotFoundError(f"No corr file found under {self.clip_dir}")
-            
-            with rasterio.open(clip_corr[0]) as src:
-                profile = src.profile
-                profile.update(dtype=rasterio.uint8, count=1)
-                stack = np.zeros((len(clip_corr), src.height, src.width), dtype=np.float32)
-
-            for i, f in tqdm(enumerate(clip_corr), desc="Reading corr masks"):
-                with rasterio.open(f) as src: 
-                    stack[i] = src.read(1)
-
-            minimal = np.min(stack, axis=0)
-            mask = (minimal >= min_corr).astype(np.uint8) 
-            with rasterio.open(self.mask_file, "w", **profile) as dst:
-                    dst.write(mask,1)
-            
-    def run(self):
-        print(f'{Style.BRIGHT}Step 6: Run Timeseries analysis')
+    def load_data(self):
+        print(f'{Style.BRIGHT}Step 5: load_data')
         self.cfg['mintpy.load.processor'] = 'hyp3'
         self.cfg['mintpy.load.unwFile'] = (self.clip_dir/'*_unw_phase_clip.tif').as_posix()
         self.cfg['mintpy.load.corFile'] = (self.clip_dir/'*_corr_clip.tif').as_posix()
         self.cfg['mintpy.load.demFile'] = (self.clip_dir/'*_dem_clip.tif').as_posix()
-        if not hasattr(self, 'mask_file'):
-            self.cfg['mintpy.reference.maskFile'] = 'auto'
-        else:
-            self.cfg['mintpy.reference.maskFile'] = (self.workdir/"stack_corr_mask.tif").as_posix()
-        self.cfg['mintpy.deramp'] = 'linear'
-        self.cfg['mintpy.topographicResidual'] = 'yes'
-        self.cfg['mintpy.troposphericDelay.method'] = 'pyaps'
-
         for key, minpy_key  in zip(['lv_theta.tif', 'lv_phi.tif', 'water_mask.tif'],['mintpy.load.incAngleFile', 'mintpy.load.azAngleFile','mintpy.load.waterMaskFile']) :
             if len(list(self.clip_dir.rglob(f'*_{key.split('.')[0]}_clip.tif'))) >0:
                 self.cfg[minpy_key] = self.clip_dir.joinpath(f'*_{key.split('.')[0]}_clip.tif').as_posix()
             else:
                 print(f'*_{key} does not exist, will skip in config')
                 continue
-        cfg_file = self.workdir/'hyp3gamma.cfg'
-        with cfg_file.open('w') as f:
-            for key, value in self.cfg.items():
-                if isinstance(value, str):
-                    val_str = value
-                elif isinstance(value, list):
-                    val_str = ','.join(map(str, value))
-                else:
-                    val_str = str(value)
-                f.write(f'{key} = {val_str}\n')
-        app = TimeSeriesAnalysis(cfg_file.as_posix(), self.workdir)
-        app.open()
-        app.run(steps=['load_data', 'modify_network', 'reference_point', 'invert_network','correct_troposphere','deramp','correct_topography','residual_RMS','reference_date','velocity','geocode', 'google_earth'])
-    
-    def clear(self):
-        if not self.debug:
-            shutil.rmtree(self.tmp_dir)
-            shutil.rmtree(self.clip_dir)
-            print('tmp files cleaned')
 
-    def save_gdal(self):
-        from mintpy.cli.save_gdal import main
-        
-        inps = [
-            (self.workdir/'velocity.h5').as_posix()
-        ]
-        main(inps)
+    def default_setting(self):
+        self.deramp(method='linear')
+        self.config_plot(method='no')
+        self.correct_troposphere()
+    
+    
+
+ 

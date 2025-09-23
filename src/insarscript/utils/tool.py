@@ -2,17 +2,20 @@
 # -*- coding: utf-8 -*-
 import time
 import json
+from dateutil.parser import isoparse
 from pathlib import Path
 from pprint import pformat
-from dateutil.parser import isoparse
+from types import SimpleNamespace
+
 
 
 import tomllib, tomli_w
 from tqdm import tqdm
-from box import Box as Config
+from box import Box 
 from colorama import Fore
+from mintpy.utils import readfile
 
-from insarscript.core import S1_SLC, select_pairs, Hyp3InSAR
+from insarscript.core import S1_SLC, select_pairs, Hyp3_GAMMA_Processor
 
 def get_config(config_path=None):
 
@@ -24,7 +27,7 @@ def get_config(config_path=None):
         try:
             with open(config_path, 'rb') as f:
                 toml = tomllib.load(f)
-                cfg = Config(toml)
+                cfg = Box(toml)
                 return cfg
         except Exception as e:
                 raise ValueError(f"Error loading config file with error {e}, is this a valid config file in TOML format?")
@@ -82,13 +85,13 @@ def quick_look_dis(
         
         if processor == "hyp3":
             print("---------Using HyP3 online processor-----------")
-            long_job = Hyp3InSAR(
+            job = Hyp3_GAMMA_Processor(
                 pairs=pairs,
                 out_dir=slc_path.as_posix(),
                 earthdata_credentials_pool=credit_pool
             )
-            long_job.submit()
-            long_job.save(slc_path.as_posix()+f"/quicklook_hyp3_p{key[0]}f{key[1]}.json")
+            job.submit()
+            job.save(slc_path.as_posix()+f"/quicklook_hyp3_p{key[0]}f{key[1]}.json")
             print(f"Submitted long job for Path{key[0]} Frame{key[1]}, Job file saved under {slc_path.as_posix()+f'/hyp3_long_p{key[0]}f{key[1]}.json'}")
             time.sleep(1)
 
@@ -109,7 +112,7 @@ def hyp3_batch_check(
     json_files = batch_path.rglob('*.json')
 
     for file in json_files:
-        job = Hyp3InSAR.load(file, earthdata_credentials_pool=earthdata_credentials_pool)
+        job = Hyp3_GAMMA_Processor.load(file, earthdata_credentials_pool=earthdata_credentials_pool)
         b = json.loads(file.read_text())
         print(f'Overview for job {Path(b['out_dir'])}')
         if not download :
@@ -132,7 +135,6 @@ def earth_credit_pool(earthdata_credentials_pool_path:str) -> dict:
     return earthdata_credentials_pool
 
 
-
 def generate_slurm_script(
     job_name="my_job",
     output_file="job_%j.out",    # %j = jobID
@@ -140,6 +142,7 @@ def generate_slurm_script(
     time="04:00:00",
     partition="all",
     nodes=1,
+    nodelist=None,            # e.g., "node[01-05]"
     ntasks=1,
     cpus_per_task=1,
     mem="4G",
@@ -187,6 +190,8 @@ def generate_slurm_script(
         lines.append(f"#SBATCH --account={account}")
     if qos:
         lines.append(f"#SBATCH --qos={qos}")
+    if nodelist:
+        lines.append(f"#SBATCH --nodelist={nodelist}")
 
     lines.append("")  # blank line
 

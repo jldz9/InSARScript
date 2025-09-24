@@ -1,23 +1,28 @@
 [build-system]
-requires = ['setuptools>=61.0']
+requires = ['setuptools>=61.0', 'wheel']
 build-backend = 'setuptools.build_meta'
+
 [project]
 name = "insarscript"
 dynamic= ["version"]
 authors = [{name="jldz9", email="Jiaweiliwork@outlook.com"}]
 description = "Hassle-free InSAR processing scripts for multiple satellites"
 readme = 'README.md'
-dependencies = []
+dependencies = [
+]
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-[project.scripts]
-insarscript = "insarscript.main:main"
-[tool.setuptools.package-data]
-"insarscript.utils" = ['config.toml']
+
+[project.urls]
+homepage = "https://jldz9.github.io/InSARScript"
+repository = "https://github.com/jldz9/InSARScript"
+
 [tool.setuptools.packages.find]
 where = ['src']
+
 [tool.setuptools.dynamic]
 version = {attr = "insarscript._version.__version__"}

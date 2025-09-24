@@ -5,7 +5,8 @@ WORKDIR =  "/"  ## Your Path to the working directory
 
 [DOWNLOADER]    
 PLATFORM = ['SENTINEL1A', 'SENTINEL1B', 'SENTINEL1C'] ## Satellite platforms, could be string or a list of string
-
+ASCENDING = True
+PATH = 
 
 [PREPROCESS]
 TILE_SIZE = 100 # meter

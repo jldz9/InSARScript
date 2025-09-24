@@ -14,9 +14,9 @@ logging.disable(logging.CRITICAL)
 from insarscript._version import __version__
 
 
-# For Sentinal-1 InSAR processing, ISCE2 and MintPy are used by default.
+# For Sentinal-1 InSAR processing, Hyp3 and MintPy are used by default.
 # ---------------------Check GDAL and SQLite3 version---------------------
-# GDAL and SQLite3 are required by ISCE2 and MintPy
+# GDAL and SQLite3 are required by MintPy
 # Use gdal > 3.8 and sqlite > 3.44 to avoid compatibility issues. (e.g.undefined symbol: sqlite3_total_changes64)
 from packaging.version import parse as v
 from osgeo import gdal
@@ -41,7 +41,8 @@ if os.environ.get('PROJ_LIB') is None:
             raise RuntimeError('Proj does not installed correctly.')
 
 # ---------------------ISCE2 Configuration---------------------
-# If ISCE and Mintpy are proper installed, ISCE_HOME should exist in the environment
+# If choose local processing, ISCE2 is required for Sentinel-1 SLC processing
+# If ISCE is proper installed, ISCE_HOME should exist in the environment
 # if ISCE_HOME exist, appending ISCE_HOME/applications and ISCE_HOME/bin to sys.path as recommended by MintPy 
 # https://github.com/yunjunz/conda-envs/blob/main/README.md#2-install-isce-2-and-mintpy
 try: 

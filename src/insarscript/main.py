@@ -23,16 +23,16 @@ def create_parser():
     parser_download.add_argument(
         "-s", "--satellite",
         metavar="STR",
-        default="Sentinel1"
+        default="Sentinel1",
         help="Choose the satellite type"
     )
 
     parser_download.add_argument(
         "-b", "--bbox",
         nargs=4,
-        metavar=('WEST_LON','SOUTH_LAT', 'EAST_LON', 'NORTH_LAT')
-        type=float
-        required=True
+        metavar=('WEST_LON','SOUTH_LAT', 'EAST_LON', 'NORTH_LAT'),
+        type=float,
+        required=True,
         help="The bounding box of AOI, west_lon, south_lat, east_lon, north_lat"
     )
 

@@ -102,7 +102,13 @@ elif 'LSB_JOB_NUMPROC' in os.environ:
     _manager = 'lsf'
 else:
     print('--------------------Local environment---------------------')
-    _memory_gb, _, __ = map(int, os.popen('free -t -m').readlines()[-1].split()[1:])
+        
+    # Check if the necessary keys are available
+    if 'SC_PAGE_SIZE' in os.sysconf_names and 'SC_PHYS_PAGES' in os.sysconf_names:
+        page_size = os.sysconf('SC_PAGE_SIZE')
+        phys_pages = os.sysconf('SC_PHYS_PAGES')
+        _memory_gb = round((page_size * phys_pages) / (1024**3))
+    else: _memory_gb = 8  # set default memory to 8GB if the system does not support os.sysconf
     _cpu_core = os.cpu_count()
     _manager = 'local'
 

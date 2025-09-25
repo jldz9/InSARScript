@@ -21,7 +21,7 @@ def get_config(config_path=None):
 
     """A function to load config file in TOML format"""
     if config_path is None:
-        config_path = Path(__file__).parent/'config.toml'        
+        config_path = Path(__file__).parent.joinpath('config.toml')        
     config_path = Path(config_path)
     if config_path.is_file():
         try:
@@ -70,7 +70,7 @@ def quick_look_dis(
         if len(r) <= 10:
             print(f"{Fore.YELLOW}Not enough SLCs found for Path{key[0]} Frame{key[1]}, skip.")
             continue
-        slc_path = output_dir/f"quicklook_p{key[0]}f{key[1]}"
+        slc_path = output_dir.joinpath(f"quicklook_p{key[0]}f{key[1]}")
         slc_path.mkdir(parents=True, exist_ok=True)
         pairs = select_pairs(
             r,
@@ -91,7 +91,7 @@ def quick_look_dis(
                 earthdata_credentials_pool=credit_pool
             )
             job.submit()
-            job.save(slc_path.as_posix()+f"/quicklook_hyp3_p{key[0]}f{key[1]}.json")
+            job.save(slc_path.joinpath(f"quicklook_hyp3_p{key[0]}f{key[1]}.json").as_posix())
             print(f"Submitted long job for Path{key[0]} Frame{key[1]}, Job file saved under {slc_path.as_posix()+f'/hyp3_long_p{key[0]}f{key[1]}.json'}")
             time.sleep(1)
 

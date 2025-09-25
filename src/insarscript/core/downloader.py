@@ -88,14 +88,16 @@ class ASFDownloader:
             flight_dir = "asc"
         elif flightDirection == asf.FLIGHT_DIRECTION.DESCENDING:
             flight_dir = "des"
+        else:
+            raise ValueError(f"flightDirection needs to be either asf.FLIGHT_DIRECTION.ASCENDING or asf.FLIGHT_DIRECTION.DESCENDING")
         output_dir = Path(output_dir).expanduser().resolve() if output_dir else None # type: ignore
         if output_dir is None:
-            self.output_dir = Path.cwd() / "tmp"
+            self.output_dir = Path.cwd().joinpath("tmp")
         elif not output_dir.is_absolute():
-            self.output_dir = Path.cwd() / self.output_dir
+            self.output_dir = Path.cwd().joinpath(output_dir)
         else: 
             self.output_dir = Path(output_dir).expanduser().resolve()
-        self.output_dir = self.output_dir / flight_dir
+        self.output_dir = self.output_dir.joinpath(flight_dir)
         print(f"Prcess directory is set to: {self.output_dir}")
 
         self._asf_authorize()
@@ -116,7 +118,7 @@ Check documentation for how to setup .netrc file.\n""")
                     print(f"{Fore.RED}Authentication failed. Please check your credentials and try again.\n")
                     continue
                 print(f"{Fore.GREEN}Authentication successful.\n")
-                netrc_path = Path.home() / ".netrc"
+                netrc_path = Path.home().joinpath(".netrc")
                 asf_entry = f"\nmachine urs.earthdata.nasa.gov\n    login {_username}\n    password {_password}\n"
                 with open(netrc_path, 'a') as f:
                     f.write(asf_entry)
@@ -127,7 +129,7 @@ Check documentation for how to setup .netrc file.\n""")
        
     def _check_netrc(self, keyword: str) -> bool:
         """Check if .netrc file exists in the home directory."""
-        netrc_path = Path.home() / '.netrc'
+        netrc_path = Path.home().joinpath('.netrc')
         if not netrc_path.is_file():            
             print(f"{Fore.RED}No .netrc file found in your home directory. Will prompt login.\n")
             return False
@@ -256,7 +258,7 @@ Check documentation for how to setup .netrc file.\n""")
         else: 
             output_dir = self.output_dir
         for key, results in self.results.items():
-            download_path = output_dir.joinpath(f'dem/p{key[0]}_f{key[1]}')
+            download_path = output_dir.joinpath(f'dem',f'p{key[0]}_f{key[1]}')
             download_path.mkdir(exist_ok=True, parents=True)
             geom = shape(results[0].geometry)
             west_lon, south_lat, east_lon, north_lat =  geom.bounds
@@ -268,7 +270,7 @@ Check documentation for how to setup .netrc file.\n""")
                 dst_ellipsoidal_height=True
             )
             
-            with rio.open(download_path/f'dem_p{key[0]}_f{key[1]}.tif', 'w', **p) as ds:
+            with rio.open(download_path.joinpath(f'dem_p{key[0]}_f{key[1]}.tif'), 'w', **p) as ds:
                     ds.write(X,1)
                     ds.update_tags(AREA_OR_POINT='Point')
         return X, p
@@ -408,7 +410,7 @@ IF you wish to download oribit files from ASF and skip CDSE, use .download(force
                         continue
                     else:
                         print(f"{Fore.GREEN}Authentication successful.\n")
-                        netrc_path = Path.home() / ".netrc"
+                        netrc_path = Path.home().joinpath(".netrc")
                         cdse_entry = f"\nmachine dataspace.copernicus.eu\n    login {self._cdse_username}\n    password {self._cdse_password}\n"
                         with open(netrc_path, 'a') as f:
                             f.write(cdse_entry)

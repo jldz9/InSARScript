@@ -36,7 +36,7 @@ if os.environ.get('PROJ_LIB') is None:
     if os.environ.get('CONDA_PREFIX') is None:
         raise RuntimeError('Conda is not correctly installed, $CONDA_PREFIX does not exist')
     else: 
-        os.environ["PROJ_LIB"] = os.environ['CONDA_PREFIX']+'/share/proj'
+        os.environ["PROJ_LIB"] = Path(os.environ['CONDA_PREFIX']).joinpath('share', 'proj').as_posix()
         if not Path(os.environ["PROJ_LIB"]).is_dir():
             raise RuntimeError('Proj does not installed correctly.')
 
@@ -54,7 +54,7 @@ except ImportError:
 
 # b. Dask for parallel processing
 from dask import config as dask_config
-tmp_dir = Path.home() / '.dask' / 'tmp'
+tmp_dir = Path.home().joinpath('.dask','tmp') 
 tmp_dir.mkdir(parents=True, exist_ok=True)
 dask_config.set({'temporary_directory':str(tmp_dir)})
 

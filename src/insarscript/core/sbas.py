@@ -37,12 +37,12 @@ class Mintpy:
         :param debug: If True, keep intermediate files, default False
         """
        
-        self.cfg = readfile.read_template(Path(mintpy.defaults.__file__).parent/'smallbaselineApp.cfg')
+        self.cfg = readfile.read_template(Path(mintpy.defaults.__file__).parent.joinpath('smallbaselineApp.cfg'))
         self.workdir = Path(workdir).expanduser().resolve()
         self.workdir.mkdir(parents=True, exist_ok=True)
-        self.tmp_dir = self.workdir/'tmp'
-        self.clip_dir = self.workdir/'clip'
-        self.cfgfile = self.workdir/'mintpy.cfg'
+        self.tmp_dir = self.workdir.joinpath('tmp')
+        self.clip_dir = self.workdir.joinpath('clip')
+        self.cfgfile = self.workdir.joinpath('mintpy.cfg')
         
         self.cfg['mintpy.compute.numWorker'] = _env['cpu']
         self.cfg['mintpy.compute.cluster'] = 'local'
@@ -57,7 +57,7 @@ class Mintpy:
         else: 
             while True:
                 self._cds_token = getpass.getpass("Enter your CDS api token at https://cds.climate.copernicus.eu/profile: ")
-                cdsrc_path = Path.home() / ".cdsapirc"
+                cdsrc_path = Path.home().joinpath(".cdsapirc")
                 if cdsrc_path.is_file():
                     cdsrc_path.unlink()
                 cdsrc_entry = f"\nurl: https://cds.climate.copernicus.eu/api\nkey: {self._cds_token}"
@@ -65,7 +65,7 @@ class Mintpy:
                     f.write(cdsrc_entry)
                     print(f"{Fore.GREEN}Credentials saved to {cdsrc_path}.\n")
                 try:
-                    tmp = (Path.home()/".cdsrc_test").mkdir(exist_ok=True)
+                    tmp = (Path.home().joinpath(".cdsrc_test")).mkdir(exist_ok=True)
                     pyaps3.ECMWFdload(['20200601','20200901'], hr='14', filedir=tmp, model='ERA5', snwe=(30,40,120,140))
                     shutil.rmtree(tmp)
                     print(f"{Fore.GREEN}Authentication successful.\n")
@@ -76,7 +76,7 @@ class Mintpy:
             
     def _check_cdsapirc(self):
         """Check if .cdsapirc token exist under home directory."""
-        cdsapirc_path = Path.home() / '.cdsapirc'
+        cdsapirc_path = Path.home().joinpath('.cdsapirc')
         if not cdsapirc_path.is_file():            
             print(f"{Fore.RED}No .cdsapirc file found in your home directory. Will prompt login.\n")
             return False
@@ -278,10 +278,10 @@ class Mintpy:
 
     def run(self):
         print(f'{Style.BRIGHT}Step 5: Run Timeseries analysis')
-        if (self.workdir/'smallbaselineApp.cfg').is_file():
-            cfg_file = self.workdir/'smallbaselineApp.cfg'
+        if (self.workdir.joinpath('smallbaselineApp.cfg')).is_file():
+            cfg_file = self.workdir.joinpath('smallbaselineApp.cfg')
         else:
-            cfg_file = self.workdir/'mintpy.cfg'
+            cfg_file = self.workdir.joinpath('mintpy.cfg')
             with cfg_file.open('w') as f:
                 for key, value in self.cfg.items():
                     if isinstance(value, str):
@@ -322,7 +322,7 @@ class Mintpy:
         from mintpy.cli.save_gdal import main as save_gdal_main
         
         inps = [
-            (self.workdir/'velocity.h5').as_posix()
+            (self.workdir.joinpath('velocity.h5')).as_posix()
         ]
         save_gdal_main(inps)
 
@@ -347,7 +347,7 @@ class Hyp3_GAMMA_SBAS(Mintpy):
         hyp3_results = list(self.hyp3_dir.rglob('*.zip'))
         self.tmp_dir.mkdir(parents=True, exist_ok=True)
         for zip_file in tqdm(hyp3_results, desc=f"Unzipping hyp3 gamma files"):
-            if (self.tmp_dir/zip_file.stem).is_dir():
+            if (self.tmp_dir.joinpath(zip_file.stem)).is_dir():
                 print(f'{Fore.YELLOW}{zip_file.stem} exist, skip')
                 continue
             else:
@@ -394,7 +394,7 @@ class Hyp3_GAMMA_SBAS(Mintpy):
         for key, files in tqdm(self.useful_files.items(), desc=f'Group', position=0, leave=True):
             if key in [u.split('.')[0] for u in self.useful_keys] and len(files) > 0:
                 for file in tqdm(files, desc="Clipping jobs", position=1, leave=False):
-                    dst_file = self.clip_dir/f'{file.stem}_clip.tif'
+                    dst_file = self.clip_dir.joinpath(f'{file.stem}_clip.tif')
                     if dst_file.is_file():
                         print(f'{Fore.YELLOW}{dst_file.name} exist, skip')
                         clip_files[key].append(dst_file)
@@ -407,9 +407,9 @@ class Hyp3_GAMMA_SBAS(Mintpy):
                     clip_files[key].append(dst_file)
             elif key == 'meta':
                 for file in tqdm(files, desc='Copying metadata'):
-                    if (self.clip_dir/file.name).is_file():
+                    if (self.clip_dir.joinpath(file.name)).is_file():
                         continue
-                    shutil.copy(file, self.clip_dir/file.name)
+                    shutil.copy(file, self.clip_dir.joinpath(file.name))
         self.clip_files = clip_files
         if not self.debug:
             shutil.rmtree(self.tmp_dir)
@@ -422,9 +422,9 @@ class Hyp3_GAMMA_SBAS(Mintpy):
     def load_data(self):
         print(f'{Style.BRIGHT}Step 5: load_data')
         self.cfg['mintpy.load.processor'] = 'hyp3'
-        self.cfg['mintpy.load.unwFile'] = (self.clip_dir/'*_unw_phase_clip.tif').as_posix()
-        self.cfg['mintpy.load.corFile'] = (self.clip_dir/'*_corr_clip.tif').as_posix()
-        self.cfg['mintpy.load.demFile'] = (self.clip_dir/'*_dem_clip.tif').as_posix()
+        self.cfg['mintpy.load.unwFile'] = (self.clip_dir.joinpath('*_unw_phase_clip.tif')).as_posix()
+        self.cfg['mintpy.load.corFile'] = (self.clip_dir.joinpath('*_corr_clip.tif')).as_posix()
+        self.cfg['mintpy.load.demFile'] = (self.clip_dir.joinpath('*_dem_clip.tif')).as_posix()
         for key, minpy_key  in zip(['lv_theta.tif', 'lv_phi.tif', 'water_mask.tif'],['mintpy.load.incAngleFile', 'mintpy.load.azAngleFile','mintpy.load.waterMaskFile']) :
             if len(list(self.clip_dir.rglob(f"*_{key.split('.')[0]}_clip.tif"))) >0:
                 self.cfg[minpy_key] = self.clip_dir.joinpath(f"*_{key.split('.')[0]}_clip.tif").as_posix()

@@ -184,7 +184,7 @@ class Hyp3_GAMMA_Processor:
                     print(f"{Fore.RED}Authentication failed. Please check your credentials and try again.\n")
                     continue
                 print(f"{Fore.GREEN}Authentication successful.\n")
-                netrc_path = Path.home() / ".netrc"
+                netrc_path = Path.home().joinpath(".netrc")
                 hyp3_entry = f"\nmachine urs.earthdata.nasa.gov\n    login {self._username}\n    password {self._password}\n"
                 with open(netrc_path, 'a') as f:
                     f.write(hyp3_entry)
@@ -192,7 +192,7 @@ class Hyp3_GAMMA_Processor:
                 break
         else:
             self.client = HyP3()
-            self._username,_,self._password = netrc.netrc(Path.home()/".netrc").authenticators('urs.earthdata.nasa.gov')
+            self._username,_,self._password = netrc.netrc(Path.home().joinpath(".netrc")).authenticators('urs.earthdata.nasa.gov')
         if pool is not None and isinstance(pool, dict) and len(pool) > 0:
             self._username_pool = list(pool.keys())
             self._password_pool = list(pool.values())
@@ -296,10 +296,10 @@ class Hyp3_GAMMA_Processor:
             raise ValueError("Inconsistent looks in failed jobs.")
         self.pairs = [(job.job_parameters['granules'][0], job.job_parameters['granules'][1]) for job in self.failed_jobs]
         _ = self.submit()
-        retry_path = self.out_dir+'/hyp3_retry_jobs.json'
+        retry_path = Path(self.out_dir).joinpath('hyp3_retry_jobs.json')
         if Path(retry_path).is_file():
             timestamp = time.strftime("%Y%m%dT%H%M%S", time.localtime())
-            retry_path = self.out_dir+f'/hyp3_retry_jobs_{timestamp}.json'
+            retry_path = Path(self.out_dir).joinpath(f'hyp3_retry_jobs_{timestamp}.json')
             print(f"{Fore.YELLOW}hyp3_retry_jobs.json already exists, saving to {retry_path} instead.")
         self.save(retry_path)
 
@@ -382,7 +382,7 @@ class Hyp3_GAMMA_Processor:
 
     def _check_netrc(self, keyword: str) -> bool:
         """Check if .netrc file exists in the home directory."""
-        netrc_path = Path.home() / '.netrc'
+        netrc_path = Path.home().joinpath('.netrc')
         if not netrc_path.is_file():            
             print(f"{Fore.RED}No .netrc file found in your home directory. Will prompt login.\n")
             return False

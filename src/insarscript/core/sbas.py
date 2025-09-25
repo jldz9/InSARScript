@@ -426,8 +426,8 @@ class Hyp3_GAMMA_SBAS(Mintpy):
         self.cfg['mintpy.load.corFile'] = (self.clip_dir/'*_corr_clip.tif').as_posix()
         self.cfg['mintpy.load.demFile'] = (self.clip_dir/'*_dem_clip.tif').as_posix()
         for key, minpy_key  in zip(['lv_theta.tif', 'lv_phi.tif', 'water_mask.tif'],['mintpy.load.incAngleFile', 'mintpy.load.azAngleFile','mintpy.load.waterMaskFile']) :
-            if len(list(self.clip_dir.rglob(f'*_{key.split('.')[0]}_clip.tif'))) >0:
-                self.cfg[minpy_key] = self.clip_dir.joinpath(f'*_{key.split('.')[0]}_clip.tif').as_posix()
+            if len(list(self.clip_dir.rglob(f"*_{key.split('.')[0]}_clip.tif"))) >0:
+                self.cfg[minpy_key] = self.clip_dir.joinpath(f"*_{key.split('.')[0]}_clip.tif").as_posix()
             else:
                 print(f'*_{key} does not exist, will skip in config')
                 continue

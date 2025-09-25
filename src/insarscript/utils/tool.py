@@ -114,7 +114,7 @@ def hyp3_batch_check(
     for file in json_files:
         job = Hyp3_GAMMA_Processor.load(file, earthdata_credentials_pool=earthdata_credentials_pool)
         b = json.loads(file.read_text())
-        print(f'Overview for job {Path(b['out_dir'])}')
+        print(f"Overview for job {Path(b['out_dir'])}")
         if not download :
             batchs = job.refresh()
         if download :

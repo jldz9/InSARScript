@@ -222,7 +222,7 @@ class Hyp3_GAMMA_Processor:
                     job = self.client.submit_insar_job(
                         granule1=ref_id,
                         granule2=sec_id,
-                        name= f'{self.job_name_prefix}_{ref_id.split('_')[5]}_{sec_id.split('_')[5]}',
+                        name= f"{self.job_name_prefix}_{ref_id.split('_')[5]}_{sec_id.split('_')[5]}",
                         include_look_vectors=self.include_look_vectors,
                         include_inc_map = self.include_inc_map,
                         looks = self.looks,

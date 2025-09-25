@@ -2,8 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import os
+import platform
 import sys
 import logging
+
 from pathlib import Path
 
 from colorama import init
@@ -12,6 +14,8 @@ from colorama import Fore, Style, Back
 
 logging.disable(logging.CRITICAL)
 from insarscript._version import __version__
+
+_system_info = platform.system()
 
 
 # For Sentinal-1 InSAR processing, Hyp3 and MintPy are used by default.
@@ -36,9 +40,18 @@ if os.environ.get('PROJ_LIB') is None:
     if os.environ.get('CONDA_PREFIX') is None:
         raise RuntimeError('Conda is not correctly installed, $CONDA_PREFIX does not exist')
     else: 
-        os.environ["PROJ_LIB"] = Path(os.environ['CONDA_PREFIX']).joinpath('share', 'proj').as_posix()
+        if _system_info == 'Windows':
+            os.environ["PROJ_LIB"] = Path(os.environ['CONDA_PREFIX']).joinpath('Library', 'share', 'proj').as_posix()
+        else:
+            os.environ["PROJ_LIB"] = Path(os.environ['CONDA_PREFIX']).joinpath('share', 'proj').as_posix()
         if not Path(os.environ["PROJ_LIB"]).is_dir():
-            raise RuntimeError('Proj does not installed correctly.')
+            import pyproj
+            proj_data_path = Path(pyproj.datadir.get_data_dir())
+            if proj_data_path.is_dir():
+                os.environ["PROJ_LIB"] = proj_data_path.as_posix()
+            else:
+                raise RuntimeError('Proj data path does not exist, please check your PROJ installation')
+            
 
 # ---------------------MintPy Configuration---------------------------
 # Configuration followed the MintPy post-installation setip 
@@ -82,8 +95,6 @@ elif 'LSB_JOB_NUMPROC' in os.environ:
     _manager = 'lsf'
 else:
     print('--------------------Local environment---------------------')
-        
-    # Check if the necessary keys are available
     if 'SC_PAGE_SIZE' in os.sysconf_names and 'SC_PHYS_PAGES' in os.sysconf_names:
         page_size = os.sysconf('SC_PAGE_SIZE')
         phys_pages = os.sysconf('SC_PHYS_PAGES')
@@ -95,7 +106,8 @@ else:
 _env = {
         "memory": _memory_gb,
         "cpu": _cpu_core,
-        "manager": _manager
+        "manager": _manager,
+        "system": _system_info,
 
     }
 # ---------------------package imports---------------------

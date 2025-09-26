@@ -158,7 +158,7 @@ df = pd.DataFrame(results)
 
 
 #hyp3_batch_check('~/glb_dis/insar/tianjin/quick_look', download=True)
-
+'''
 def main():
     from insarscript.utils import generate_slurm_script
     from insarscript.core import Hyp3_GAMMA_SBAS
@@ -177,7 +177,7 @@ def main():
             print(f"Error processing {path.name}: {e}")
             continue
 
-    '''
+    
     for path in paths:
         generate_slurm_script(job_name=f'sbas_{path.name}',
                               output_file=f'{path.name}_%j.out',
@@ -201,7 +201,18 @@ def main():
                               "EOF"
         )
     '''
-
+from insarscript.core import S1_SLC
+def main():
+ 
+    from insarscript.utils import quick_look_dis
+    quick_look_dis(
+        bbox=[-63.799, -26.774, -54.06, -22.868],
+        
+        AscendingflightDirection=False,
+        processor="hyp3",
+        output_dir = '/local/insar/South_America')
+    
+    
 
 
 if __name__ == "__main__":

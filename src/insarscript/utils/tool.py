@@ -79,7 +79,7 @@ def quick_look_dis(
             dt_max=120, 
             pb_max=200,
             min_degree=2,
-            max_degree=4,
+            max_degree=5,
             force_connect=True
             )
         

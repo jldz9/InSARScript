@@ -44,7 +44,7 @@ def select_pairs(search_results: list[ASFProduct],
     id_time = {p.properties['sceneName']: p.properties['startTime'] for p in prods}
     # 1) Build pairwise baseline table with caching (N stacks; each pair filled once)
     B = {} # (earlier,later) -> (|dt_days|, |bperp_m|)
-    for ref in prods:
+    for ref in tqdm(prods, desc="Finding pairs", position=0, leave=True):
         rid = ref.properties['sceneName']
         print(f'looking for paris for {rid}')
         for attempt in range(1, 11):

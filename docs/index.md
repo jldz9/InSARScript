@@ -1,6 +1,6 @@
-## Welcome to InSARScript ! :smile:
-InSAR Script is an open-source pacakge focus on full InSAR processing pipeline.
-The goal of this pacakge is to provide hassle-free InSAR processing experience for multiple satellite products.
+## Welcome to InSARScript ! :tada:
+InSAR Script is an open-source package designed to support the full InSAR processing pipeline.
+The primary goal of this package is to provide a streamlined and user-friendly InSAR processing experience across multiple satellite products.
 
 This document will assume you have fundimental understanding of: 
 
@@ -12,7 +12,9 @@ This document will assume you have fundimental understanding of:
 
 ## System Requirement 
 
-InSARScript should be able to run on any Linux-based system. 
+InSARScript is designed to run on Unix-based systems. Internet connection is required. 
+Windows compatibility is under testing and may not function reliably.
+
 The package has been tested under Ubuntu 22.04.4 LTS 
 
 *[WSL2]: Windows Subsystem for Linux 2
@@ -26,8 +28,13 @@ Test environment:
 | Memory  | 64GB DDR5           |
 | Operate System| Ubuntu 22.04.4 LTS |
 
+## Disclaimer
+
+This package is provided "as-is" without any warranties, express or implied. The authors and contributors make no guarantees regarding the functionality, reliability, or suitability of the package for any particular purpose. By using this package, you assume all risks associated with its use, and the developers are not liable for any damages or issues that may arise, whether directly or indirectly, from its use.
+
 ## Need Help? 
 
 Meanwhile, if you have any question relate to the package or the documentation, please feel free to submit [![GitHub](https://img.shields.io/badge/Issue-%2312100E?logo=github&logoColor=black&color=white)](https://github.com/jldz9/InSARScript/issues), 
 join [![Discord](https://img.shields.io/badge/Discord-%235865F2?logo=discord&logoColor=white)](https://discord.gg/RJJM42MBUU), 
 or send me [![Email](https://img.shields.io/badge/Email-%23EA4335?logo=gmail&logoColor=white)](mailto:jiaweiliwork@outlook.com)
+

@@ -203,17 +203,17 @@ def main():
     '''
 from insarscript.core import S1_SLC
 def main():
- 
-    from insarscript.utils import quick_look_dis
-    quick_look_dis(
-        bbox=[-63.799, -26.774, -54.06, -22.868],
-        
+    a = S1_SLC(
+        platform=['Sentinel-1A', 'Sentinel-1B', 'Sentinel-1C'],
         AscendingflightDirection=False,
-        processor="hyp3",
-        output_dir = '/local/insar/South_America')
+        bbox = [124.3,45.0, 125.0, 46.0],
+        start='2020-01-01',
+        end='2020-12-31',
+        output_dir = '~/S1',
+    )
+    results = a.search()
+    a.footprint(save_path='./footprint.png')
     
-    
-
 
 if __name__ == "__main__":
     main()

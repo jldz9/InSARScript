@@ -32,7 +32,9 @@ theme:
 
 nav: 
   - Home: index.md
-  - QuickStart: quickstart.md
+  - QuickStart: 
+        - Setup: quickstart/install.md
+        - Workflow: quickstart/workflow.md
   - Download: download/download.md
   - Process: process/processor.md
   - About: about.md

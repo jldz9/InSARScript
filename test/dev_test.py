@@ -158,14 +158,15 @@ df = pd.DataFrame(results)
 
 
 #hyp3_batch_check('~/glb_dis/insar/tianjin/quick_look', download=True)
-'''
+
 def main():
     from insarscript.utils import generate_slurm_script
-    from insarscript.core import Hyp3_GAMMA_SBAS
+    from insarscript.core import Hyp3_GAMMA_SBAS, Hyp3_GAMMA_Processor
     workdir = Path('/local/insar/South_America').expanduser().resolve()
-    paths = [p for p in workdir.glob('*') if p.is_dir() and p.name in ['quicklook_p155f670', 'quicklook_p24f661', 'quicklook_p24f666','quicklook_p53f662','quicklook_p53f667','quicklook_p53f670','quicklook_p53f672','quicklook_p97f659','quicklook_p97f665']]
+    paths = [p for p in workdir.glob('*') if p.is_dir()]
     for path in paths:
         try:
+            hyp3_batch_check(path.as_posix(), download=True)
             mintpy = Hyp3_GAMMA_SBAS(hyp3_dir=path.as_posix())
             mintpy.prep_data()
             mintpy.load_data()
@@ -177,7 +178,7 @@ def main():
             print(f"Error processing {path.name}: {e}")
             continue
 
-    
+    '''
     for path in paths:
         generate_slurm_script(job_name=f'sbas_{path.name}',
                               output_file=f'{path.name}_%j.out',
@@ -200,6 +201,7 @@ def main():
                               "mintpy.run()\n"\
                               "EOF"
         )
+<<<<<<< Updated upstream
     '''
 from insarscript.core import S1_SLC
 def main():
@@ -214,6 +216,12 @@ def main():
     results = a.search()
     a.footprint(save_path='./footprint.png')
     
+=======
+    
+'''
+    
+    
+>>>>>>> Stashed changes
 
 if __name__ == "__main__":
     main()

@@ -265,7 +265,7 @@ class Hyp3_GAMMA_Processor:
         Sometime Hyp3 jobs fail due to various reasons, this function will retry failed jobs in the stored batchs.
         """
         if not hasattr(self, 'failed_jobs') or self.batchs is None:
-            raise ValueError(f'No batchs exist, did you submitted a job?')
+            batch = self.refresh()
         if len(self.failed_jobs) == 0:
             print(f'No failed jobs found.')
             return

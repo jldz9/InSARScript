@@ -29,7 +29,7 @@ for key, result in results.items():
 # ------------
 # 2. Test Hyp3_GAMMA_Processor class
 # ------------
-from insarscript.core import Hyp3_GAMMA_Processor
+from insarscript.core import Hyp3_InSAR_Processor
 
 test_json = Path('~/InSARScript/test/Path105_Frame441.json').expanduser().as_posix()
-hyp3 = Hyp3_GAMMA_Processor.load(path=test_json, save_path='~/S1/hyp3')
+hyp3 = Hyp3_InSAR_Processor.load(path=test_json, save_path='~/S1/hyp3')

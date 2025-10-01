@@ -161,13 +161,13 @@ df = pd.DataFrame(results)
 
 def main():
     from insarscript.utils import generate_slurm_script
-    from insarscript.core import Hyp3_GAMMA_SBAS, Hyp3_GAMMA_Processor
+    from insarscript.core import Hyp3_SBAS, Hyp3_InSAR_Processor
     workdir = Path('/local/insar/South_America').expanduser().resolve()
     paths = [p for p in workdir.glob('*') if p.is_dir()]
     for path in paths:
         try:
             hyp3_batch_check(path.as_posix(), download=True)
-            mintpy = Hyp3_GAMMA_SBAS(hyp3_dir=path.as_posix())
+            mintpy = Hyp3_SBAS(hyp3_dir=path.as_posix())
             mintpy.prep_data()
             mintpy.load_data()
             mintpy.default_setting()
@@ -201,7 +201,6 @@ def main():
                               "mintpy.run()\n"\
                               "EOF"
         )
-<<<<<<< Updated upstream
     '''
 from insarscript.core import S1_SLC
 def main():
@@ -216,21 +215,15 @@ def main():
     results = a.search()
     a.footprint(save_path='./footprint.png')
     
-=======
-    
-'''
-    
-    
->>>>>>> Stashed changes
 
 if __name__ == "__main__":
     main()
 
 """
 def main():
-    from insarscript.core.sbas import Hyp3_GAMMA_SBAS
+    from insarscript.core.sbas import Hyp3_SBAS
     hyp3_sbas = Hyp3_GAMMA_SBAS(hyp3_dir = '/local/insar/South_America/quicklook_p126f671')
 
     hyp3_sbas.run()
 """
-
+from insarscript import S1_SLC

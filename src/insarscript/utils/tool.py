@@ -15,7 +15,7 @@ from box import Box as Config
 from colorama import Fore
 from mintpy.utils import readfile
 
-from insarscript.core import S1_SLC, select_pairs, Hyp3_GAMMA_Processor
+from insarscript.core import S1_SLC, select_pairs, Hyp3_InSAR_Processor
 
 def get_config(config_path=None):
 
@@ -85,7 +85,7 @@ def quick_look_dis(
         
         if processor == "hyp3":
             print("---------Using HyP3 online processor-----------")
-            job = Hyp3_GAMMA_Processor(
+            job = Hyp3_InSAR_Processor(
                 pairs=pairs,
                 out_dir=slc_path.as_posix(),
                 earthdata_credentials_pool=credit_pool
@@ -112,7 +112,7 @@ def hyp3_batch_check(
     json_files = batch_path.rglob('*.json')
 
     for file in json_files:
-        job = Hyp3_GAMMA_Processor.load(file, earthdata_credentials_pool=earthdata_credentials_pool)
+        job = Hyp3_InSAR_Processor.load(file, earthdata_credentials_pool=earthdata_credentials_pool)
         b = json.loads(file.read_text())
         print(f"Overview for job {Path(b['out_dir'])}")
         if not download :

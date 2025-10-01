@@ -35,8 +35,6 @@ nav:
   - QuickStart: 
         - Setup: quickstart/install.md
         - Workflow: quickstart/workflow.md
-  - Download: download/download.md
-  - Process: process/processor.md
   - About: about.md
 
 extra:
@@ -73,7 +71,8 @@ markdown_extensions:
   - md_in_html
   - pymdownx.blocks.caption
   
-
+extra_css:
+  - stylesheets/extra.css
 plugins:
   - search
 

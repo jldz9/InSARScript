@@ -1,0 +1,11 @@
+.md-sidebar--primary {
+    flex: 0 0 200px;
+}
+
+.md-content {
+    flex: 1 1 auto;
+}
+
+.md-grid {
+    max-width: 65rem;
+}

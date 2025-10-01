@@ -327,7 +327,7 @@ class Mintpy:
         save_gdal_main(inps)
 
 
-class Hyp3_GAMMA_SBAS(Mintpy):
+class Hyp3_SBAS(Mintpy):
     def __init__(self, 
                  hyp3_dir: str, 
                  workdir: str | None = None,
@@ -341,6 +341,9 @@ class Hyp3_GAMMA_SBAS(Mintpy):
         super().__init__(workdir=workdir, compression=compression, debug=debug)
         print(f'workdir: {self.workdir}')
         self.useful_keys = ['unw_phase.tif', 'corr.tif', 'lv_theta.tif', 'lv_phi.tif', 'water_mask.tif', 'dem.tif']
+        self.deramp(method='linear')
+        self.config_plot(method='no')
+        self.correct_troposphere()
        
     def unzip_hyp3(self):
         print(f'{Style.BRIGHT}Step 1: Unzip all downloaded hyp3 gamma files')
@@ -418,6 +421,7 @@ class Hyp3_GAMMA_SBAS(Mintpy):
         self.unzip_hyp3()
         self.collect_files()
         self.clip_to_overlap()
+        self.load_data()
 
     def load_data(self):
         print(f'{Style.BRIGHT}Step 5: load_data')
@@ -431,11 +435,7 @@ class Hyp3_GAMMA_SBAS(Mintpy):
             else:
                 print(f'*_{key} does not exist, will skip in config')
                 continue
-
-    def default_setting(self):
-        self.deramp(method='linear')
-        self.config_plot(method='no')
-        self.correct_troposphere()
+        
     
     
 

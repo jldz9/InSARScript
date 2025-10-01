@@ -54,7 +54,7 @@ The program will prompts for login on first use.<br><br>
 
 
 
-#### [Copernicus Data Space Ecosystem](https://dataspace.copernicus.eu/) (Optional)
+#### [Copernicus Data Space Ecosystem](https://dataspace.copernicus.eu/)
 
 This account is required for downloading orbit files, the release of orbit files on this website is faster than NASA earthdata for couple hours to days. 
 
@@ -71,7 +71,7 @@ machine dataspace.copernicus.eu
 
 The program will prompts for login on first use.<br><br>
 
-#### [Copernicus Climate Data Store](https://cds.climate.copernicus.eu/) (Optional but recommended)
+#### [Copernicus Climate Data Store](https://cds.climate.copernicus.eu/)
 
 This account is required to perform tropospheric correction using PyAPS.
 

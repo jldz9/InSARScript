@@ -119,7 +119,7 @@ def select_pairs(search_results: list[ASFProduct],
     
     return sorted(pairs)
 
-class Hyp3_GAMMA_Processor:
+class Hyp3_InSAR_Processor:
     """Hyp3 processor for interferogram generation online."""
     def __init__(self,
                 pairs: list[str, str] | tuple[str, str] | list[tuple[str, str]] | None=None, 
@@ -131,7 +131,7 @@ class Hyp3_GAMMA_Processor:
                 apply_water_mask :bool=True,
                 include_displacement_maps:bool=True,
                 phase_filter_parameter :float=0.6,
-                out_dir:str="products_hyp3",
+                out_dir:str = '~/tmp',
                 job_name_prefix:str="ifg",
                 job_ids: dict[str, list[str]] | None=None,
                 earthdata_credentials_pool: dict[str, str] | None=None
@@ -152,7 +152,8 @@ class Hyp3_GAMMA_Processor:
         :param job_ids: A list of job IDs to use.
         :param earthdata_credentials_pool: A dictionary containing a pool of Earthdata credentials with format {'username': 'passowrd'}
         """
-        self.out_dir: str = out_dir
+      
+        self.out_dir : Path = Path(out_dir).expanduser().resolve()
         self.include_look_vectors: bool = include_look_vectors
         self.include_inc_map: bool = include_inc_map
         self.looks: str = looks
@@ -169,7 +170,7 @@ class Hyp3_GAMMA_Processor:
                 self.job_ids[user].extend(ids)
         self._hyp3_authorize(pool=earthdata_credentials_pool)
 
-    def _hyp3_authorize(self, pool: dict[str, str] = None):
+    def _hyp3_authorize(self, pool: dict[str, str] | None = None):
         """Authorize the HyP3 client.
         param pool: A dictionary containing a pool of Earthdata credentials with format {'username': 'passowrd'}
         """
@@ -296,33 +297,33 @@ class Hyp3_GAMMA_Processor:
             raise ValueError("Inconsistent looks in failed jobs.")
         self.pairs = [(job.job_parameters['granules'][0], job.job_parameters['granules'][1]) for job in self.failed_jobs]
         _ = self.submit()
-        retry_path = Path(self.out_dir).joinpath('hyp3_retry_jobs.json')
+        retry_path = self.out_dir.joinpath('hyp3_retry_jobs.json')
         if Path(retry_path).is_file():
             timestamp = time.strftime("%Y%m%dT%H%M%S", time.localtime())
-            retry_path = Path(self.out_dir).joinpath(f'hyp3_retry_jobs_{timestamp}.json')
+            retry_path = self.out_dir.joinpath(f'hyp3_retry_jobs_{timestamp}.json')
             print(f"{Fore.YELLOW}hyp3_retry_jobs.json already exists, saving to {retry_path} instead.")
         self.save(retry_path)
 
     def refresh(self, batchs:dict|None=None):
         """Refresh job statuses from HyP3 for the provided batch or the stored job_ids."""
-        b = defaultdict(Batch)
+        batchs = defaultdict(Batch)
         failed_jobs = []
         if batchs is None:
             if not self.job_ids:
-                raise ValueError(f'No jobs exist and no batch provided, did you submitted a job?')
+                raise ValueError(f'No jobs exist and no batch provided, did you submitted or loaded a job?')
             for username, job_ids in self.job_ids.items():
                 self.client = HyP3(username=username, password=self._password_pool[self._username_pool.index(username)])
                 all_jobs = self.client.find_jobs()
                 jobs = Batch([j for j in all_jobs if j.job_id in job_ids])
-                b[username] += jobs
+                batchs[username] += jobs
         else:
             # normalize to latest state from server
             for username, batch in batchs.items():
                 self.client = HyP3(username=username, password=self._password_pool[self._username_pool.index(username)])
                 all_jobs = self.client.find_jobs()
                 jobs = Batch([j for j in all_jobs if j.job_id in [job.job_id for job in batch.jobs]])
-                b[username] += jobs
-        for username, batch in b.items():
+                batchs[username] += jobs
+        for username, batch in batchs.items():
             print(f'Username: {username}')
             f = [job for job in batch.jobs if job.status_code == "FAILED"]
             if len(f) > 0:
@@ -332,16 +333,16 @@ class Hyp3_GAMMA_Processor:
                     print(f'Failed jobs: {f_job.job_id}')
             for job in batch.jobs:
                 print(f'{Style.BRIGHT}Name:{Style.RESET_ALL}{job.name} {Style.BRIGHT}Job ID:{Style.RESET_ALL}{job.job_id} {Style.BRIGHT}Job type:{Style.RESET_ALL}{job.job_type} {Style.BRIGHT}Status:{Style.RESET_ALL}{job.status_code}')
-        self.batchs = b
+        self.batchs = batchs
         self.failed_jobs = failed_jobs
-        return self.batchs
+        return batchs
 
     def download(self, batchs: dict[Batch] | None = None) -> Path:
         if batchs is None:
             b = self.refresh()
         else:
             b = self.refresh(batchs)
-        out = Path(self.out_dir)
+        out = self.out_dir
         out.mkdir(parents=True, exist_ok=True)
         exist = out.rglob("*.zip")
         exist_name = [p.name for p in exist]
@@ -357,20 +358,26 @@ class Hyp3_GAMMA_Processor:
                         continue
                     self.client = HyP3(username=username, password=self._password_pool[self._username_pool.index(username)])
                     job.download_files(location=str(out))
-        return
+        return out
 
-    def save(self, path: str = "hyp3_jobs.json") -> str:
+    def save(self, path: str | None = None) -> Path:
         """ ---- persistence (resume later) ----"""
-        path = Path(path).expanduser().resolve()
+        if hasattr(self, 'batchs') is False or self.batchs is None:
+            raise ValueError(f'No batchs exist to save, did you submitted or refreshed a job?')
+        if path is None:
+            path : Path = self.out_dir.joinpath('hyp3_jobs.json')
+        else:
+            path : Path = Path(path).expanduser().resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
         if path.is_file():
             path.unlink()
-        payload = {"job_ids": self.job_ids, "out_dir": self.out_dir}
-        Path(path).write_text(json.dumps(payload, indent=2))
-        print(f'Batch file saved under {path}, you may resume using Hyp3_GAMMA_Processor.load(path: "file path")')
+        payload = {"job_ids": self.job_ids, "out_dir": self.out_dir.as_posix()}
+        path.write_text(json.dumps(payload, indent=2))
+        print(f'Batch file saved under {path}, you may resume using Hyp3_InSAR_Processor.load(path: "file path")')
         return path
     
     @classmethod
-    def load(cls, path: str = "hyp3_jobs.json", save_path : str | None = None, earthdata_credentials_pool: dict | None = None) -> "Hyp3_GAMMA_Processor":
+    def load(cls, path: str = "hyp3_jobs.json", save_path : str | None = None, earthdata_credentials_pool: dict | None = None) -> "Hyp3_InSAR_Processor":
         path = Path(path).expanduser().resolve()
         data = json.loads(path.read_text())
         if save_path is not None:

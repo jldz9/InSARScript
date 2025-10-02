@@ -7,10 +7,10 @@ package:
 
 source:
   url: https://github.com/jldz9/InSARScript/archive/refs/tags/v{{ version }}.tar.gz
-  sha256: 4a7e15b7b7d279620811dd10c6a1ea2d74ca8f4cf443173dfe3ac7468a4444b3
+  sha256: 279cf5786dee9492a5a2be54b5c597f68672039bd676cecc02160410b1e85661
 
 build:
-  script: "{{ PYTHON }} -m pip install . -vv"
+  script: "{{ PYTHON }} -m pip install --no-deps .  -vv"
   number: 0
   noarch: python
 

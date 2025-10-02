@@ -9,8 +9,31 @@ authors = [{name="jldz9", email="Jiaweiliwork@outlook.com"}]
 description = "Hassle-free InSAR processing scripts for multiple satellites"
 readme = 'README.md'
 dependencies = [
+"asf_search==10.0.4",
+"colorama==0.4.6",
+"contextily==1.6.2",
+"dask==2025.7.0",
+"dem_stitcher==2.5.12",
+"GDAL==3.11.0",
+"hyp3_sdk==7.7.3",
+"matplotlib==3.10.6",
+"mintpy==1.6.2",
+"numpy==2.3.3",
+"packaging==25.0",
+"pandas==2.3.3",
+"psutil==7.0.0",
+"pyaps3==0.3.7",
+"pyproj==3.7.2",
+"python_box==7.3.2",
+"python_dateutil==2.9.0.post0",
+"rasterio==1.4.3",
+"Requests==2.32.5",
+"sentineleof==0.11.1",
+"Shapely==2.1.2",
+"tomli_w==1.2.0",
+"tqdm==4.67.1",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",

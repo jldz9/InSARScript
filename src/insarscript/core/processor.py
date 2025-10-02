@@ -306,7 +306,7 @@ class Hyp3_InSAR_Processor:
 
     def refresh(self, batchs:dict|None=None):
         """Refresh job statuses from HyP3 for the provided batch or the stored job_ids."""
-        batchs = defaultdict(Batch)
+        tmp_batchs = defaultdict(Batch)
         failed_jobs = []
         if batchs is None:
             if not self.job_ids:
@@ -315,15 +315,15 @@ class Hyp3_InSAR_Processor:
                 self.client = HyP3(username=username, password=self._password_pool[self._username_pool.index(username)])
                 all_jobs = self.client.find_jobs()
                 jobs = Batch([j for j in all_jobs if j.job_id in job_ids])
-                batchs[username] += jobs
+                tmp_batchs[username] += jobs
         else:
             # normalize to latest state from server
             for username, batch in batchs.items():
                 self.client = HyP3(username=username, password=self._password_pool[self._username_pool.index(username)])
                 all_jobs = self.client.find_jobs()
                 jobs = Batch([j for j in all_jobs if j.job_id in [job.job_id for job in batch.jobs]])
-                batchs[username] += jobs
-        for username, batch in batchs.items():
+                tmp_batchs[username] += jobs
+        for username, batch in tmp_batchs.items():
             print(f'Username: {username}')
             f = [job for job in batch.jobs if job.status_code == "FAILED"]
             if len(f) > 0:
@@ -333,9 +333,9 @@ class Hyp3_InSAR_Processor:
                     print(f'Failed jobs: {f_job.job_id}')
             for job in batch.jobs:
                 print(f'{Style.BRIGHT}Name:{Style.RESET_ALL}{job.name} {Style.BRIGHT}Job ID:{Style.RESET_ALL}{job.job_id} {Style.BRIGHT}Job type:{Style.RESET_ALL}{job.job_type} {Style.BRIGHT}Status:{Style.RESET_ALL}{job.status_code}')
-        self.batchs = batchs
+        self.batchs = tmp_batchs
         self.failed_jobs = failed_jobs
-        return batchs
+        return tmp_batchs
 
     def download(self, batchs: dict[Batch] | None = None) -> Path:
         if batchs is None:

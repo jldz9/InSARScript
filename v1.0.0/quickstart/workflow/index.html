@@ -1,0 +1,1038 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://jldz9.github.io/InSARScript/v1.0.0/quickstart/workflow/">
+      
+      
+        <link rel="prev" href="../install/">
+      
+      
+        <link rel="next" href="../../about/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.21">
+    
+    
+      
+        <title>Workflow - InSARScript</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.2a3383ac.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#set-aoi" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="InSARScript" class="md-header__button md-logo" aria-label="InSARScript" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            InSARScript
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Workflow
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="grey" data-md-color-accent="indigo"  aria-label="switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jldz9/InSARScript" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.0.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jldz9/InSARScript
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../install/" class="md-tabs__link">
+          
+  
+  
+  QuickStart
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../about/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  About
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="InSARScript" class="md-nav__button md-logo" aria-label="InSARScript" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    InSARScript
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jldz9/InSARScript" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.0.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jldz9/InSARScript
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    QuickStart
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            QuickStart
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Setup
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Workflow
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Workflow
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#set-aoi" class="md-nav__link">
+    <span class="md-ellipsis">
+      Set AOI
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#search" class="md-nav__link">
+    <span class="md-ellipsis">
+      Search
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Search">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#filter-search-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      Filter search results
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interferogram-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interferogram Process
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Interferogram Process">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#local-processing-isce2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Local Processing (ISCE2)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#online-processing-with-hyp3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Online Processing with HyP3
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sbas" class="md-nav__link">
+    <span class="md-ellipsis">
+      SBAS
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SBAS">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#connect-with-isce2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Connect with ISCE2
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#connect-with-hyp3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Connect with HyP3
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../about/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    About
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#set-aoi" class="md-nav__link">
+    <span class="md-ellipsis">
+      Set AOI
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#search" class="md-nav__link">
+    <span class="md-ellipsis">
+      Search
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Search">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#filter-search-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      Filter search results
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interferogram-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interferogram Process
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Interferogram Process">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#local-processing-isce2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Local Processing (ISCE2)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#online-processing-with-hyp3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Online Processing with HyP3
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sbas" class="md-nav__link">
+    <span class="md-ellipsis">
+      SBAS
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SBAS">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#connect-with-isce2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Connect with ISCE2
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#connect-with-hyp3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Connect with HyP3
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+  <h1>Workflow</h1>
+
+<p>This section will get you on track as soon as possible. The complete InSAR time-series processing workflow includes:</p>
+<div style="text-align: center;">
+<pre class="mermaid"><code>graph
+    A[Set AOI] --&gt; B[Search];
+    B[Search] --&gt; C[local processing];
+    B[Search] --&gt; D[Online processing];
+    D --&gt; E[Download];
+    C --&gt; F[Interferograms];
+    E --&gt; F[Interferograms];
+    F--&gt; G[SBAS];
+    G --&gt; H[Post-Processing];</code></pre>
+</div>
+
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The example in QuickStart process Sentinel-1 SLCs under IW mode. </p>
+</div>
+<h2 id="set-aoi">Set <abbr title="Area of interest">AOI</abbr></h2>
+<p>InSARScript current support bounding box method to select <abbr title="Area of interest">AOI</abbr>. To define <abbr title="Area of interest">AOI</abbr>, simply create a list of coordinates by:</p>
+<p><div class="language-py highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">AOI</span> <span class="o">=</span> <span class="p">[</span><span class="mf">124.67</span><span class="p">,</span> <span class="mf">46.38</span><span class="p">,</span> <span class="mf">125.35</span><span class="p">,</span> <span class="mf">46.85</span><span class="p">]</span>
+</span></code></pre></div>
+The <abbr title="Area of interest">AOI</abbr> should be specified as <strong><em>[min_long, min_lat, max_long, max_lat]</em></strong>, this program will assume <abbr title="Coordinate Reference System">CRS</abbr> of <abbr title="Area of interest">AOI</abbr> is EPSG:4326 (WGS84)</p>
+<h2 id="search">Search</h2>
+<p>Seaching and downloading of satellite scenes by using: </p>
+<p><div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">insarscript</span><span class="w"> </span><span class="kn">import</span> <span class="n">S1_SLC</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">s1</span> <span class="o">=</span> <span class="n">S1_SLC</span><span class="p">(</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">platform</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Sentinel-1A&#39;</span><span class="p">,</span> <span class="s1">&#39;Sentinel-1B&#39;</span><span class="p">,</span> <span class="s1">&#39;Sentinel-1C&#39;</span><span class="p">],</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">AscendingflightDirection</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">bbox</span> <span class="o">=</span> <span class="n">AOI</span><span class="p">,</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">start</span><span class="o">=</span><span class="s1">&#39;2020-01-01&#39;</span><span class="p">,</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">end</span><span class="o">=</span><span class="s1">&#39;2020-12-31&#39;</span><span class="p">,</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">output_dir</span> <span class="o">=</span> <span class="s1">&#39;~/tmp&#39;</span><span class="p">,</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="p">)</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">results</span> <span class="o">=</span> <span class="n">s1</span><span class="o">.</span><span class="n">search</span><span class="p">()</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">s1</span><span class="o">.</span><span class="n">download</span><span class="p">()</span>
+</span></code></pre></div>
+This will download availiable Sentinel-1 SLCs that cover your <abbr title="Area of interest">AOI</abbr> for local processing uses.</p>
+<h4 id="filter-search-results">Filter search results</h4>
+<p>However, your <abbr title="Area of interest">AOI</abbr> probably spans multiple scenes. To filter the search results, you can use:
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">s1</span><span class="o">.</span><span class="n">footprint</span><span class="p">()</span>
+</span></code></pre></div>
+This will display a footprint map of the available Sentinel-1 scenes that covers the <abbr title="Area of interest">AOI</abbr>. The stack indicates numbers of SAR sences in that footprint
+<img alt="footprint" src="../footprint.png" style="width:500px; display: block; margin: auto;" /></p>
+<p>OR</p>
+<p><div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">s1</span><span class="o">.</span><span class="n">summary</span><span class="p">()</span>
+</span></code></pre></div>
+This will output the summary of availiable Sentinel-1 scenes that covers the <abbr title="Area of interest">AOI</abbr>. </p>
+<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Sence:<span class="w"> </span>Path<span class="w"> </span><span class="m">3</span><span class="w"> </span>Frame<span class="w"> </span><span class="m">439</span>,<span class="w"> </span>Amount:<span class="w"> </span><span class="m">23</span>,<span class="w"> </span>time:<span class="w"> </span><span class="m">2020</span>-01-01<span class="w"> </span>--&gt;<span class="w"> </span><span class="m">2020</span>-12-26
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>Sence:<span class="w"> </span>Path<span class="w"> </span><span class="m">3</span><span class="w"> </span>Frame<span class="w"> </span><span class="m">435</span>,<span class="w"> </span>Amount:<span class="w"> </span><span class="m">23</span>,<span class="w"> </span>time:<span class="w"> </span><span class="m">2020</span>-01-01<span class="w"> </span>--&gt;<span class="w"> </span><span class="m">2020</span>-12-26
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>Sence:<span class="w"> </span>Path<span class="w"> </span><span class="m">105</span><span class="w"> </span>Frame<span class="w"> </span><span class="m">441</span>,<span class="w"> </span>Amount:<span class="w"> </span><span class="m">29</span>,<span class="w"> </span>time:<span class="w"> </span><span class="m">2020</span>-01-08<span class="w"> </span>--&gt;<span class="w"> </span><span class="m">2020</span>-12-21
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>Sence:<span class="w"> </span>Path<span class="w"> </span><span class="m">105</span><span class="w"> </span>Frame<span class="w"> </span><span class="m">435</span>,<span class="w"> </span>Amount:<span class="w"> </span><span class="m">29</span>,<span class="w"> </span>time:<span class="w"> </span><span class="m">2020</span>-01-08<span class="w"> </span>--&gt;<span class="w"> </span><span class="m">2020</span>-12-21
+</span></code></pre></div>
+if we decide to choose two SAR sence stacks <em>(Path:3 Frame:435)</em> and <em>(Path:3 Frame:439)</em> for further process
+, simply do: </p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">filter_results</span> <span class="o">=</span> <span class="n">s1</span><span class="o">.</span><span class="n">pick</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span><span class="mi">435</span><span class="p">))</span>
+</span></code></pre></div>
+<p>You can then review the footprint and summary to confirm that the filter has been applied successfully.
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">s1</span><span class="o">.</span><span class="n">footprint</span><span class="p">()</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">s1</span><span class="o">.</span><span class="n">summary</span><span class="p">()</span>
+</span></code></pre></div>
+Which would return: </p>
+<p><img alt="filtered_results_footprint" src="../footprint_picked.png" style="width:500px; display: block; margin: auto;" />
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">Sence</span><span class="p">:</span> <span class="n">Path</span> <span class="mi">3</span> <span class="n">Frame</span> <span class="mi">435</span><span class="p">,</span> <span class="n">Amount</span><span class="p">:</span> <span class="mi">23</span><span class="p">,</span> <span class="n">time</span><span class="p">:</span> <span class="mi">2020</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">01</span> <span class="o">--&gt;</span> <span class="mi">2020</span><span class="o">-</span><span class="mi">12</span><span class="o">-</span><span class="mi">26</span>
+</span></code></pre></div></p>
+<h2 id="interferogram-process">Interferogram Process</h2>
+<p>After locating SAR scene stacks that cover the Area of Interest (<abbr title="Area of interest">AOI</abbr>), the next step is to generate unwrapped interferograms in preparation for the <abbr title="Small Baseline Subset">SBAS</abbr> processing. There are two main options to accomplish this:</p>
+<ul>
+<li>
+<p>Local Processing: Generate interferograms locally, starting from the raw <abbr title="Single Look Complex">SLC</abbr> data.</p>
+</li>
+<li>
+<p>Online Processing with HyP3: Use the <a href="https://hyp3-docs.asf.alaska.edu/">HyP3 platform</a>
+ provided by ASF to run the interferometric processing in the cloud and download the resulting interferograms.</p>
+</li>
+</ul>
+<h4 id="local-processing-isce2">Local Processing (ISCE2)</h4>
+<div class="admonition abstract">
+<p class="admonition-title">Abstract</p>
+<p>Local Processing is under development</p>
+</div>
+<h4 id="online-processing-with-hyp3">Online Processing with HyP3</h4>
+<p>HyP3 is an online processing platform provided by ASF (Alaska Satellite Facility). To generate an interferogram, it takes a pair of Sentinel-1 granule IDs as input and produces one interferogram for that pair. InSARScript can automate this process. </p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">insar_job</span> <span class="o">=</span> <span class="n">hyp3</span><span class="o">.</span><span class="n">submit_insar_job</span><span class="p">(</span><span class="s1">&#39;reference_granule_id&#39;</span><span class="p">,</span> <span class="s1">&#39;secondary_granule_id&#39;</span><span class="p">,</span> <span class="s1">&#39;job_name&#39;</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Assume we have five pairs of granule_ids:
+<div class="language-Python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">pairs</span> <span class="o">=</span> <span class="p">[(</span><span class="s1">&#39;S1B_IW_SLC__1SDV_20200101T215331_20200101T215358_019629_025190_2C0B&#39;</span><span class="p">,</span> <span class="s1">&#39;S1B_IW_SLC__1SDV_20200113T215331_20200113T215358_019804_025721_53E3&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;S1B_IW_SLC__1SDV_20200101T215331_20200101T215358_019629_025190_2C0B&#39;</span><span class="p">,</span> <span class="s1">&#39;S1B_IW_SLC__1SDV_20200125T215331_20200125T215358_019979_025CB6_C45D&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;S1B_IW_SLC__1SDV_20200101T215331_20200101T215358_019629_025190_2C0B&#39;</span><span class="p">,</span> <span class="s1">&#39;S1B_IW_SLC__1SDV_20200206T215330_20200206T215357_020154_026269_0B80&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;S1B_IW_SLC__1SDV_20200101T215331_20200101T215358_019629_025190_2C0B&#39;</span><span class="p">,</span> <span class="s1">&#39;S1B_IW_SLC__1SDV_20200218T215330_20200218T215357_020329_02680A_426D&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;S1B_IW_SLC__1SDV_20200101T215331_20200101T215358_019629_025190_2C0B&#39;</span><span class="p">,</span> <span class="s1">&#39;S1B_IW_SLC__1SDV_20200313T215330_20200313T215357_020679_027335_A83A&#39;</span><span class="p">)]</span>
+</span></code></pre></div></p>
+<p>to submit these pairs, run: </p>
+<p><div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">insarscript</span><span class="w"> </span><span class="kn">import</span> <span class="n">Hyp3_InSAR_Processor</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">hyp3_insar</span> <span class="o">=</span> <span class="n">Hyp3_InSAR_Processor</span><span class="p">(</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="n">pairs</span> <span class="o">=</span> <span class="n">pairs</span><span class="p">,</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>    <span class="n">out_dir</span> <span class="o">=</span> <span class="s1">&#39;~/tmp&#39;</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="p">)</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="n">batch</span> <span class="o">=</span> <span class="n">hyp3_insar</span><span class="o">.</span><span class="n">submit</span><span class="p">()</span>
+</span></code></pre></div>
+Your processing requests have been submitted to the ASF server. You can check the processing status using:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">batch</span> <span class="o">=</span> <span class="n">hyp3_insar</span><span class="o">.</span><span class="n">refresh</span><span class="p">()</span>
+</span></code></pre></div>
+<p><div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>Output: 
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>Username: Your_ASF_UserName
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>Name:ifg_20200101T215331_20200218T215330 Job ID:68b2be08-2ad7-4cad-9bbb-3d33e8468300 Job type:INSAR_GAMMA Status:RUNNING
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>Name:ifg_20200101T215331_20200313T215330 Job ID:be57c44f-9514-4b92-8e7b-9e1c9c0d9d08 Job type:INSAR_GAMMA Status:RUNNING
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>Name:ifg_20200101T215331_20200206T215330 Job ID:c10cc297-2008-491d-a76c-c38958830d87 Job type:INSAR_GAMMA Status:RUNNING
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>Name:ifg_20200101T215331_20200125T215331 Job ID:61d48bb8-f86d-4b2a-b933-2709b653b86b Job type:INSAR_GAMMA Status:RUNNING
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>Name:ifg_20200101T215331_20200113T215331 Job ID:28a7f5e7-d8d4-4958-854f-a7e625a0a09e Job type:INSAR_GAMMA Status:RUNNING
+</span></code></pre></div>
+Processing will take roughly 30 mins for every 100 interferograms depends on the ASF server load, you can save the job script to check back later by:</p>
+<p><div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">savepath</span> <span class="o">=</span> <span class="n">hyp3_insar</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+</span></code></pre></div>
+This will save current job ids into a JSON file, named hyp3_jobs.json under your workdir by default (e.g. <code>~/tmp/hyp3_jobs.json</code>). The job script will looks like: </p>
+<p><div class="language-json highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="p">{</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">&quot;job_ids&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">&quot;Your_ASF_UserName&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">      </span><span class="s2">&quot;28a7f5e7-d8d4-4958-854f-a7e625a0a09e&quot;</span><span class="p">,</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">      </span><span class="s2">&quot;61d48bb8-f86d-4b2a-b933-2709b653b86b&quot;</span><span class="p">,</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">      </span><span class="s2">&quot;c10cc297-2008-491d-a76c-c38958830d87&quot;</span><span class="p">,</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">      </span><span class="s2">&quot;68b2be08-2ad7-4cad-9bbb-3d33e8468300&quot;</span><span class="p">,</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">      </span><span class="s2">&quot;be57c44f-9514-4b92-8e7b-9e1c9c0d9d08&quot;</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">    </span><span class="p">]</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">  </span><span class="p">},</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">  </span><span class="nt">&quot;out_dir&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Your/Project/Save/Path&quot;</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="p">}</span>
+</span></code></pre></div>
+To load back this job, simply use: </p>
+<p><div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">hyp3_insar_reload</span> <span class="o">=</span> <span class="n">Hyp3_InSAR_Processor</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">path</span> <span class="o">=</span> <span class="s1">&#39;~/tmp/hyp3_jobs.json&#39;</span><span class="p">)</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">batchs</span> <span class="o">=</span> <span class="n">hyp3_insar_reload</span><span class="o">.</span><span class="n">refresh</span><span class="p">()</span>
+</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>Output:
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>Username: Your_ASF_UserName
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>Name:ifg_20200101T215331_20200218T215330 Job ID:68b2be08-2ad7-4cad-9bbb-3d33e8468300 Job type:INSAR_GAMMA Status:SUCCEEDED
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>Name:ifg_20200101T215331_20200313T215330 Job ID:be57c44f-9514-4b92-8e7b-9e1c9c0d9d08 Job type:INSAR_GAMMA Status:SUCCEEDED
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>Name:ifg_20200101T215331_20200206T215330 Job ID:c10cc297-2008-491d-a76c-c38958830d87 Job type:INSAR_GAMMA Status:SUCCEEDED
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>Name:ifg_20200101T215331_20200125T215331 Job ID:61d48bb8-f86d-4b2a-b933-2709b653b86b Job type:INSAR_GAMMA Status:SUCCEEDED
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>Name:ifg_20200101T215331_20200113T215331 Job ID:28a7f5e7-d8d4-4958-854f-a7e625a0a09e Job type:INSAR_GAMMA Status:SUCCEEDED
+</span></code></pre></div>
+Seems all interferograms are ready! </p>
+<p>You can download these interferograms by: </p>
+<p><div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="n">hyp3_insar_reload</span><span class="o">.</span><span class="n">download</span><span class="p">()</span>
+</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>S1BB_20200101T215331_20200218T215330_VVP048_INT80_G_weF_5991.zip: 100%|██████████████████████████████████████████████████| 338M/338M [00:11&lt;00:00, 29.9MB/s]
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>S1BB_20200101T215331_20200313T215330_VVP072_INT80_G_weF_4CCA.zip: 100%|██████████████████████████████████████████████████| 340M/340M [00:07&lt;00:00, 50.4MB/s]
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>S1BB_20200101T215331_20200206T215330_VVP036_INT80_G_weF_0C8D.zip: 100%|██████████████████████████████████████████████████| 335M/335M [00:07&lt;00:00, 47.8MB/s]
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>S1BB_20200101T215331_20200125T215331_VVP024_INT80_G_weF_74ED.zip: 100%|██████████████████████████████████████████████████| 334M/334M [00:10&lt;00:00, 31.9MB/s]
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>S1BB_20200101T215331_20200113T215331_VVP012_INT80_G_weF_EE06.zip: 100%|██████████████████████████████████████████████████| 336M/336M [00:06&lt;00:00, 53.0MB/s]
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>Downloading:: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████| 5/5 [00:55&lt;00:00, 11.13s/it]
+</span></code></pre></div>
+Once all downloads are complete, you should be able to find the compressed .zip files in your working directory, these contain your processed interferograms!</p>
+<h2 id="sbas"><abbr title="Small Baseline Subset">SBAS</abbr></h2>
+<p>Running <abbr title="Small Baseline Subset">SBAS</abbr> requires a set of interferograms generated from SAR image pairs with small spatial and temporal baselines. This approach is designed to minimize phase decorrelation and improve the quality of the deformation signal.</p>
+<p>InSARScript utilizes <a href="https://github.com/insarlab/MintPy">MintPy</a>, a powerful open-source toolbox for InSAR time-series analysis, to perform the <abbr title="Small Baseline Subset">SBAS</abbr> workflow.</p>
+<h4 id="connect-with-isce2">Connect with ISCE2</h4>
+<div class="admonition abstract">
+<p class="admonition-title">Abstract</p>
+<p>ISCE2 connection is Under development </p>
+</div>
+<h4 id="connect-with-hyp3">Connect with HyP3</h4>
+<p>Let's look back to the <code>filter_results</code> we generated in the Search section: </p>
+<p><div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">insarscript</span><span class="w"> </span><span class="kn">import</span> <span class="n">S1_SLC</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">AOI</span> <span class="o">=</span> <span class="p">[</span><span class="mf">124.67</span><span class="p">,</span> <span class="mf">46.38</span><span class="p">,</span> <span class="mf">125.35</span><span class="p">,</span> <span class="mf">46.85</span><span class="p">]</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">s1</span> <span class="o">=</span> <span class="n">S1_SLC</span><span class="p">(</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>    <span class="n">platform</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Sentinel-1A&#39;</span><span class="p">,</span> <span class="s1">&#39;Sentinel-1B&#39;</span><span class="p">,</span> <span class="s1">&#39;Sentinel-1C&#39;</span><span class="p">],</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="n">AscendingflightDirection</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>    <span class="n">bbox</span> <span class="o">=</span> <span class="n">AOI</span><span class="p">,</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>    <span class="n">start</span><span class="o">=</span><span class="s1">&#39;2020-01-01&#39;</span><span class="p">,</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>    <span class="n">end</span><span class="o">=</span><span class="s1">&#39;2020-12-31&#39;</span><span class="p">,</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>    <span class="n">output_dir</span> <span class="o">=</span> <span class="s1">&#39;~/tmp&#39;</span><span class="p">,</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="p">)</span>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="n">results</span> <span class="o">=</span> <span class="n">s1</span><span class="o">.</span><span class="n">search</span><span class="p">()</span>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="n">filter_results</span> <span class="o">=</span> <span class="n">s1</span><span class="o">.</span><span class="n">pick</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span><span class="mi">435</span><span class="p">))</span>
+</span></code></pre></div>
+Before submitting jobs to HyP3 to generate interferograms, we first need to prepare the list of connection pairs.</p>
+<p><div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">insarscript</span><span class="w"> </span><span class="kn">import</span> <span class="n">select_pairs</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">sbas_pairs</span> <span class="o">=</span> <span class="n">select_pairs</span><span class="p">(</span><span class="n">search_results</span><span class="o">=</span> <span class="n">filter_results</span><span class="p">[(</span><span class="mi">3</span><span class="p">,</span><span class="mi">435</span><span class="p">)])</span>
+</span></code></pre></div>
+For this particular stack of scenes, it returns 83 pairs, each representing a valid interferometric connection based on default baseline thresholds.
+<div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>&gt;&gt;&gt; sbas_pairs
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>[(&#39;S1B_IW_SLC__1SDV_20200101T215331_20200101T215358_019629_025190_2C0B&#39;, &#39;S1B_IW_SLC__1SDV_20200113T215331_20200113T215358_019804_025721_53E3&#39;), (&#39;S1B_IW_SLC__1SDV_20200101T215331_20200101T215358_019629_025190_2C0B&#39;, &#39;S1B_IW_SLC__1SDV_20200125T215331_20200125T215358_019979_025CB6_C45D&#39;), (&#39;S1B_IW_SLC__1SDV_20200101T215331_20200101T215358_019629_025190_2C0B&#39;, &#39;S1B_IW_SLC__1SDV_20200206T215330_20200206T215357_020154_026269_0B80&#39;), (&#39;S1B_IW_SLC__1SDV_20200101T215331_20200101T215358_019629_025190_2C0B&#39;, &#39;S1B_IW_SLC__1SDV_20200218T215330_20200218T215357_020329_02680A_426D&#39;), (&#39;S1B_IW_SLC__1SDV_20200101T215331_20200101T215358_019629_025190_2C0B&#39;, &#39;S1B_IW_SLC__1SDV_20200313T215330_20200313T215357_020679_027335_A83A&#39;), (&#39;S1B_IW_SLC__1SDV_20200101T215331_20200101T215358_019629_025190_2C0B&#39;, &#39;S1B_IW_SLC__1SDV_20200406T215330_20200406T215357_021029_027E44_E25E&#39;), (&#39;S1B_IW_SLC__1SDV_20200113T215331_20200113T215358_019804_025721_53E3&#39;, &#39;S1B_IW_SLC__1SDV_20200125T215331_20200125T215358_019979_025CB6_C45D&#39;), (&#39;S1B_IW_SLC__1SDV_20200113T215331_20200113T215358_019804_025721_53E3&#39;, &#39;S1B_IW_SLC__1SDV_20200206T215330_20200206T215357_020154_026269_0B80&#39;), (&#39;S1B_IW_SLC__1SDV_20200113T215331_20200113T215358_019804_025721_53E3&#39;, &#39;S1B_IW_SLC__1SDV_20200218T215330_20200218T215357_020329_02680A_426D&#39;), (&#39;S1B_IW_SLC__1SDV_20200113T215331_20200113T215358_019804_025721_53E3&#39;, &#39;S1B_IW_SLC__1SDV_20200301T215330_20200301T215357_020504_026DA9_212B&#39;), (&#39;S1B_IW_SLC__1SDV_20200113T215331_20200113T215358_019804_025721_53E3&#39;, &#39;S1B_IW_SLC__1SDV_20200325T215330_20200325T215357_020854_0278BD_7268&#39;), (&#39;S1B_IW_SLC__1SDV_20200113T215331_20200113T215358_019804_025721_53E3&#39;, &#39;S1B_IW_SLC__1SDV_20200418T215331_20200418T215358_021204_0283CE_1664&#39;), (&#39;S1B_IW_SLC__1SDV_20200125T215331_20200125T215358_019979_025CB6_C45D&#39;, &#39;S1B_IW_SLC__1SDV_20200206T215330_20200206T215357_020154_026269_0B80&#39;), (&#39;S1B_IW_SLC__1SDV_20200125T215331_20200125T215358_019979_025CB6_C45D&#39;, &#39;S1B_IW_SLC__1SDV_20200218T215330_20200218T215357_020329_02680A_426D&#39;), (&#39;S1B_IW_SLC__1SDV_20200125T215331_20200125T215358_019979_025CB6_C45D&#39;, &#39;S1B_IW_SLC__1SDV_20200313T215330_20200313T215357_020679_027335_A83A&#39;), (&#39;S1B_IW_SLC__1SDV_20200125T215331_20200125T215358_019979_025CB6_C45D&#39;, &#39;S1B_IW_SLC__1SDV_20200406T215330_20200406T215357_021029_027E44_E25E&#39;), (&#39;S1B_IW_SLC__1SDV_20200206T215330_20200206T215357_020154_026269_0B80&#39;, &#39;S1B_IW_SLC__1SDV_20200218T215330_20200218T215357_020329_02680A_426D&#39;), (&#39;S1B_IW_SLC__1SDV_20200206T215330_20200206T215357_020154_026269_0B80&#39;, &#39;S1B_IW_SLC__1SDV_20200313T215330_20200313T215357_020679_027335_A83A&#39;), (&#39;S1B_IW_SLC__1SDV_20200206T215330_20200206T215357_020154_026269_0B80&#39;, &#39;S1B_IW_SLC__1SDV_20200325T215330_20200325T215357_020854_0278BD_7268&#39;), (&#39;S1B_IW_SLC__1SDV_20200206T215330_20200206T215357_020154_026269_0B80&#39;, &#39;S1B_IW_SLC__1SDV_20200418T215331_20200418T215358_021204_0283CE_1664&#39;), (&#39;S1B_IW_SLC__1SDV_20200218T215330_20200218T215357_020329_02680A_426D&#39;, &#39;S1B_IW_SLC__1SDV_20200301T215330_20200301T215357_020504_026DA9_212B&#39;), (&#39;S1B_IW_SLC__1SDV_20200218T215330_20200218T215357_020329_02680A_426D&#39;, &#39;S1B_IW_SLC__1SDV_20200313T215330_20200313T215357_020679_027335_A83A&#39;), (&#39;S1B_IW_SLC__1SDV_20200218T215330_20200218T215357_020329_02680A_426D&#39;, &#39;S1B_IW_SLC__1SDV_20200325T215330_20200325T215357_020854_0278BD_7268&#39;), (&#39;S1B_IW_SLC__1SDV_20200218T215330_20200218T215357_020329_02680A_426D&#39;, &#39;S1B_IW_SLC__1SDV_20200406T215330_20200406T215357_021029_027E44_E25E&#39;), (&#39;S1B_IW_SLC__1SDV_20200218T215330_20200218T215357_020329_02680A_426D&#39;, &#39;S1B_IW_SLC__1SDV_20200430T215331_20200430T215359_021379_028953_F4D1&#39;), (&#39;S1B_IW_SLC__1SDV_20200301T215330_20200301T215357_020504_026DA9_212B&#39;, &#39;S1B_IW_SLC__1SDV_20200313T215330_20200313T215357_020679_027335_A83A&#39;), (&#39;S1B_IW_SLC__1SDV_20200301T215330_20200301T215357_020504_026DA9_212B&#39;, &#39;S1B_IW_SLC__1SDV_20200325T215330_20200325T215357_020854_0278BD_7268&#39;), (&#39;S1B_IW_SLC__1SDV_20200301T215330_20200301T215357_020504_026DA9_212B&#39;, &#39;S1B_IW_SLC__1SDV_20200418T215331_20200418T215358_021204_0283CE_1664&#39;), (&#39;S1B_IW_SLC__1SDV_20200313T215330_20200313T215357_020679_027335_A83A&#39;, &#39;S1B_IW_SLC__1SDV_20200325T215330_20200325T215357_020854_0278BD_7268&#39;), (&#39;S1B_IW_SLC__1SDV_20200313T215330_20200313T215357_020679_027335_A83A&#39;, &#39;S1B_IW_SLC__1SDV_20200406T215330_20200406T215357_021029_027E44_E25E&#39;), (&#39;S1B_IW_SLC__1SDV_20200313T215330_20200313T215357_020679_027335_A83A&#39;, &#39;S1B_IW_SLC__1SDV_20200418T215331_20200418T215358_021204_0283CE_1664&#39;), (&#39;S1B_IW_SLC__1SDV_20200313T215330_20200313T215357_020679_027335_A83A&#39;, &#39;S1B_IW_SLC__1SDV_20200430T215331_20200430T215359_021379_028953_F4D1&#39;), (&#39;S1B_IW_SLC__1SDV_20200313T215330_20200313T215357_020679_027335_A83A&#39;, &#39;S1B_IW_SLC__1SDV_20200617T215334_20200617T215401_022079_029E6C_FF0A&#39;), (&#39;S1B_IW_SLC__1SDV_20200325T215330_20200325T215357_020854_0278BD_7268&#39;, &#39;S1B_IW_SLC__1SDV_20200406T215330_20200406T215357_021029_027E44_E25E&#39;), (&#39;S1B_IW_SLC__1SDV_20200325T215330_20200325T215357_020854_0278BD_7268&#39;, &#39;S1B_IW_SLC__1SDV_20200418T215331_20200418T215358_021204_0283CE_1664&#39;), (&#39;S1B_IW_SLC__1SDV_20200325T215330_20200325T215357_020854_0278BD_7268&#39;, &#39;S1B_IW_SLC__1SDV_20200430T215331_20200430T215359_021379_028953_F4D1&#39;), (&#39;S1B_IW_SLC__1SDV_20200406T215330_20200406T215357_021029_027E44_E25E&#39;, &#39;S1B_IW_SLC__1SDV_20200418T215331_20200418T215358_021204_0283CE_1664&#39;), (&#39;S1B_IW_SLC__1SDV_20200406T215330_20200406T215357_021029_027E44_E25E&#39;, &#39;S1B_IW_SLC__1SDV_20200430T215331_20200430T215359_021379_028953_F4D1&#39;), (&#39;S1B_IW_SLC__1SDV_20200406T215330_20200406T215357_021029_027E44_E25E&#39;, &#39;S1B_IW_SLC__1SDV_20200617T215334_20200617T215401_022079_029E6C_FF0A&#39;), (&#39;S1B_IW_SLC__1SDV_20200406T215330_20200406T215357_021029_027E44_E25E&#39;, &#39;S1B_IW_SLC__1SDV_20200711T215335_20200711T215403_022429_02A91E_5F7E&#39;), (&#39;S1B_IW_SLC__1SDV_20200418T215331_20200418T215358_021204_0283CE_1664&#39;, &#39;S1B_IW_SLC__1SDV_20200430T215331_20200430T215359_021379_028953_F4D1&#39;), (&#39;S1B_IW_SLC__1SDV_20200418T215331_20200418T215358_021204_0283CE_1664&#39;, &#39;S1B_IW_SLC__1SDV_20200723T215336_20200723T215403_022604_02AE6B_BFA0&#39;), (&#39;S1B_IW_SLC__1SDV_20200430T215331_20200430T215359_021379_028953_F4D1&#39;, &#39;S1B_IW_SLC__1SDV_20200617T215334_20200617T215401_022079_029E6C_FF0A&#39;), (&#39;S1B_IW_SLC__1SDV_20200430T215331_20200430T215359_021379_028953_F4D1&#39;, &#39;S1B_IW_SLC__1SDV_20200711T215335_20200711T215403_022429_02A91E_5F7E&#39;), (&#39;S1B_IW_SLC__1SDV_20200430T215331_20200430T215359_021379_028953_F4D1&#39;, &#39;S1B_IW_SLC__1SDV_20200804T215337_20200804T215404_022779_02B3BA_EE5A&#39;), (&#39;S1B_IW_SLC__1SDV_20200617T215334_20200617T215401_022079_029E6C_FF0A&#39;, &#39;S1B_IW_SLC__1SDV_20200711T215335_20200711T215403_022429_02A91E_5F7E&#39;), (&#39;S1B_IW_SLC__1SDV_20200617T215334_20200617T215401_022079_029E6C_FF0A&#39;, &#39;S1B_IW_SLC__1SDV_20200723T215336_20200723T215403_022604_02AE6B_BFA0&#39;), (&#39;S1B_IW_SLC__1SDV_20200617T215334_20200617T215401_022079_029E6C_FF0A&#39;, &#39;S1B_IW_SLC__1SDV_20200804T215337_20200804T215404_022779_02B3BA_EE5A&#39;), (&#39;S1B_IW_SLC__1SDV_20200617T215334_20200617T215401_022079_029E6C_FF0A&#39;, &#39;S1B_IW_SLC__1SDV_20200828T215338_20200828T215406_023129_02BEA7_3124&#39;), (&#39;S1B_IW_SLC__1SDV_20200617T215334_20200617T215401_022079_029E6C_FF0A&#39;, &#39;S1B_IW_SLC__1SDV_20200921T215339_20200921T215406_023479_02C9A1_C052&#39;), (&#39;S1B_IW_SLC__1SDV_20200711T215335_20200711T215403_022429_02A91E_5F7E&#39;, &#39;S1B_IW_SLC__1SDV_20200723T215336_20200723T215403_022604_02AE6B_BFA0&#39;), (&#39;S1B_IW_SLC__1SDV_20200711T215335_20200711T215403_022429_02A91E_5F7E&#39;, &#39;S1B_IW_SLC__1SDV_20200804T215337_20200804T215404_022779_02B3BA_EE5A&#39;), (&#39;S1B_IW_SLC__1SDV_20200711T215335_20200711T215403_022429_02A91E_5F7E&#39;, &#39;S1B_IW_SLC__1SDV_20200816T215338_20200816T215405_022954_02B928_36DA&#39;), (&#39;S1B_IW_SLC__1SDV_20200711T215335_20200711T215403_022429_02A91E_5F7E&#39;, &#39;S1B_IW_SLC__1SDV_20200828T215338_20200828T215406_023129_02BEA7_3124&#39;), (&#39;S1B_IW_SLC__1SDV_20200711T215335_20200711T215403_022429_02A91E_5F7E&#39;, &#39;S1B_IW_SLC__1SDV_20200921T215339_20200921T215406_023479_02C9A1_C052&#39;), (&#39;S1B_IW_SLC__1SDV_20200711T215335_20200711T215403_022429_02A91E_5F7E&#39;, &#39;S1B_IW_SLC__1SDV_20201015T215340_20201015T215407_023829_02D48B_23A9&#39;), (&#39;S1B_IW_SLC__1SDV_20200723T215336_20200723T215403_022604_02AE6B_BFA0&#39;, &#39;S1B_IW_SLC__1SDV_20200804T215337_20200804T215404_022779_02B3BA_EE5A&#39;), (&#39;S1B_IW_SLC__1SDV_20200723T215336_20200723T215403_022604_02AE6B_BFA0&#39;, &#39;S1B_IW_SLC__1SDV_20200816T215338_20200816T215405_022954_02B928_36DA&#39;), (&#39;S1B_IW_SLC__1SDV_20200723T215336_20200723T215403_022604_02AE6B_BFA0&#39;, &#39;S1B_IW_SLC__1SDV_20200828T215338_20200828T215406_023129_02BEA7_3124&#39;), (&#39;S1B_IW_SLC__1SDV_20200723T215336_20200723T215403_022604_02AE6B_BFA0&#39;, &#39;S1B_IW_SLC__1SDV_20201003T215339_20201003T215407_023654_02CF1B_F664&#39;), (&#39;S1B_IW_SLC__1SDV_20200723T215336_20200723T215403_022604_02AE6B_BFA0&#39;, &#39;S1B_IW_SLC__1SDV_20201027T215340_20201027T215407_024004_02DA0A_F8B2&#39;), (&#39;S1B_IW_SLC__1SDV_20200804T215337_20200804T215404_022779_02B3BA_EE5A&#39;, &#39;S1B_IW_SLC__1SDV_20200816T215338_20200816T215405_022954_02B928_36DA&#39;), (&#39;S1B_IW_SLC__1SDV_20200804T215337_20200804T215404_022779_02B3BA_EE5A&#39;, &#39;S1B_IW_SLC__1SDV_20200828T215338_20200828T215406_023129_02BEA7_3124&#39;), (&#39;S1B_IW_SLC__1SDV_20200804T215337_20200804T215404_022779_02B3BA_EE5A&#39;, &#39;S1B_IW_SLC__1SDV_20200921T215339_20200921T215406_023479_02C9A1_C052&#39;), (&#39;S1B_IW_SLC__1SDV_20200804T215337_20200804T215404_022779_02B3BA_EE5A&#39;, &#39;S1B_IW_SLC__1SDV_20201015T215340_20201015T215407_023829_02D48B_23A9&#39;), (&#39;S1B_IW_SLC__1SDV_20200816T215338_20200816T215405_022954_02B928_36DA&#39;, &#39;S1B_IW_SLC__1SDV_20200828T215338_20200828T215406_023129_02BEA7_3124&#39;), (&#39;S1B_IW_SLC__1SDV_20200816T215338_20200816T215405_022954_02B928_36DA&#39;, &#39;S1B_IW_SLC__1SDV_20200921T215339_20200921T215406_023479_02C9A1_C052&#39;), (&#39;S1B_IW_SLC__1SDV_20200816T215338_20200816T215405_022954_02B928_36DA&#39;, &#39;S1B_IW_SLC__1SDV_20201003T215339_20201003T215407_023654_02CF1B_F664&#39;), (&#39;S1B_IW_SLC__1SDV_20200816T215338_20200816T215405_022954_02B928_36DA&#39;, &#39;S1B_IW_SLC__1SDV_20201027T215340_20201027T215407_024004_02DA0A_F8B2&#39;), (&#39;S1B_IW_SLC__1SDV_20200828T215338_20200828T215406_023129_02BEA7_3124&#39;, &#39;S1B_IW_SLC__1SDV_20200921T215339_20200921T215406_023479_02C9A1_C052&#39;), (&#39;S1B_IW_SLC__1SDV_20200828T215338_20200828T215406_023129_02BEA7_3124&#39;, &#39;S1B_IW_SLC__1SDV_20201003T215339_20201003T215407_023654_02CF1B_F664&#39;), (&#39;S1B_IW_SLC__1SDV_20200828T215338_20200828T215406_023129_02BEA7_3124&#39;, &#39;S1B_IW_SLC__1SDV_20201015T215340_20201015T215407_023829_02D48B_23A9&#39;), (&#39;S1B_IW_SLC__1SDV_20200921T215339_20200921T215406_023479_02C9A1_C052&#39;, &#39;S1B_IW_SLC__1SDV_20201003T215339_20201003T215407_023654_02CF1B_F664&#39;), (&#39;S1B_IW_SLC__1SDV_20200921T215339_20200921T215406_023479_02C9A1_C052&#39;, &#39;S1B_IW_SLC__1SDV_20201015T215340_20201015T215407_023829_02D48B_23A9&#39;), (&#39;S1B_IW_SLC__1SDV_20200921T215339_20200921T215406_023479_02C9A1_C052&#39;, &#39;S1B_IW_SLC__1SDV_20201027T215340_20201027T215407_024004_02DA0A_F8B2&#39;), (&#39;S1B_IW_SLC__1SDV_20200921T215339_20200921T215406_023479_02C9A1_C052&#39;, &#39;S1B_IW_SLC__1SDV_20201226T215338_20201226T215405_024879_02F5DA_AC3F&#39;), (&#39;S1B_IW_SLC__1SDV_20201003T215339_20201003T215407_023654_02CF1B_F664&#39;, &#39;S1B_IW_SLC__1SDV_20201015T215340_20201015T215407_023829_02D48B_23A9&#39;), (&#39;S1B_IW_SLC__1SDV_20201003T215339_20201003T215407_023654_02CF1B_F664&#39;, &#39;S1B_IW_SLC__1SDV_20201027T215340_20201027T215407_024004_02DA0A_F8B2&#39;), (&#39;S1B_IW_SLC__1SDV_20201003T215339_20201003T215407_023654_02CF1B_F664&#39;, &#39;S1B_IW_SLC__1SDV_20201214T215338_20201214T215405_024704_02F02E_8CBB&#39;), (&#39;S1B_IW_SLC__1SDV_20201015T215340_20201015T215407_023829_02D48B_23A9&#39;, &#39;S1B_IW_SLC__1SDV_20201027T215340_20201027T215407_024004_02DA0A_F8B2&#39;), (&#39;S1B_IW_SLC__1SDV_20201015T215340_20201015T215407_023829_02D48B_23A9&#39;, &#39;S1B_IW_SLC__1SDV_20201226T215338_20201226T215405_024879_02F5DA_AC3F&#39;), (&#39;S1B_IW_SLC__1SDV_20201027T215340_20201027T215407_024004_02DA0A_F8B2&#39;, &#39;S1B_IW_SLC__1SDV_20201214T215338_20201214T215405_024704_02F02E_8CBB&#39;), (&#39;S1B_IW_SLC__1SDV_20201214T215338_20201214T215405_024704_02F02E_8CBB&#39;, &#39;S1B_IW_SLC__1SDV_20201226T215338_20201226T215405_024879_02F5DA_AC3F&#39;)]
+</span></code></pre></div></p>
+<p>We now submit our selected pairs to HyP3 for interferogram processing and save job script:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">insarscript</span><span class="w"> </span><span class="kn">import</span> <span class="n">Hyp3_InSAR_Processor</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">hyp3_sbas</span> <span class="o">=</span> <span class="n">Hyp3_InSAR_Processor</span><span class="p">(</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>    <span class="n">pairs</span> <span class="o">=</span> <span class="n">sbas_pairs</span><span class="p">,</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>    <span class="n">out_dir</span> <span class="o">=</span> <span class="s1">&#39;~/tmp&#39;</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="p">)</span>
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="n">batch</span> <span class="o">=</span> <span class="n">hyp3_sbas</span><span class="o">.</span><span class="n">submit</span><span class="p">()</span>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="n">hyp3_sbas</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="n">hyp3_sbas</span><span class="o">.</span><span class="n">refresh</span><span class="p">()</span>
+</span></code></pre></div>
+<p>Once processing is complete download all interferograms:</p>
+<p><div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="n">hyp3_sbas</span><span class="o">.</span><span class="n">download</span><span class="p">()</span>
+</span></code></pre></div>
+We can then perfrom <abbr title="Small Baseline Subset">SBAS</abbr>: </p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">insarscript</span><span class="w"> </span><span class="kn">import</span> <span class="n">Hyp3_SBAS</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="n">sbas_run</span> <span class="o">=</span> <span class="n">Hyp3_SBAS</span><span class="p">(</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>    <span class="n">hyp3_dir</span> <span class="o">=</span> <span class="s1">&#39;~/tmp&#39;</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="p">)</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="n">sbas_run</span><span class="o">.</span><span class="n">prep_data</span><span class="p">()</span>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="n">sbas_run</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+</span></code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="jiaweiliwork@outlook.com" target="_blank" rel="noopener" title="Email me" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.0.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4l208 156a48 48 0 0 0 57.6 0l208-156c12.1-9.1 19.2-23.3 19.2-38.4 0-26.5-21.5-48-48-48zM0 196v188c0 35.3 28.7 64 64 64h384c35.3 0 64-28.7 64-64V196L313.6 344.8c-34.1 25.6-81.1 25.6-115.2 0z"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://discord.gg/RJJM42MBUU" target="_blank" rel="noopener" title="Discord" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 7.0.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M492.5 69.8c-.2-.3-.4-.6-.8-.7-38.1-17.5-78.4-30-119.7-37.1-.4-.1-.8 0-1.1.1s-.6.4-.8.8c-5.5 9.9-10.5 20.2-14.9 30.6-44.6-6.8-89.9-6.8-134.4 0-4.5-10.5-9.5-20.7-15.1-30.6-.2-.3-.5-.6-.8-.8s-.7-.2-1.1-.2C162.5 39 122.2 51.5 84.1 69c-.3.1-.6.4-.8.7C7.1 183.5-13.8 294.6-3.6 404.2c0 .3.1.5.2.8s.3.4.5.6c44.4 32.9 94 58 146.8 74.2.4.1.8.1 1.1 0s.7-.4.9-.7c11.3-15.4 21.4-31.8 30-48.8.1-.2.2-.5.2-.8s0-.5-.1-.8-.2-.5-.4-.6-.4-.3-.7-.4c-15.8-6.1-31.2-13.4-45.9-21.9-.3-.2-.5-.4-.7-.6s-.3-.6-.3-.9 0-.6.2-.9.3-.5.6-.7c3.1-2.3 6.2-4.7 9.1-7.1.3-.2.6-.4.9-.4s.7 0 1 .1c96.2 43.9 200.4 43.9 295.5 0 .3-.1.7-.2 1-.2s.7.2.9.4c2.9 2.4 6 4.9 9.1 7.2.2.2.4.4.6.7s.2.6.2.9-.1.6-.3.9-.4.5-.6.6c-14.7 8.6-30 15.9-45.9 21.8-.2.1-.5.2-.7.4s-.3.4-.4.7-.1.5-.1.8.1.5.2.8c8.8 17 18.8 33.3 30 48.8.2.3.6.6.9.7s.8.1 1.1 0c52.9-16.2 102.6-41.3 147.1-74.2.2-.2.4-.4.5-.6s.2-.5.2-.8c12.3-126.8-20.5-236.9-86.9-334.5zm-302 267.7c-29 0-52.8-26.6-52.8-59.2s23.4-59.2 52.8-59.2c29.7 0 53.3 26.8 52.8 59.2 0 32.7-23.4 59.2-52.8 59.2m195.4 0c-29 0-52.8-26.6-52.8-59.2s23.4-59.2 52.8-59.2c29.7 0 53.3 26.8 52.8 59.2 0 32.7-23.2 59.2-52.8 59.2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tabs", "navigation.sections", "navigation.expand", "toc.follow", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

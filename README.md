@@ -13,19 +13,19 @@ The primary goal of this package is to provide a streamlined and user-friendly I
 ## Installation 
 
 InSARScript can be installed using Conda
-```
+```bash
 conda install jldz9::insarscript -c conda-forge
 
 ```
 Pip: 
 
-```
+```bash
 Pip install insarscript
 ```
 
 Source: 
 
-```
+```bash
 git clone https://github.com/jldz9/InSARScript.git
 cd InSARScript
 conda env create -f environment.yml -n insarscript_dev
@@ -53,7 +53,7 @@ conda env create -f environment.yml -n insarscript_dev
 
 #### Search:
 
-```
+```python
 from insarscript import S1_SLC
 
 s1 = S1_SLC(
@@ -70,7 +70,7 @@ results = s1.search()
 
 #### Interferogram Process
 
-```
+```python
 from insarscript import S1_SLC
 from insarscript import select_pairs
 sbas_pairs = select_pairs(search_results= filter_results[(3,435)])

@@ -4,6 +4,8 @@ on:
     tags:
       - 'v*'
       - 'dev*'
+    paths:
+      - 'docs/**'
 permissions:
   contents: write
 jobs:

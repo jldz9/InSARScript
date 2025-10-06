@@ -13,6 +13,16 @@ InSAR Script is currently under active development. You can install the latest a
 conda install jldz9::insarscript -c conda-forge
 
 ```
+OR 
+
+from pip:
+!!! Note
+    Since GDAL depends on non-Python system libraries, we will add it via conda: 
+
+```bash
+pip install insarscript
+conda install gdal
+```
 
 ### **Development Setup**
 To set up a development environment for the latest dev version, clone the repository and create the Conda environment: : 

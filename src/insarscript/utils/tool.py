@@ -158,7 +158,7 @@ def generate_slurm_script(
     export_env=None,             # dict of env variables
     command="echo Hello SLURM!",
     filename="job.slurm"
-):
+    ):
     """
     Generate a full SLURM batch script with many options.
     """
@@ -218,3 +218,20 @@ def generate_slurm_script(
         f.write(script_content)
 
     return filename 
+
+def batch_rename(
+    dirs : list[str],
+    pattern: str = "velocity.tif",
+    ):
+
+    for path in dirs:
+        path = Path(path).expanduser().resolve()
+        if not path.is_dir():
+            print(f"{path} is not a valid directory, skip.")
+            continue
+        tif_files = list(path.rglob(f'*{pattern}'))
+        for tif in tif_files:
+            new_name = f"velocity_{tif.parent.name}.tif"
+            new_path = tif.parent.joinpath(new_name)
+            tif.rename(new_path)
+            print(f"Renamed {tif.name} to {new_name}")

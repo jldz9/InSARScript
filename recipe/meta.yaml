@@ -1,17 +1,18 @@
 {% set name = "insarscript" %}
 {% set version = "1.0.0" %}
 {% set python_min = "3.11" %}
+
 package:
   name: {{ name|lower }}
   version: {{ version }}
 
 source:
-  path: .
+  path: ../
   #url: https://github.com/jldz9/InSARScript/archive/refs/tags/v{{ version }}.tar.gz
   #sha256: 279cf5786dee9492a5a2be54b5c597f68672039bd676cecc02160410b1e85661
 
 build:
-  script: "{{ PYTHON }} -m pip install --no-deps .  -vv"
+  script: "{{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation"
   number: 0
   noarch: python
 
@@ -21,7 +22,6 @@ requirements:
     - python {{ python_min }}
     - pip
     - setuptools >=61.0
-    - wheel
   run:
     - python >={{ python_min }}
     - gdal >=3.8
@@ -41,8 +41,11 @@ requirements:
 test: 
   requires:
     - python {{ python_min }}
+    - pip
   imports:
     - insarscript
+  commands:
+    - pip check
 
 about:
   home: https://github.com/jldz9/InSARScript

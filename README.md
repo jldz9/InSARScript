@@ -21,9 +21,10 @@ Pip:
 
 ```bash
 Pip install insarscript
+conda install gdal
 ```
 
-Source: 
+From source: 
 
 ```bash
 git clone https://github.com/jldz9/InSARScript.git

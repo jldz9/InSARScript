@@ -98,7 +98,7 @@ class ASFDownloader:
         else: 
             self.output_dir = Path(output_dir).expanduser().resolve()
         self.output_dir = self.output_dir.joinpath(flight_dir)
-        print(f"Prcess directory is set to: {self.output_dir}")
+        print(f"Process directory is set to: {self.output_dir}")
 
         self._asf_authorize()
         

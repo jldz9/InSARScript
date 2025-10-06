@@ -316,7 +316,10 @@ class Mintpy:
                 shutil.rmtree(self.tmp_dir)
             if self.clip_dir.is_dir():
                 shutil.rmtree(self.clip_dir)
-            print('tmp files cleaned')
+            if len(list(self.workdir.glob('*.zip'))) > 0:
+                for file in self.workdir.glob('*.zip'):
+                        file.unlink()
+            print('All tmp files cleaned')
 
     def save_gdal(self):
         from mintpy.cli.save_gdal import main as save_gdal_main
@@ -414,8 +417,6 @@ class Hyp3_SBAS(Mintpy):
                         continue
                     shutil.copy(file, self.clip_dir.joinpath(file.name))
         self.clip_files = clip_files
-        if not self.debug:
-            shutil.rmtree(self.tmp_dir)
     
     def prep_data(self):
         self.unzip_hyp3()

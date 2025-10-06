@@ -10,7 +10,7 @@ InSAR Script is currently under active development. You can install the latest a
 
 ```bash
 
-conda install jldz9::insarscript -c conda-forge
+conda install insarscript -c conda-forge
 
 ```
 OR 

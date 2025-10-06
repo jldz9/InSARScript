@@ -37,8 +37,7 @@ def get_config(config_path=None):
 def quick_look_dis(
     results: dict | None = None,
     bbox : list[float] = [126.451, 45.272, 127.747, 45.541],
-    path: int | None = None,
-    frame: int | None = None,
+    scenes: list[tuple[int, int]] | None = None,
     start: str= '2020-01-01',
     end : str = '2020-12-31',
     AscendingflightDirection: bool = True,
@@ -50,11 +49,32 @@ def quick_look_dis(
     Quick look for slow ground displacement.
     This method will generate quick overlook through given area
     :param results: The search result from ASF search output from ASFDownloader, should be a dict with {(path, frame): [asf_search.Products..,asf_search.Products..]}, if the result was provided, this program will skip searching process
-    
+    :param bbox: The bounding box to search for SLCs, in [minLon, minLat, maxLon, maxLat] format
+    :param scenes: A list of (path, frame) tuples to limit the search
+    :param start: The start date for searching SLCs, in 'YYYY-MM-DD' format
+    :param end: The end date for searching SLCs, in 'YYYY-MM-DD
+    :param AscendingflightDirection: True for ascending, False for descending
+    :param processor: The processor to use, "hyp3" or "ISCE"
+    :param output_dir: The output directory to save results
+    :param credit_pool: The Earthdata credit pool for Hyp3 processor, a dict with {username: password}
     """
+    result_slc = {}
     output_dir = Path(output_dir).joinpath('quick_look').expanduser().resolve()
     if results is not None and isinstance(results, dict):
         result_slc = results
+    elif scenes is not None and isinstance(scenes, list):
+        for (path, frame) in scenes:
+            print(f"Searching for Path {path} Frame {frame} ...")
+            slc = S1_SLC(
+                AscendingflightDirection=AscendingflightDirection,
+                bbox=None,
+                start=start,
+                end=end,
+                output_dir=output_dir.as_posix(),
+                path = path,
+                frame = frame
+            )
+            result_slc.update(slc.search())
     else:
         slc = S1_SLC(
             AscendingflightDirection=AscendingflightDirection,
@@ -62,8 +82,6 @@ def quick_look_dis(
             start=start,
             end=end,
             output_dir=output_dir.as_posix(),
-            path=path,
-            frame=frame
         )
         result_slc = slc.search()
     for key, r in tqdm(result_slc.items(), desc=f'Submiting Jobs', position=0, leave=True):
@@ -78,7 +96,7 @@ def quick_look_dis(
             dt_tol=3,
             dt_max=120, 
             pb_max=200,
-            min_degree=2,
+            min_degree=3,
             max_degree=5,
             force_connect=True
             )
@@ -122,7 +140,7 @@ def hyp3_batch_check(
         if retry and len(job.failed_jobs)>0:
             job.retry()
 
-def earth_credit_pool(earthdata_credentials_pool_path:str) -> dict:
+def earth_credit_pool(earthdata_credentials_pool_path = Path.home().joinpath('.credit_pool')) -> dict:
     """
     Load Earthdata credit pool from a file.
     """

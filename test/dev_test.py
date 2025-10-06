@@ -15,5 +15,15 @@ import pandas as pd
 import numpy as np
 import time
 
-path = '~/tmp'
-hyp3_batch_check(path)
+scenes = [(40,112),(69,112),(69,109),(69,104),(69,98),(171,106),(142,106),(142,101),(142,96),
+          (40,107),(40,102),(40,97),(113,111),(113,106),(113,101),(113,96),(84,65),(84,70),
+          (11,71),(11,65),(113,71),(40,71),(40,77),(142,75),(142,81),(69,84),(69,74),(157,56),
+          (157,61),(157,66),(69,89),(171,93)]
+
+
+quick_look_dis(scenes=scenes, start='2020-01-01', end='2020-12-31', 
+                        AscendingflightDirection=True, 
+                        processor='hyp3', 
+                        output_dir='/local/insar',
+                        credit_pool=earth_credit_pool())
+

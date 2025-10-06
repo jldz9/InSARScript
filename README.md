@@ -14,7 +14,7 @@ The primary goal of this package is to provide a streamlined and user-friendly I
 
 InSARScript can be installed using Conda
 ```bash
-conda install jldz9::insarscript -c conda-forge
+conda install insarscript -c conda-forge
 
 ```
 Pip: 

@@ -35,6 +35,8 @@ nav:
   - QuickStart: 
         - Setup: quickstart/install.md
         - Workflow: quickstart/workflow.md
+  - API: 
+        - Downloader: API/downloader.md
   - About: about.md
 
 extra:

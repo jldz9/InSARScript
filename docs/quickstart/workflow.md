@@ -273,3 +273,12 @@ sbas_run = Hyp3_SBAS(
 sbas_run.prep_data()
 sbas_run.run()
 ```
+
+## PostProcessing
+
+currently Hyp3_SBAS support save result into geo-reference GeoTiff
+
+```python
+sbas_run.save_gdal()
+```
+This would save the file named `velocity.tif` under work directory

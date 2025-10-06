@@ -72,7 +72,7 @@ Sence: Path 105 Frame 441, Amount: 29, time: 2020-01-08 --> 2020-12-21
 Sence: Path 105 Frame 435, Amount: 29, time: 2020-01-08 --> 2020-12-21
 
 ```
-if we decide to choose two SAR sence stacks *(Path:3 Frame:435)* and *(Path:3 Frame:439)* for further process
+if we decide to choose one SAR sence stacks *(Path:3 Frame:435)* for further process
 , simply do: 
 
 ```python

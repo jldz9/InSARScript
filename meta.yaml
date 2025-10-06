@@ -6,8 +6,9 @@ package:
   version: {{ version }}
 
 source:
-  url: https://github.com/jldz9/InSARScript/archive/refs/tags/v{{ version }}.tar.gz
-  sha256: 279cf5786dee9492a5a2be54b5c597f68672039bd676cecc02160410b1e85661
+  path: .
+  #url: https://github.com/jldz9/InSARScript/archive/refs/tags/v{{ version }}.tar.gz
+  #sha256: 279cf5786dee9492a5a2be54b5c597f68672039bd676cecc02160410b1e85661
 
 build:
   script: "{{ PYTHON }} -m pip install --no-deps .  -vv"

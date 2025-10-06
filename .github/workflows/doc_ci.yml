@@ -1,9 +1,8 @@
 name: doc_ci 
 on:
   push:
-    tags:
-      - 'v*'
-      - 'dev*'
+    branches:
+      - 'main'
     paths:
       - 'docs/**'
 permissions:

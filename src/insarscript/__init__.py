@@ -109,7 +109,7 @@ _env = {
     }
 # ---------------------package imports---------------------
 
-from insarscript.utils import tool, apis
+from insarscript.utils import postprocess, tool, apis
 from insarscript.core.downloader import S1_SLC
 from insarscript.core.processor import select_pairs, Hyp3_InSAR_Processor
 from insarscript.core.sbas import  Hyp3_SBAS

@@ -152,7 +152,6 @@ def earth_credit_pool(earthdata_credentials_pool_path = Path.home().joinpath('.c
             earthdata_credentials_pool[key] = value
     return earthdata_credentials_pool
 
-
 def generate_slurm_script(
     job_name="my_job",
     output_file="job_%j.out",    # %j = jobID

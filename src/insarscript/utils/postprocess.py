@@ -5,6 +5,7 @@ import geopandas as gpd
 import h5py
 import numpy as np
 import rasterio
+import re
 
 from rasterio.features import shapes
 from rasterio.transform import from_origin
@@ -27,15 +28,24 @@ def _crs_from_attrs(attrs):
         try: return CRS.from_epsg(int(A["EPSG"]))
         except: pass
     if "UTM_ZONE" in A:
-        zone = int(A["UTM_ZONE"])
-        lat = None
-        for k in ("REF_LAT","LAT_REF1","LAT_REF2","LAT_REF3","LAT_REF4"):
-            if k in A:
-                try: lat = float(A[k]); break
-                except: pass
-        north = (lat is None) or (lat >= 0.0)
-        epsg = 32600 + zone if north else 32700 + zone
-        return CRS.from_epsg(epsg)
+        if bool(re.fullmatch(r'\d+[A-Za-z]', A["UTM_ZONE"])): # e.g., '33N'
+            zone_str = A["UTM_ZONE"][-1]
+            zone_num = int(A["UTM_ZONE"][:-1])
+            if zone_str.upper() == 'N':
+                epsg = 32600 + zone_num
+            else:
+                epsg = 32700 + zone_num
+            return CRS.from_epsg(epsg)
+        elif bool(re.fullmatch(r'\d+', str(A["UTM_ZONE"]))): # e.g., 33
+            zone = int(A["UTM_ZONE"])
+            lat = None
+            for k in ("REF_LAT","LAT_REF1","LAT_REF2","LAT_REF3","LAT_REF4"):
+                if k in A:
+                    try: lat = float(A[k]); break
+                    except: pass
+            north = (lat is None) or (lat >= 0.0)
+            epsg = 32600 + zone if north else 32700 + zone
+            return CRS.from_epsg(epsg)
     return None
 
 def _unit_from_attrs(attrs):
@@ -45,7 +55,7 @@ def _unit_from_attrs(attrs):
 
 def h5_to_raster(
     h5_file: str | Path,
-    out_dir: str | Path | None = None,
+    out_raster: str | Path | None = None,
 ):
     """
     Convert a HDF5 dataset from mintpy to GeoTIFF raster.
@@ -55,10 +65,10 @@ def h5_to_raster(
     - out_raster: Path to the output GeoTIFF file.
     """
     h5_file = Path(h5_file).expanduser().resolve()
-    if out_dir is None:
-        out_raster = h5_file.parent
+    if out_raster is None:
+        out_raster = h5_file.parent.joinpath(f"{h5_file.stem}.tif")
     else:
-        out_dir = Path(out_dir).expanduser().resolve()
+        out_raster = Path(out_raster).expanduser().resolve()
     valid_name = ['ERA5','geomertryGeo', 'ifgramStack', 'velocity', 'velocityERA5', 'avgSpatialCoh', 
                   'demErr', 'maskConnComp', 'maskTempCoh', 'numInvIfgram', 'temporalCoherence', 'timeseries',
                   'timeseriesResidual']
@@ -79,7 +89,7 @@ def h5_to_raster(
                 ref = f[key]
                 data = ref[()]
                 height, width = data.shape
-                data[data == float(ref.attrs['NO_DATA_VALUE'])] = NODATA
+                data[data == float(attrs['NO_DATA_VALUE'])] = NODATA
                 bad = ~np.isfinite(data)
                 if bad.any():
                     data[bad] = NODATA
@@ -87,7 +97,7 @@ def h5_to_raster(
                            crs=crs, transform=transform, nodata=NODATA,
                            tiled=True, compress="deflate", predictor=3,
                            blockxsize=256, blockysize=256, BIGTIFF="IF_SAFER")
-                out_path = out_raster.joinpath(f"{h5_file.stem}_{key}.tif")
+                out_path = out_raster.with_name(f"{out_raster.stem}_{key}.tif")
                 with rasterio.Env(GDAL_TIFF_INTERNAL_MASK=True):
                     with rasterio.open(out_path.as_posix(), 'w', **profile) as dst:
                         dst.write(data, 1)
@@ -95,7 +105,7 @@ def h5_to_raster(
                         unit = unit
                         if unit:
                             tags["units"] = unit
-                        dst.update_tags(**tags)       
+                        dst.update_tags(**tags)    
 
 
 def save_footprint(raster_file: str | Path, out_footprint: str | Path | None = None):

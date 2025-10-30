@@ -55,7 +55,7 @@ def _unit_from_attrs(attrs):
 
 def h5_to_raster(
     h5_file: str | Path,
-    out_dir: str | Path | None = None,
+    out_raster: str | Path | None = None,
 ):
     """
     Convert a HDF5 dataset from mintpy to GeoTIFF raster.
@@ -65,10 +65,10 @@ def h5_to_raster(
     - out_raster: Path to the output GeoTIFF file.
     """
     h5_file = Path(h5_file).expanduser().resolve()
-    if out_dir is None:
-        out_raster = h5_file.parent
+    if out_raster is None:
+        out_raster = h5_file.parent.joinpath(f"{h5_file.stem}.tif")
     else:
-        out_dir = Path(out_dir).expanduser().resolve()
+        out_raster = Path(out_raster).expanduser().resolve()
     valid_name = ['ERA5','geomertryGeo', 'ifgramStack', 'velocity', 'velocityERA5', 'avgSpatialCoh', 
                   'demErr', 'maskConnComp', 'maskTempCoh', 'numInvIfgram', 'temporalCoherence', 'timeseries',
                   'timeseriesResidual']
@@ -97,7 +97,7 @@ def h5_to_raster(
                            crs=crs, transform=transform, nodata=NODATA,
                            tiled=True, compress="deflate", predictor=3,
                            blockxsize=256, blockysize=256, BIGTIFF="IF_SAFER")
-                out_path = out_raster.joinpath(f"{h5_file.stem}_{key}.tif")
+                out_path = out_raster.with_name(f"{out_raster.stem}_{key}.tif")
                 with rasterio.Env(GDAL_TIFF_INTERNAL_MASK=True):
                     with rasterio.open(out_path.as_posix(), 'w', **profile) as dst:
                         dst.write(data, 1)
@@ -105,7 +105,7 @@ def h5_to_raster(
                         unit = unit
                         if unit:
                             tags["units"] = unit
-                        dst.update_tags(**tags)       
+                        dst.update_tags(**tags)    
 
 
 def save_footprint(raster_file: str | Path, out_footprint: str | Path | None = None):

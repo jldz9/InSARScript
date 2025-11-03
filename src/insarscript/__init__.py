@@ -78,23 +78,18 @@ os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 # ---------------------Check runing environment -----------
 if 'SLURM_MEM_PER_NODE' in os.environ:
-    print('--------------------SLURM environment-----------------------')
     _memory_gb = int(int(os.environ['SLURM_MEM_PER_NODE'])/1024)
     _cpu_core = int(os.environ['SLURM_CPUS_PER_TASK'])
     _manager = 'slurm'
-    
 elif 'PBS_NUM_PPN' in os.environ:
-    print('--------------------PBS environment-----------------------')
     _memory_gb = int(int(os.environ['PBS_MEM']))
     _cpu_core = int(os.environ['PBS_NUM_PPN'])
     _manager = 'pbs'
 elif 'LSB_JOB_NUMPROC' in os.environ:
-    print('--------------------LSF environment-----------------------')
     _memory_gb = int(int(os.environ['LSB_JOB_MEMLIMIT'])/1024)
     _cpu_core = int(os.environ['LSB_JOB_NUMPROC '])
     _manager = 'lsf'
 else:
-    print('--------------------Local environment---------------------')
     import psutil
     _memory_gb = round(psutil.virtual_memory().total/1024**3)
     _cpu_core = os.cpu_count()

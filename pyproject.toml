@@ -9,6 +9,7 @@ authors = [{name="jldz9", email="Jiaweiliwork@outlook.com"}]
 description = "Hassle-free InSAR processing scripts for multiple satellites"
 readme = 'README.md'
 dependencies = [
+"numpy<2.0",
 "asf_search",
 "colorama",
 "contextily",

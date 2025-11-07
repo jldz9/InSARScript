@@ -37,6 +37,7 @@ requirements:
     - rasterio =1.4.3
     - sentineleof 
     - tomli-w 
+    - numpy <2.0
 
 test: 
   requires:

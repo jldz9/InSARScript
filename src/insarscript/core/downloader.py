@@ -187,6 +187,7 @@ Check documentation for how to setup .netrc file.\n""")
     def footprint(self, save_path: str | None = None):
         """
         Print the search result footprint and AOI use matplotlib
+        
         """
         if not hasattr(self, 'results'):
             self.search()

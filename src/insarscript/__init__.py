@@ -16,46 +16,9 @@ logging.disable(logging.CRITICAL)
 from insarscript._version import __version__
 _system_info = platform.system()
 
-
-# For Sentinal-1 InSAR processing, Hyp3 and MintPy are used by default.
-# ---------------------Check GDAL and SQLite3 version---------------------
-# GDAL and SQLite3 are required by MintPy
-# Use gdal > 3.8 and sqlite > 3.44 to avoid compatibility issues. (e.g.undefined symbol: sqlite3_total_changes64)
-from packaging.version import parse as v
-from osgeo import gdal
-gdal_version = gdal.__version__
-if v(gdal_version) < v('3.8'):
-    print(f"{Fore.RED}GDAL version {gdal_version} is not supported. Please install GDAL version >= 3.8.")
-
-import sqlite3
-sqlite_version = sqlite3.sqlite_version
-if v(sqlite_version) < v('3.44'):
-    print(f"{Fore.RED}SQLite version {sqlite_version} is not supported. Please install SQLite version >= 3.44.")
-
-# ---------------------Make Sure PROJ_LIB exist----------------------------
-# proj.db is required when gdal tried to read the CRS, PROJ_LIB offen missing during installation. 
-
-if os.environ.get('PROJ_LIB') is None:
-    if os.environ.get('CONDA_PREFIX') is None:
-        raise RuntimeError('Conda is not correctly installed, $CONDA_PREFIX does not exist')
-    else: 
-        if _system_info == 'Windows':
-            os.environ["PROJ_LIB"] = Path(os.environ['CONDA_PREFIX']).joinpath('Library', 'share', 'proj').as_posix()
-        else:
-            os.environ["PROJ_LIB"] = Path(os.environ['CONDA_PREFIX']).joinpath('share', 'proj').as_posix()
-        if not Path(os.environ["PROJ_LIB"]).is_dir():
-            import pyproj
-            proj_data_path = Path(pyproj.datadir.get_data_dir())
-            if proj_data_path.is_dir():
-                os.environ["PROJ_LIB"] = proj_data_path.as_posix()
-            else:
-                raise RuntimeError('Proj data path does not exist, please check your PROJ installation')
-            
-
 # ---------------------MintPy Configuration---------------------------
 # Configuration followed the MintPy post-installation setip 
 # https://github.com/insarlab/MintPy/blob/main/docs/installation.md#3-post-installation-setup
-
 try: 
     import mintpy
 except ImportError:

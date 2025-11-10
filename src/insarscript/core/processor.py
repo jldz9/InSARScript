@@ -337,11 +337,13 @@ class Hyp3_InSAR_Processor:
         self.failed_jobs = failed_jobs
         return tmp_batchs
 
-    def download(self, batchs: dict[Batch] | None = None) -> Path:
+    def download(self, batchs: dict[Batch] | None = None, output: str | None = None) -> Path:
         if batchs is None:
             b = self.refresh()
         else:
             b = self.refresh(batchs)
+        if output is not None:
+            self.out_dir = Path(output).expanduser().resolve()
         out = self.out_dir
         out.mkdir(parents=True, exist_ok=True)
         exist = out.rglob("*.zip")

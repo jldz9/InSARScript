@@ -169,7 +169,6 @@ Check documentation for how to setup .netrc file.\n""")
         self.results = grouped
         if len(grouped) > 1: 
             print(f"{Fore.YELLOW}The AOI crosses {len(grouped)} stacks, you can use .summary() or .footprint() to check footprints and .pick((path_frame)) to specific the stack of scence you would like to download. If use .download() directly will create subfolders under {self.output_dir} for each stack")
-        
         return grouped
  
     def summary(self, ls=False):
@@ -234,12 +233,14 @@ Check documentation for how to setup .netrc file.\n""")
         """
         Give a path and frame to choose specific stack of scenes or a list of path and frame, e.g path_frame = [(25,351), (25,352), (25,353)]
         """
+        if not hasattr(self, 'results'):
+            raise ValueError(f"{Fore.RED}No search results found. Please run search() first.")
         if isinstance(path_frame, tuple):
             new_dict = defaultdict(list)
             value = self.results.get(path_frame)
             new_dict[path_frame].extend(value) #type: ignore
             self.results = new_dict
-            return self.results
+            return new_dict
         elif isinstance(path_frame, list):
             new_dict = defaultdict(list)
             for p_f in path_frame: 
@@ -248,7 +249,7 @@ Check documentation for how to setup .netrc file.\n""")
                     continue
                 new_dict[p_f].extend(value)
             self.results = new_dict
-            return self.results
+            return new_dict
         else: 
             raise ValueError(f"path and frame needs to be under same type, either both int or both list of int")
     

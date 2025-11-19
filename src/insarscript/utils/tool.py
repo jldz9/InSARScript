@@ -84,14 +84,9 @@ def quick_look_dis(
             output_dir=output_dir.as_posix(),
         )
         result_slc = slc.search()
-    for key, r in tqdm(result_slc.items(), desc=f'Submiting Jobs', position=0, leave=True):
-        if len(r) <= 10:
-            print(f"{Fore.YELLOW}Not enough SLCs found for Path{key[0]} Frame{key[1]}, skip.")
-            continue
-        slc_path = output_dir.joinpath(f"quicklook_p{key[0]}f{key[1]}")
-        slc_path.mkdir(parents=True, exist_ok=True)
-        pairs = select_pairs(
-            r,
+
+    pairs = select_pairs(
+            result_slc,
             dt_targets=(12,24,36,48,72,96),
             dt_tol=3,
             dt_max=120, 
@@ -100,11 +95,17 @@ def quick_look_dis(
             max_degree=5,
             force_connect=True
             )
+    for key, pair in tqdm(pairs.items(), desc=f'Submiting Jobs', position=0, leave=True):
+        if len(r) <= 10:
+            print(f"{Fore.YELLOW}Not enough pairs found for a decent displacement analysis for Path{key[0]} Frame{key[1]}, skip the sence.")
+            continue
+        slc_path = output_dir.joinpath(f"quicklook_p{key[0]}f{key[1]}")
+        slc_path.mkdir(parents=True, exist_ok=True)
         
         if processor == "hyp3":
             print("---------Using HyP3 online processor-----------")
             job = Hyp3_InSAR_Processor(
-                pairs=pairs,
+                pairs=pair,
                 out_dir=slc_path.as_posix(),
                 earthdata_credentials_pool=credit_pool
             )

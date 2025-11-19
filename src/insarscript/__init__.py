@@ -7,7 +7,6 @@ import sys
 import logging
 
 from pathlib import Path
-
 from colorama import init
 init(autoreset=True)
 from colorama import Fore, Style, Back
@@ -24,8 +23,6 @@ try:
 except ImportError:
     print(f"{Fore.RED}MintPy is not installed.")
     sys.exit(1)
-# a. ERA5 for tropospheric correction
-#TODO - Add instruction for ERA5 setup at https://github.com/insarlab/pyaps#2-account-setup-for-era5
 
 # b. Dask for parallel processing
 from dask import config as dask_config

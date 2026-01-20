@@ -37,7 +37,16 @@ os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 # ---------------------Check runing environment -----------
 if 'SLURM_MEM_PER_NODE' in os.environ:
-    _memory_gb = int(int(os.environ['SLURM_MEM_PER_NODE'])/1024)
+    if int(os.environ['SLURM_MEM_PER_NODE'])<=512:
+        # Value is small, assuming GB
+        _memory_gb = int(os.environ['SLURM_MEM_PER_NODE'])
+    elif int(os.environ['SLURM_MEM_PER_NODE'])>512&int(os.environ['SLURM_MEM_PER_NODE'])<=524288:
+        # This range of value would assume to be MB
+        _memory_gb = int(int(os.environ['SLURM_MEM_PER_NODE'])/1024)
+    elif int(os.environ['SLURM_MEM_PER_NODE'])>524288:
+        # Value is too large, assume mem is KB
+    
+        _memory_gb = int(int(os.environ['SLURM_MEM_PER_NODE'])/(1024**2))
     _cpu_core = int(os.environ['SLURM_CPUS_PER_TASK'])
     _manager = 'slurm'
 elif 'PBS_NUM_PPN' in os.environ:
@@ -63,7 +72,7 @@ _env = {
     }
 # ---------------------package imports---------------------
 
-from insarscript.utils import postprocess, tool, apis
+from insarscript.utils import postprocess, tool, apis, batch
 from insarscript.core.downloader import S1_SLC
 from insarscript.core.processor import select_pairs, Hyp3_InSAR_Processor
 from insarscript.core.sbas import  Hyp3_SBAS

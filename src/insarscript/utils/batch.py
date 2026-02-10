@@ -14,7 +14,6 @@ from osgeo import gdal
 from pathlib import Path
 from tqdm import tqdm
 
-from insarscript.core import Hyp3_InSAR_Processor, S1_SLC, select_pairs
 
 
 def hyp3_batch_check(

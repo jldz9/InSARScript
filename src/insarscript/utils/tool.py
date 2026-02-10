@@ -15,7 +15,7 @@ from box import Box as Config
 from colorama import Fore
 from mintpy.utils import readfile
 
-from insarscript.core import S1_SLC, select_pairs, Hyp3_InSAR_Processor
+from insarscript.downloader import S1_SLC, ASF_Base_Downloader
 
 def get_config(config_path=None):
 
@@ -33,10 +33,6 @@ def get_config(config_path=None):
                 raise ValueError(f"Error loading config file with error {e}, is this a valid config file in TOML format?")
     else:
         raise FileNotFoundError(f"Config file not found under {config_path}")
-
-
-
-
 
 def earth_credit_pool(earthdata_credentials_pool_path = Path.home().joinpath('.credit_pool')) -> dict:
     """

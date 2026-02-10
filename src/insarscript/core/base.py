@@ -67,7 +67,7 @@ class Hyp3Processor(ABC):
     def submit(self) -> Any:
         pass
 
-class BaseAnalysis(ABC):
+class BaseAnalyzer(ABC):
     name: str
     default_config: Optional[Type] = None
     def __init__(self, config=None):

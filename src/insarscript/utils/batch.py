@@ -255,8 +255,6 @@ def batch_era5_download(batch_dir, ERA5_dir):
     ERA5_path = Path(ERA5_dir).expanduser().resolve()
     ERA5_path.mkdir(parents=True, exist_ok=True)
 
-    
-
     for subfolder in tqdm(batch_path.iterdir(), desc="Scanning Subfolders", position=0, leave=True):
         zip_files = list(subfolder.glob('*.zip'))
         W, E, N, S = 180, -180, -90, 90

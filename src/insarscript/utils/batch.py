@@ -45,7 +45,7 @@ def dis_scan(
     bbox : list[float] = [126.451, 45.272, 127.747, 45.541],
     start: str= '2020-01-01',
     end : str = '2020-12-31',
-    flightDirection: bool = 'ASCENDING', # or DESCENDING
+    flightDirection: str = 'ASCENDING', # or DESCENDING
     downloader: str = "S1_SLC",
     processor: str = "Hyp3_InSAR",
     output_dir = "out",
@@ -87,14 +87,13 @@ def dis_scan(
             max_degree=5,
             force_connect=True
             )
-    for key, pair in tqdm(pairs.items(), desc=f'Submiting Jobs', position=0, leave=True):
-        if len(pairs) <= 10:
+    for key, pair in tqdm(pairs.items(), desc=f'Working on batch', position=0, leave=True):
+        if len(pair) <= 10:
             print(f"{Fore.YELLOW}Not enough pairs found for a decent displacement analysis for Path{key[0]} Frame{key[1]}, skip the sence.")
             continue
         slc_path = output_dir.joinpath(f"quicklook_p{key[0]}f{key[1]}")
         slc_path.mkdir(parents=True, exist_ok=True)
         
-    
         job =Processor(processor,
             pairs=pair,
             out_dir=slc_path.as_posix(),

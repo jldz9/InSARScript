@@ -12,7 +12,7 @@ from .asf_base import ASF_Base_Downloader
 
 @dataclass
 class S1_SLC_Config(ASF_Base_Config):
-    type:str = "S1_SLC_Config"
+    name:str = "S1_SLC_Config"
     dataset: str | list[str] | None =  constants.DATASET.SENTINEL1
     instrument: str | None = constants.INSTRUMENT.C_SAR
     beamMode:str | None = constants.BEAMMODE.IW

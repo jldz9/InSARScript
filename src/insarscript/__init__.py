@@ -112,8 +112,7 @@ from .downloader.s1_slc import S1_SLC_Config
 from .utils import (
     tool,
     postprocess,
-    batch,
-    insartool
+    batch
 )
 
 __all__ = [

@@ -26,7 +26,6 @@ class Hyp3_InSAR(Hyp3Processor):
     default_config = Hyp3_InSAR_Base_Config
 
     def __init__(self, config=None):
-    
         super().__init__(config)
         self._hyp3_authorize(pool=self.config.earthdata_credentials_pool)
         self.cost = self.client.costs()['INSAR_GAMMA']['cost_table'][f'{self.config.looks}']

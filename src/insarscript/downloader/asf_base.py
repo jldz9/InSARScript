@@ -21,6 +21,7 @@ from shapely.geometry import shape
 
 from insarscript.core.base import BaseDownloader
 from insarscript.core.config import ASF_Base_Config
+from insarscript.utils.tool import _to_wkt
 
 class ASF_Base_Downloader(BaseDownloader): 
     """
@@ -43,11 +44,8 @@ class ASF_Base_Downloader(BaseDownloader):
         if self.config.dataset is None and self.config.platform is None:
             raise ValueError(f"{Fore.RED}Dataset or platform must be specified for ASF search.")
         
-        if self.config.bbox and not self.config.intersectsWith:
-            w, s, e, n = self.config.bbox
-            self.config.intersectsWith = f"POLYGON(({w} {s}, {e} {s}, {e} {n}, {w} {n}, {w} {s}))" 
+        self.config.intersectsWith = _to_wkt(self.config.intersectsWith)
         
-        self._asf_authorize()
         
     def _asf_authorize(self):
         print(f"""
@@ -88,6 +86,12 @@ Check documentation for how to setup .netrc file.\n""")
                 else:
                     print(f"{Fore.RED}no machine name {keyword} found .netrc file. Will prompt login.\n")
                     return False
+                
+    @property
+    def session(self):
+        if not hasattr(self, '_session') or self._session is None:
+            self._asf_authorize()
+        return self._session
                 
     def search(self) -> dict:
         """
@@ -245,7 +249,7 @@ Check documentation for how to setup .netrc file.\n""")
                 print(f"Downloading {i}/{len(results)}: {result.properties['fileID']}")
                 try: 
                     start_time = time.time()
-                    result.download(path=download_path, session=self._session)
+                    result.download(path=download_path, session=self.session)
                     elapsed = time.time() - start_time
 
                     size_mb = result.properties['bytes'] / (1024 * 1024)  # Convert bytes to MB

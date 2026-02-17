@@ -50,8 +50,7 @@ class ASF_Base_Config:
     season: list[int] | None = None
     stack_from_id: str | None = None
     maxResults: int | None = None
-    output_dir: Path | str = field(default_factory=lambda: Path.cwd())
-    bbox: List[float] | None = None #[west(min)_lon, south(min)_lat, east(max)_lon, north(max)_lat]
+    output_dir: Path | str = field(default_factory=lambda: Path.cwd()) 
 
     def __post_init__(self):
         if isinstance(self.output_dir, str):

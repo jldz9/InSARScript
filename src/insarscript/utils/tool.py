@@ -4,22 +4,25 @@ import json
 import os
 import time
 
+from collections import defaultdict
 from dateutil.parser import isoparse
 from pathlib import Path
 from pprint import pformat
 from types import SimpleNamespace
 
-import tomllib, tomli_w
-
+import geopandas as gpd
+from asf_search.exceptions import ASFSearchError
+from asf_search import ASFProduct
 from box import Box as Config
 from colorama import Fore
 from mintpy.utils import readfile
-from asf_search.exceptions import ASFSearchError
-from asf_search import ASFProduct
-from collections import defaultdict
-from colorama import Fore
-from dateutil.parser import isoparse
+from shapely.geometry import box
+from shapely import wkt
 from tqdm import tqdm
+
+
+
+
 
 def select_pairs(search_results: dict[tuple[int,int], list[ASFProduct]],
                 dt_targets:tuple[int] =(6, 12, 24, 36, 48, 72, 96) ,
@@ -135,7 +138,6 @@ def select_pairs(search_results: dict[tuple[int,int], list[ASFProduct]],
                     neighbors[b].discard(a)
         pairs_group[key]=sorted(pairs)
     return pairs_group[(0, 0)] if input_is_list else pairs_group
-
 
 def get_config(config_path=None):
 
@@ -266,3 +268,43 @@ def batch_rename(
             new_path = tif.parent.joinpath(new_name)
             tif.rename(new_path)
             print(f"Renamed {tif.name} to {new_name}")
+
+
+def _to_wkt(geom_input) -> str:
+    """
+    Converts various input types to a WKT string.
+    Supported: 
+    1. List/Tuple of 4 numbers [min_lon, min_lat, max_lon, max_lat]
+    2. String path to a spatial file (GeoJSON, SHP, etc.)
+    3. Valid WKT string
+    """
+    if isinstance(geom_input, (list, tuple)):
+        if len(geom_input) != 4:
+            raise ValueError(f"BBox list must have exactly 4 elements, got {len(geom_input)}")
+        
+        if not all(isinstance(n, (int, float)) for n in geom_input):
+            raise TypeError("All elements in BBox list must be int or float.")
+        
+        return box(*geom_input).wkt
+    
+    if isinstance(geom_input, str):
+        geom_input = geom_input.strip()
+
+        if Path(geom_input).exists():
+            try:
+                # Use geopandas to read any spatial format (SHP, GeoJSON, KML)
+                gdf = gpd.read_file(geom_input)
+                # Combine all geometries in the file into one (unary_union)
+                return gdf.geometry.union_all().wkt
+            except Exception as e:
+                raise ValueError(f"Could not read spatial file at {geom_input}: {e}")
+            
+        try:
+            # Try to load it to see if it's valid WKT
+            decoded = wkt.loads(geom_input)
+            return decoded.wkt
+        except Exception:
+            raise ValueError(
+                "Input string is neither a valid file path nor a valid WKT string."
+            )
+    raise TypeError(f"Unsupported input type: {type(geom_input)}. Expected list, tuple, or str.")

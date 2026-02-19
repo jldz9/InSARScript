@@ -270,7 +270,7 @@ def batch_rename(
             print(f"Renamed {tif.name} to {new_name}")
 
 
-def _to_wkt(geom_input) -> str:
+def _to_wkt(geom_input) -> str | None:
     """
     Converts various input types to a WKT string.
     Supported: 
@@ -307,4 +307,6 @@ def _to_wkt(geom_input) -> str:
             raise ValueError(
                 "Input string is neither a valid file path nor a valid WKT string."
             )
+    if not geom_input:
+        return None
     raise TypeError(f"Unsupported input type: {type(geom_input)}. Expected list, tuple, or str.")

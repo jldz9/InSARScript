@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import json
-import os
+from __future__ import annotations
+
 import time
+import logging
 
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dateutil.parser import isoparse
 from pathlib import Path
-from pprint import pformat
-from types import SimpleNamespace
+from typing import Optional
+from threading import Lock
+
 
 import geopandas as gpd
 from asf_search.exceptions import ASFSearchError
-from asf_search import ASFProduct
+from asf_search import ASFProduct, ASFSearchError
+from asf_search.baseline.calc import calculate_perpendicular_baselines
 from box import Box as Config
 from colorama import Fore
-from mintpy.utils import readfile
 from shapely.geometry import box
 from shapely import wkt
 from tqdm import tqdm
@@ -23,120 +26,566 @@ from tqdm import tqdm
 
 
 
+import logging
+import time
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
+from typing import Union
 
-def select_pairs(search_results: dict[tuple[int,int], list[ASFProduct]],
-                dt_targets:tuple[int] =(6, 12, 24, 36, 48, 72, 96) ,
-                dt_tol:int=3,
-                dt_max:int=120,
-                pb_max:int=150,
-                min_degree:int=3,
-                max_degree:int=999,
-                force_connect: bool = True):
-    
+from asf_search import ASFProduct, ASFSearchError
+from asf_search.baseline.calc import calculate_perpendicular_baselines
+from colorama import Fore
+from dateutil.parser import isoparse
+from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
+
+# Sentinel value used when a baseline cannot be determined.
+# Large enough to fail every filter condition.
+_MISSING: float = 10_000.0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  TYPE ALIASES
+# ═══════════════════════════════════════════════════════════════════════════
+
+SceneID   = str
+DateFloat = float   # Unix timestamp (seconds)
+Pair      = tuple[SceneID, SceneID]
+BaselineEntry = tuple[float, float]   # (dt_days, bperp_m)
+BaselineTable = dict[Pair, BaselineEntry]
+PairGroup = dict[tuple[int, int], list[Pair]]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  INTERNAL HELPERS
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _has_local_baseline(p: ASFProduct) -> bool:
     """
-    Select interfergrom pairs based on temporalBaseline and perpendicularBaseline'
-    :param search_results: The list of ASFProduct from asf_search 
-    :param dt_targets: The prefered temporal spacings to make interfergrams
-    :param dt_tol: The tolerance in days adds to temporal spacings for flexibility
-    :param dt_max: The maximum temporal baseline [days]
-    :param pb_max: The maximum perpendicular baseline [m]
-    :param min_degree: The minimum number of connections
-    :param max_degree: The maximum number of connections
-    :param force_connect: if connections are less than min_degree with given dt_targets, will force to use pb_max to search for additional pairs. Be aware this could leads to low quality pairs.
+    Return True if *p* carries enough on-product data to compute bperp
+    locally without calling the ASF API.
+
+    Sentinel-1 (CALCULATED type):
+        p.baseline['stateVectors']['positions'] and ['velocities'] must exist.
+
+    ALOS / ERS / RADARSAT (PRE_CALCULATED type):
+        p.baseline['insarBaseline'] (a scalar float) must exist.
     """
+    b = getattr(p, "baseline", None)
+    if not b:
+        return False
+    if "stateVectors" in b:
+        sv = b["stateVectors"]
+        return bool(sv.get("positions") and sv.get("velocities"))
+    if "insarBaseline" in b:
+        return True
+    return False
+
+
+def _fetch_stack_with_retry(
+    ref: ASFProduct,
+    max_attempts: int = 10,
+) -> tuple[SceneID, list[ASFProduct]]:
+    """
+    Fetch the ASF stack for *ref* with exponential-backoff retry.
+
+    Returns (scene_name, stack_products).
+    Raises ASFSearchError after *max_attempts* consecutive failures.
+    """
+    rid = ref.properties["sceneName"]
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return rid, ref.stack()
+        except ASFSearchError:
+            if attempt == max_attempts:
+                logger.error(
+                    "Stack fetch failed for %s after %d attempts.", rid, max_attempts
+                )
+                raise
+            wait = 0.5 * 2 ** (attempt - 1)
+            logger.debug(
+                "Attempt %d failed for %s; retrying in %.1f s.", attempt, rid, wait
+            )
+            time.sleep(wait)
+    raise ASFSearchError(f"Unreachable: failed to fetch stack for {rid}")
+
+
+def _build_baseline_table_local(
+    prods: list[ASFProduct],
+    ids: set[SceneID],
+    id_time_dt: dict[SceneID, DateFloat],
+) -> BaselineTable:
+    """
+    Compute the full pairwise (dt_days, bperp_m) table from data already
+    stored on each ASFProduct — **zero network calls**.
+
+    Algorithm
+    ---------
+    1. Call ``calculate_perpendicular_baselines(reference=prods[0], secondaries=prods)``
+       once.  This is the same function asf_search uses internally inside
+       ``ref.stack()``, but we call it directly so no HTTP request is made.
+       It returns bperp for every scene relative to ``prods[0]`` as the anchor.
+
+    2. Pairwise bperp between scenes A and B equals
+       ``|bp_vector[A] - bp_vector[B]|``
+       because perpendicular baseline is a linear function of orbital
+       separation and the common anchor cancels out.
+
+    3. Temporal baseline is computed directly from pre-parsed Unix timestamps.
+    """
+    B: BaselineTable = {}
+    if not prods:
+        return B
+
+    try:
+        anchored = calculate_perpendicular_baselines(
+            reference=prods[0].properties['sceneName'],
+            stack=prods,
+        )
+        bp_vector: dict[SceneID, float | None] = {
+            p.properties["sceneName"]: p.properties.get("perpendicularBaseline")
+            for p in anchored
+        }
+    except Exception as exc:
+        logger.warning(
+            "Local baseline calculation failed (%s); table will be empty.", exc
+        )
+        return B
+
+    for i, a in enumerate(prods):
+        for b in prods[i + 1:]:
+            aid = a.properties["sceneName"]
+            bid = b.properties["sceneName"]
+            if aid not in ids or bid not in ids:
+                continue
+            # Temporal baseline in days
+            dt = abs(id_time_dt[bid] - id_time_dt[aid]) / 86_400.0
+            # Pairwise bperp = |bp_relative_to_anchor[B] - bp_relative_to_anchor[A]|
+            bp_a, bp_b = bp_vector.get(aid), bp_vector.get(bid)
+            bp = (
+                abs(bp_b - bp_a)
+                if (bp_a is not None and bp_b is not None)
+                else _MISSING
+            )
+
+            early, late = (
+                (aid, bid) if id_time_dt[aid] <= id_time_dt[bid] else (bid, aid)
+            )
+            B[(early, late)] = (dt, bp)
+
+    logger.info(
+        "Local baseline table: %d pairs from %d scenes.", len(B), len(prods)
+    )
+    return B
+
+
+def _build_baseline_table_api(
+    prods: list[ASFProduct],
+    ids: set[SceneID],
+    id_time_dt: dict[SceneID, DateFloat],
+    max_workers: int,
+) -> BaselineTable:
+    """
+    Fallback: fetch baselines via ``ref.stack()`` in a thread pool.
+
+    Only called for products that are missing local baseline data.
+    Threads are used because ``ref.stack()`` is network-bound (the GIL is
+    released during I/O, so threads genuinely run concurrently).
+
+    Lock strategy: each thread builds a local dict without any locking, then
+    acquires the shared lock once to batch-write — minimising contention.
+    ``setdefault`` ensures the first writer wins on any race.
+    """
+    B: BaselineTable = {}
+    B_lock = Lock()
+
+    def _process_ref(ref: ASFProduct) -> int:
+        rid, stacks = _fetch_stack_with_retry(ref)
+        local: BaselineTable = {}
+
+        for sec in stacks:
+            sid = sec.properties["sceneName"]
+            if sid not in ids or sid == rid:
+                continue
+            a, b = (
+                (rid, sid) if id_time_dt[rid] <= id_time_dt[sid] else (sid, rid)
+            )
+            if (a, b) in B:
+                continue
+            dt = sec.properties.get("temporalBaseline")
+            bp = sec.properties.get("perpendicularBaseline")
+            local[(a, b)] = (
+                abs(dt) if dt is not None else _MISSING,
+                abs(bp) if bp is not None else _MISSING,
+            )
+
+        if local:
+            with B_lock:
+                for k, v in local.items():
+                    B.setdefault(k, v)   # first writer wins; values are identical
+
+        return len(local)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_process_ref, ref): ref for ref in prods}
+        with tqdm(
+            as_completed(futures),
+            total=len(futures),
+            desc="Fetching stacks (API fallback)",
+            unit="scene",
+        ) as bar:
+            for fut in bar:
+                ref = futures[fut]
+                try:
+                    n = fut.result()
+                    bar.set_postfix(
+                        pairs=len(B),
+                        new=n,
+                        scene=ref.properties["sceneName"][-10:],
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "Error processing %s: %s",
+                        ref.properties["sceneName"], exc,
+                    )
+                    raise
+
+    logger.info(
+        "API baseline table: %d pairs from %d scenes.", len(B), len(prods)
+    )
+    return B
+
+
+def _build_baseline_table(
+    prods: list[ASFProduct],
+    ids: set[SceneID],
+    id_time_dt: dict[SceneID, DateFloat],
+    max_workers: int,
+) -> BaselineTable:
+    """
+    Route each product to the fastest available baseline source.
+
+    - Products with stateVectors or insarBaseline  →  local (no network)
+    - Products missing that data                   →  API fallback (threaded)
+
+    The two result dicts are merged; API results take precedence for any
+    overlap (unlikely, but safe).
+    """
+    local_prods = [p for p in prods if _has_local_baseline(p)]
+    api_prods   = [p for p in prods if not _has_local_baseline(p)]
+
+    if not api_prods:
+        logger.info(
+            "All %d products have local baseline data — no API calls needed.",
+            len(prods),
+        )
+    else:
+        logger.warning(
+            "%d / %d products missing local baseline data — API fallback for those.",
+            len(api_prods), len(prods),
+        )
+
+    B: BaselineTable = {}
+
+    if local_prods:
+        B.update(_build_baseline_table_local(local_prods, ids, id_time_dt))
+
+    if api_prods:
+        B.update(_build_baseline_table_api(api_prods, ids, id_time_dt, max_workers))
+
+    return B
+
+
+def _enforce_connectivity(
+    pairs: set[Pair],
+    B: BaselineTable,
+    names: list[SceneID],
+    id_time_dt: dict[SceneID, DateFloat],
+    min_degree: int,
+    max_degree: int,
+    pb_max: float,
+    dt_max: float,
+    force_connect: bool
+) -> set[Pair]:
+    """
+    Enforce min_degree / max_degree connectivity on the interferogram graph.
+
+    Step A — boost under-connected scenes
+        For each scene with fewer than *min_degree* connections, add the
+        nearest-time neighbours that satisfy *pb_max* and *dt_max* until
+        the scene reaches *min_degree* or candidates are exhausted.
+
+    Step B — trim over-connected scenes
+        For each scene exceeding *max_degree*, remove the worst pair
+        (highest dt, then highest bperp) as long as doing so does not drop
+        the other endpoint below *min_degree*.  Stops early and logs a
+        warning if trimming is impossible without violating min_degree.
+
+    This function is intentionally single-threaded: each modification to
+    *neighbors* affects subsequent decisions, so the operations are
+    order-dependent and cannot be safely parallelised.
+
+    Pre-sorting candidate lists once per scene (O(N log N) total) avoids
+    re-sorting on every degree-enforcement iteration.
+    """
+    neighbors: dict[SceneID, set[SceneID]] = defaultdict(set)
+    for a, b in pairs:
+        neighbors[a].add(b)
+        neighbors[b].add(a)
+
+    # Pre-sort candidates by |Δt| for every scene — paid once, reused many times
+    sorted_cands: dict[SceneID, list[tuple[SceneID, float]]] = {
+        n: sorted(
+            ((m, abs(id_time_dt[m] - id_time_dt[n])) for m in names if m != n),
+            key=lambda x: x[1],
+        )
+        for n in names
+    }
+
+    # ── Step A: boost under-connected scenes ─────────────────────────────
+    if force_connect:
+        for n in names:
+            if len(neighbors[n]) >= min_degree:
+                continue
+
+            logger.debug(
+                "Scene %s: degree %d < min_degree %d; searching for more pairs.",
+                n, len(neighbors[n]), min_degree,
+            )
+
+            for m, _ in sorted_cands[n]:
+                if len(neighbors[n]) >= min_degree:
+                    break
+                if m in neighbors[n]:
+                    continue
+
+                a, b = (n, m) if id_time_dt[n] <= id_time_dt[m] else (m, n)
+                entry = B.get((a, b))
+                if entry is None:
+                    continue
+
+                dt_val, bp_val = entry
+                if bp_val > pb_max or dt_val > dt_max:
+                    continue
+
+                pairs.add((a, b))
+                neighbors[a].add(b)
+                neighbors[b].add(a)
+                logger.debug(
+                    "  force-added %s – %s  (dt=%.0f d, bp=%.1f m)",
+                    a, b, dt_val, bp_val,
+                )
+
+            if len(neighbors[n]) < min_degree:
+                logger.warning(
+                    "Scene %s: only %d / %d connections available in baseline table.",
+                    n, len(neighbors[n]), min_degree,
+                )
+
+    # ── Step B: trim over-connected scenes ───────────────────────────────
+    for n in names:
+        while len(neighbors[n]) > max_degree:
+            # Rank neighbours: worst = highest dt, then highest bperp
+            ranked = sorted(
+                neighbors[n],
+                key=lambda m: B.get(
+                    (n, m) if id_time_dt[n] <= id_time_dt[m] else (m, n),
+                    (0.0, 0.0),
+                ),
+                reverse=True,
+            )
+
+            removed = False
+            
+            for min_other in (min_degree + 1, min_degree):
+                for worst in ranked:
+                    if len(neighbors[worst]) < min_other:
+                        continue
+                    a, b = (
+                        (n, worst) if id_time_dt[n] <= id_time_dt[worst]
+                        else (worst, n)
+                    )
+                    pairs.discard((a, b))
+                    neighbors[n].discard(worst)
+                    neighbors[worst].discard(n)
+                    removed = True
+                    break
+                if removed:
+                    break
+
+            if not removed:
+                # Every neighbour is at min_degree — impossible to trim further.
+                # This happens when min_degree and max_degree conflict,
+                # e.g. min_degree=5, max_degree=3.
+                logger.warning(
+                    "Scene %s: cannot trim to max_degree=%d — all %d neighbours "
+                    "are at min_degree=%d. Consider increasing max_degree or "
+                    "decreasing min_degree.",
+                    n, max_degree, len(neighbors[n]), min_degree,
+                )
+                break
+
+    return pairs
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  PUBLIC API
+# ═══════════════════════════════════════════════════════════════════════════
+
+def select_pairs(
+    search_results: Union[dict[tuple[int, int], list[ASFProduct]], list[ASFProduct]],
+    dt_targets: tuple[int, ...] = (6, 12, 24, 36, 48, 72, 96),
+    dt_tol: int = 3,
+    dt_max: int = 120,
+    pb_max: float = 150.0,
+    min_degree: int = 3,
+    max_degree: int = 999,
+    force_connect: bool = True,
+    max_workers: int = 8,
+) -> Union[PairGroup, list[Pair]]:
+    """
+    select_pairs.py
+    ===============
+    Select interferogram pairs from ASF search results based on temporal and
+    perpendicular baseline criteria.
+
+    Key design decisions
+    --------------------
+    - Local-first: uses data already on each ASFProduct (stateVectors or
+    insarBaseline) to compute baselines without any API calls.
+    - API fallback: scenes missing local data fall back to ref.stack() calls
+    via a thread pool (I/O-bound, GIL released during network wait).
+    - Graph-aware: enforces min_degree / max_degree connectivity constraints
+    after primary selection, protecting both endpoints when trimming.
+
+    Supported sensors
+    -----------------
+    - Sentinel-1 (CALCULATED)  : stateVectors + ascendingNodeTime  -> local
+    - ALOS / ERS / RADARSAT
+    (PRE_CALCULATED)         : insarBaseline scalar               -> local
+    - Any product missing data : ref.stack() API call               -> fallback
+    """
+
+    """
+    Select interferogram pairs based on temporal and perpendicular baseline.
+
+    Parameters
+    ----------
+    search_results:
+        Either a flat ``list[ASFProduct]`` (single stack) or a
+        ``dict[tuple[int,int], list[ASFProduct]]`` keyed by (path, frame).
+    dt_targets:
+        Preferred temporal spacings [days].  A candidate pair passes if
+        ``|dt - target| <= dt_tol`` for at least one target.
+    dt_tol:
+        Tolerance [days] added to each entry in *dt_targets*.
+    dt_max:
+        Hard ceiling on temporal baseline [days].
+    pb_max:
+        Hard ceiling on perpendicular baseline [m].
+    min_degree:
+        Minimum interferogram connections per scene.
+        Enforced when *force_connect* is True.
+    max_degree:
+        Maximum interferogram connections per scene.
+    force_connect:
+        If a scene falls below *min_degree* after primary selection, add
+        its nearest-time neighbours that satisfy *pb_max* and *dt_max*.
+        May introduce lower-quality pairs; a warning is logged.
+    max_workers:
+        Threads for the API fallback path.
+        Has **no effect** when all products carry local baseline data
+        (the common case for Sentinel-1 and ALOS).
+        Set to 1 to disable threading entirely (useful for debugging).
+
+    Returns
+    -------
+    A flat ``list[Pair]`` when *search_results* was a list, otherwise a
+    ``dict[tuple[int,int], list[Pair]]`` keyed by (path, frame).
+    Each ``Pair`` is a ``(earlier_scene_name, later_scene_name)`` tuple
+    sorted by acquisition time.
+    """
+    # ── normalise input ───────────────────────────────────────────────────
     input_is_list = isinstance(search_results, list)
     if input_is_list:
-        working_dict = {(0, 0): search_results}
+        working_dict: dict[tuple[int, int], list[ASFProduct]] = {
+            (0, 0): search_results   # type: ignore[arg-type]
+        }
     elif isinstance(search_results, dict):
         working_dict = search_results
     else:
-        raise ValueError(f"search_results must be a list or dict, got {type(search_results)}")
-    
-    pairs_group = defaultdict(list)
+        raise TypeError(
+            f"search_results must be a list or dict of ASFProducts, "
+            f"got {type(search_results)}"
+        )
+
+    # ── primary filter helpers (defined once, closed over threshold args) ─
+    def _near_target(dt: float) -> bool:
+        return any(abs(dt - t) <= dt_tol for t in dt_targets)
+
+    def _passes_primary(dt: float, bp: float) -> bool:
+        return _near_target(dt) and dt <= dt_max and bp <= pb_max
+
+    pairs_group: PairGroup = defaultdict(list)
+
+    # ── process each (path, frame) key ───────────────────────────────────
     for key, search_result in working_dict.items():
-        if not isinstance(working_dict, dict):
-            raise ValueError(f'search_results need to be a dict of list of ASFProduct from asf_search, got {type(working_dict)} for key {key}')
         if not input_is_list:
-            print(f'{Fore.GREEN}Searching pairs for path {key[0]} frame {key[1]}...')
+            logger.info(
+                "%sSearching pairs for path %d frame %d …",
+                Fore.GREEN, key[0], key[1],
+            )
 
-        prods = sorted(search_result, key=lambda p: p.properties['startTime'])
-        ids = {p.properties['sceneName'] for p in prods}
-        id_time = {p.properties['sceneName']: p.properties['startTime'] for p in prods}
-        # 1) Build pairwise baseline table with caching (N stacks; each pair filled once)
-        B = {} # (earlier,later) -> (|dt_days|, |bperp_m|)
-        for ref in tqdm(prods, desc="Finding pairs", position=0, leave=True):
-            rid = ref.properties['sceneName']
-            print(f'looking for paris for {rid}')
-            for attempt in range(1, 11):
-                try:
-                    stacks = ref.stack()
-                    break
-                except ASFSearchError as e: 
-                    if attempt == 10:
-                        raise 
-                    time.sleep(0.5 * 2**(attempt-1))
-                    
-            for sec in stacks:
-                sid = sec.properties['sceneName']
-                if sid not in ids or sid == rid:
-                    continue
-                a, b = sorted((rid, sid), key=lambda k: id_time[k])
-                if (a,b) in B:
-                    continue
-                dt = abs(10000 if sec.properties['temporalBaseline'] is None else sec.properties['temporalBaseline'])
-                bp = abs(10000 if sec.properties['perpendicularBaseline'] is None else sec.properties['perpendicularBaseline'])
-                
-                B[(a,b)] = (dt, bp)
+        # Sort by acquisition time so `names` is chronologically ordered
+        prods = sorted(search_result, key=lambda p: p.properties["startTime"])
 
-        # 2) First-cut keep by Δt/Δ⊥
-        def pass_rules(dt, bp):
-            near = any(abs(dt -t)<= dt_tol for t in dt_targets)
-            return near and dt <= dt_max and bp <= pb_max
-        
-        pairs = {e for e, (dt, bp) in B.items() if pass_rules(dt, bp)}
+        if not prods:
+            logger.warning("No products for key %s — skipping.", key)
+            continue
 
-        # 3) Enforce connectivity: degree ≥ MIN_DEGREE (add nearest-time links under PB cap)
-        if force_connect is True:
-            neighbors = defaultdict(set)
+        # Pre-parse acquisition datetimes to Unix timestamps (done once;
+        # reused in sort keys, dt calculations, and pair ordering)
+        id_time_raw: dict[SceneID, str] = {
+            p.properties["sceneName"]: p.properties["startTime"] for p in prods
+        }
+        id_time_dt: dict[SceneID, DateFloat] = {
+            sid: isoparse(t).timestamp() for sid, t in id_time_raw.items()
+        }
+        ids: set[SceneID] = set(id_time_raw)
+        names: list[SceneID] = [p.properties["sceneName"] for p in prods]
 
-            for a, b in pairs:
-                neighbors[a].add(b)
-                neighbors[b].add(a)
+        # ── 1. Build pairwise baseline table ─────────────────────────────
+        B = _build_baseline_table(prods, ids, id_time_dt, max_workers=max_workers)
 
-            names = [p.properties['sceneName'] for p in prods]
-            for n in names:
-                if len(neighbors[n]) >= min_degree:
-                    continue
-                cands = sorted((m for m in names if m != n), key=lambda m: abs((isoparse(id_time[m]) - isoparse(id_time[n])).days))
-                for m in cands:
-                    a, b = sorted((n, m), key=lambda k: id_time[k])
-                    dtbp = B.get((a, b))
-                    if not dtbp:
-                        continue
-                    _, bp = dtbp
-                    if bp > pb_max:
-                        continue
-                    if (a, b) not in pairs:
-                        pairs.add((a, b))
-                        neighbors[a].add(b); neighbors[b].add(a)
-                    if len(neighbors[n]) >= min_degree:
-                        break
+        # ── 2. Primary pair selection ─────────────────────────────────────
+        pairs: set[Pair] = {
+            e for e, (dt, bp) in B.items() if _passes_primary(dt, bp)
+        }
+        logger.info(
+            "Key %s — primary selection: %d / %d candidate pairs.",
+            key, len(pairs), len(B),
+        )
 
-            for n in names:
-                while len(neighbors[n]) > max_degree:
-                    # Rank this node’s pairs by "badness" = (dt, pb), descending
-                    ranked = sorted(
-                        [(m, *B.get(tuple(sorted((n, m))), (99999, 99999))) for m in neighbors[n]],
-                        key=lambda x: (x[1], x[2]),  # sort by dt, then pb
-                        reverse=True
-                    )
-                    worst, _, _ = ranked[0]  # worst neighbor
-                    a, b = sorted((n, worst), key=lambda k: id_time[k])
-                    if (a, b) in pairs:
-                        pairs.remove((a, b))
-                    neighbors[a].discard(b)
-                    neighbors[b].discard(a)
-        pairs_group[key]=sorted(pairs)
+        # ── 3. Connectivity enforcement ───────────────────────────────────
+        pairs = _enforce_connectivity(
+            pairs,
+            B,
+            names,
+            id_time_dt,
+            min_degree=min_degree,
+            max_degree=max_degree,
+            pb_max=pb_max,
+            dt_max=float(dt_max),
+            force_connect=force_connect
+        )
+
+        pairs_group[key] = sorted(pairs)
+        logger.info(
+            "Key %s — final pair count: %d.", key, len(pairs_group[key])
+        )
+
     return pairs_group[(0, 0)] if input_is_list else pairs_group
 
 def get_config(config_path=None):
@@ -268,7 +717,6 @@ def batch_rename(
             new_path = tif.parent.joinpath(new_name)
             tif.rename(new_path)
             print(f"Renamed {tif.name} to {new_name}")
-
 
 def _to_wkt(geom_input) -> str | None:
     """

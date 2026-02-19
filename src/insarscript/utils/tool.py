@@ -2,19 +2,23 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import re
 import time
 import logging
 
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from dateutil.parser import isoparse
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 from threading import Lock
 
-
 import geopandas as gpd
-from asf_search.exceptions import ASFSearchError
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import networkx as nx
+import numpy as np
 from asf_search import ASFProduct, ASFSearchError
 from asf_search.baseline.calc import calculate_perpendicular_baselines
 from box import Box as Config
@@ -23,21 +27,6 @@ from shapely.geometry import box
 from shapely import wkt
 from tqdm import tqdm
 
-
-
-
-import logging
-import time
-from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
-from typing import Union
-
-from asf_search import ASFProduct, ASFSearchError
-from asf_search.baseline.calc import calculate_perpendicular_baselines
-from colorama import Fore
-from dateutil.parser import isoparse
-from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -443,7 +432,7 @@ def select_pairs(
     min_degree: int = 3,
     max_degree: int = 999,
     force_connect: bool = True,
-    max_workers: int = 8,
+    max_workers: int = 8
 ) -> Union[PairGroup, list[Pair]]:
     """
     select_pairs.py
@@ -585,8 +574,9 @@ def select_pairs(
         logger.info(
             "Key %s — final pair count: %d.", key, len(pairs_group[key])
         )
+    pairs = pairs_group[(0, 0)] if input_is_list else pairs_group
 
-    return pairs_group[(0, 0)] if input_is_list else pairs_group
+    return pairs, B
 
 def get_config(config_path=None):
 
@@ -604,6 +594,274 @@ def get_config(config_path=None):
                 raise ValueError(f"Error loading config file with error {e}, is this a valid config file in TOML format?")
     else:
         raise FileNotFoundError(f"Config file not found under {config_path}")
+    
+
+def plot_pair_network(
+    pairs: list[Pair] | PairGroup,
+    B: BaselineTable,                            # ✅ now required
+    title: str = "Interferogram Network",
+    figsize: tuple[int, int] = (18, 7),
+    save_path: str | None = None,
+) -> plt.Figure:
+    """
+    Draw interferogram network + per-scene connection histogram.
+
+    Layout
+    ------
+    - Left  : network  (x=acquisition date, y=perpendicular baseline [m])
+    - Right : horizontal bar chart of connections per SAR scene
+    """
+
+    # ── 0. Normalise input ────────────────────────────────────────────────
+    if isinstance(pairs, dict):
+        flat_pairs: list[Pair] = []
+        group_labels: list[str] = []
+        for (path, frame), pair_list in pairs.items():
+            flat_pairs.extend(pair_list)
+            group_labels.append(f"P{path}/F{frame}: {len(pair_list)} pairs")
+        subtitle = " | ".join(group_labels)
+    else:
+        flat_pairs = pairs
+        subtitle = f"{len(flat_pairs)} pairs"
+
+    # ── 1. Parse dates ────────────────────────────────────────────────────
+    scenes: set[SceneID] = set()
+    for a, b in flat_pairs:
+        scenes.update([a, b])
+
+    def _parse_date(scene_name: str) -> datetime:
+        if not isinstance(scene_name, str):
+            raise TypeError(
+                f"Expected str, got {type(scene_name).__name__}: {scene_name!r}."
+            )
+        m = re.search(r"(\d{8})", scene_name)
+        if m:
+            return datetime.strptime(m.group(1), "%Y%m%d")
+        m = re.search(r"(\d{4}-\d{2}-\d{2})", scene_name)
+        if m:
+            return datetime.strptime(m.group(1), "%Y-%m-%d")
+        raise ValueError(f"Cannot parse date from scene name: {scene_name}")
+
+    id_time: dict[SceneID, datetime] = {s: _parse_date(s) for s in scenes}
+    t0      = min(id_time.values())
+    id_days: dict[SceneID, float] = {
+        s: (id_time[s] - t0).total_seconds() / 86_400.0 for s in scenes
+    }
+
+    # ── 2. Build graph ────────────────────────────────────────────────────
+    G = nx.Graph()
+    G.add_nodes_from(scenes)
+
+    if isinstance(pairs, dict):
+        for (path, frame), pair_list in pairs.items():
+            for a, b in pair_list:
+                dt, bp = B.get((a, b), (_MISSING, _MISSING))
+                G.add_edge(a, b, dt=dt, bp=bp, path=path, frame=frame)
+    else:
+        for a, b in flat_pairs:
+            dt, bp = B.get((a, b), (_MISSING, _MISSING))
+            G.add_edge(a, b, dt=dt, bp=bp, path=0, frame=0)
+
+    # ── 3. Node positions (x=days, y=bperp) ──────────────────────────────
+    # Assign each scene a bperp position by averaging bperp of all its pairs.
+    # B stores absolute bperp; we recover a relative position by anchoring
+    # the earliest scene at y=0 and walking forward in time.
+    bperp_accum: dict[SceneID, list[float]] = defaultdict(list)
+    for (a, b), (dt, bp) in B.items():
+        if bp >= _MISSING:
+            continue
+        bperp_accum[a].append(-bp / 2.0)
+        bperp_accum[b].append(+bp / 2.0)
+
+    bperp_pos: dict[SceneID, float] = {
+        s: float(np.mean(v)) if v else 0.0
+        for s, v in bperp_accum.items()
+    }
+    # anchor earliest scene to y=0
+    sorted_by_time = sorted(scenes, key=lambda s: id_days[s])
+    offset = bperp_pos.get(sorted_by_time[0], 0.0)
+    bperp_pos = {s: bperp_pos.get(s, 0.0) - offset for s in scenes}
+
+    pos: dict[SceneID, tuple[float, float]] = {
+        s: (id_days[s], bperp_pos[s]) for s in scenes
+    }
+
+    # ── 4. Visual attributes ──────────────────────────────────────────────
+    degrees      = dict(G.degree())
+    max_deg      = max(degrees.values(), default=1)
+    node_colours = [plt.cm.RdYlGn(degrees[n] / max_deg) for n in G.nodes()]
+
+    edge_dts     = [G[a][b]["dt"] for a, b in G.edges()]
+    max_dt       = max((d for d in edge_dts if d < _MISSING), default=1.0)
+    edge_colours = [plt.cm.RdYlGn_r(min(dt, max_dt) / max_dt) for dt in edge_dts]
+    edge_widths  = [0.5 + 2.5 * (1.0 - min(dt, max_dt) / max_dt) for dt in edge_dts]
+
+    if isinstance(pairs, dict):
+        group_keys  = list(pairs.keys())
+        linestyles  = ["-", "--", "-.", ":"] * (len(group_keys) // 4 + 1)
+        key_style   = {k: linestyles[i] for i, k in enumerate(group_keys)}
+        edge_styles = [
+            key_style[(G[a][b]["path"], G[a][b]["frame"])] for a, b in G.edges()
+        ]
+    else:
+        edge_styles = ["-"] * len(G.edges())
+
+    # ── 5. Figure layout ──────────────────────────────────────────────────
+    fig = plt.figure(figsize=figsize)
+    gs  = fig.add_gridspec(1, 2, width_ratios=[3, 1], wspace=0.35)
+    ax_net  = fig.add_subplot(gs[0])
+    ax_hist = fig.add_subplot(gs[1])
+
+    # ── 6. Draw network ───────────────────────────────────────────────────
+    edges_by_style: dict[str, list] = defaultdict(list)
+    for (a, b), style, colour, width in zip(
+        G.edges(), edge_styles, edge_colours, edge_widths
+    ):
+        edges_by_style[style].append((a, b, colour, width))
+
+    for style, edge_data in edges_by_style.items():
+        nx.draw_networkx_edges(
+            G, pos, ax=ax_net,
+            edgelist=[(a, b) for a, b, _, _ in edge_data],
+            edge_color=[c for _, _, c, _ in edge_data],
+            width=[w for _, _, _, w in edge_data],
+            style=style,
+            alpha=0.7,
+        )
+
+    nx.draw_networkx_nodes(
+        G, pos, ax=ax_net,
+        node_color=node_colours,
+        node_size=80,
+        linewidths=0.5,
+        edgecolors="black",
+    )
+    nx.draw_networkx_labels(
+        G, pos,
+        labels={s: s[-8:] for s in G.nodes()},
+        ax=ax_net,
+        font_size=5,
+    )
+
+    # ── 7. Network axes ───────────────────────────────────────────────────
+    ax_net.set_xlabel("Days since first acquisition", fontsize=11)
+    ax_net.set_ylabel("Perpendicular baseline [m]", fontsize=11)    # ✅ real unit
+    ax_net.set_title(
+        f"{title}\n{subtitle}\n"
+        f"{len(scenes)} scenes · {len(flat_pairs)} pairs · "
+        f"mean degree {np.mean(list(degrees.values())):.1f}",
+        fontsize=11,
+    )
+    ax_net.tick_params(left=True, bottom=True, labelleft=True, labelbottom=True)
+    ax_net.set_frame_on(True)
+
+    # real date ticks on top axis
+    x_vals  = [p[0] for p in pos.values()]
+    x_ticks = np.linspace(min(x_vals), max(x_vals), min(8, len(pos)))
+    ax2 = ax_net.twiny()
+    ax2.set_xlim(ax_net.get_xlim())
+    ax2.set_xticks(x_ticks)
+    ax2.set_xticklabels(
+        [
+            (t0 + __import__("datetime").timedelta(days=d)).strftime("%Y-%m-%d")
+            for d in x_ticks
+        ],
+        rotation=30, ha="left", fontsize=7,
+    )
+    ax2.set_xlabel("Acquisition date (UTC)", fontsize=9)
+
+    # ── 8. Per-scene connection histogram ─────────────────────────────────
+    # Sort scenes by date so the histogram reads chronologically top→bottom
+    sorted_scene_names = sorted(scenes, key=lambda s: id_days[s])
+    scene_degrees      = [degrees[s] for s in sorted_scene_names]
+    short_names        = [s[-12:] for s in sorted_scene_names]   # trim for readability
+    y_positions        = range(len(sorted_scene_names))
+
+    bar_colours = [plt.cm.RdYlGn(degrees[s] / max_deg) for s in sorted_scene_names]
+
+    bars = ax_hist.barh(
+        y_positions,
+        scene_degrees,
+        color=bar_colours,
+        edgecolor="white",
+        linewidth=0.4,
+        height=0.7,
+    )
+
+    # annotate each bar with connection count
+    for bar, count in zip(bars, scene_degrees):
+        ax_hist.text(
+            bar.get_width() + 0.1,
+            bar.get_y() + bar.get_height() / 2,
+            str(count),
+            va="center", fontsize=7,
+        )
+
+    # vertical line at mean degree
+    mean_deg = np.mean(scene_degrees)
+    ax_hist.axvline(
+        mean_deg, color="steelblue", linestyle="--", linewidth=1.0, alpha=0.8
+    )
+    ax_hist.text(
+        mean_deg + 0.1, len(sorted_scene_names) - 0.5,
+        f"mean\n{mean_deg:.1f}",
+        color="steelblue", fontsize=7, va="top",
+    )
+
+    # mark scenes below min connectivity in red
+    for i, (s, deg) in enumerate(zip(sorted_scene_names, scene_degrees)):
+        if deg < 2:
+            ax_hist.get_children()[i].set_edgecolor("red")
+            ax_hist.get_children()[i].set_linewidth(1.5)
+
+    ax_hist.set_yticks(y_positions)
+    ax_hist.set_yticklabels(short_names, fontsize=6)
+    ax_hist.set_xlabel("Number of connections", fontsize=9)
+    ax_hist.set_title("Connections\nper scene", fontsize=10)
+    ax_hist.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+    ax_hist.set_frame_on(True)
+    # match vertical order to network: earliest at top
+    ax_hist.invert_yaxis()
+
+    # ── 9. Legends ────────────────────────────────────────────────────────
+    deg_legend = ax_net.legend(
+        handles=[
+            mpatches.Patch(color=plt.cm.RdYlGn(v / max_deg), label=f"degree {v}")
+            for v in sorted(set(degrees.values()))
+        ],
+        title="Node degree", loc="upper left", fontsize=7, title_fontsize=8,
+    )
+    ax_net.add_artist(deg_legend)
+
+    ax_net.legend(
+        handles=[
+            mpatches.Patch(
+                color=plt.cm.RdYlGn_r(v / max_dt), label=f"{v:.0f} days"
+            )
+            for v in [0, max_dt * 0.33, max_dt * 0.66, max_dt]
+        ],
+        title="Temporal baseline", loc="lower right", fontsize=7, title_fontsize=8,
+    )
+
+    if isinstance(pairs, dict):
+        ax_net.add_artist(
+            ax_net.legend(
+                handles=[
+                    mpatches.Patch(
+                        linestyle=key_style[k], fill=False,
+                        edgecolor="grey", label=f"P{k[0]}/F{k[1]}",
+                    )
+                    for k in group_keys
+                ],
+                title="Path / Frame", loc="upper right", fontsize=7, title_fontsize=8,
+            )
+        )
+
+    if save_path:
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"Saved → {save_path}")
+
+    return fig
 
 def earth_credit_pool(earthdata_credentials_pool_path = Path.home().joinpath('.credit_pool')) -> dict:
     """

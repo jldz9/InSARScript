@@ -601,7 +601,7 @@ def plot_pair_network(
     B: BaselineTable,                            # ✅ now required
     title: str = "Interferogram Network",
     figsize: tuple[int, int] = (18, 7),
-    save_path: str | None = None,
+    save_path: str |Path| None = None,
 ) -> plt.Figure:
     """
     Draw interferogram network + per-scene connection histogram.
@@ -613,6 +613,8 @@ def plot_pair_network(
     """
 
     # ── 0. Normalise input ────────────────────────────────────────────────
+    save_path = Path(save_path).expanduser()
+    
     if isinstance(pairs, dict):
         flat_pairs: list[Pair] = []
         group_labels: list[str] = []

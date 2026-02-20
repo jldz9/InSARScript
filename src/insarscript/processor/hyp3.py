@@ -114,16 +114,20 @@ class Hyp3_InSAR(Hyp3Processor):
                 if max_jobs_allowed > 0:
                     chunk_size = min(max_jobs_allowed, len(job_queue), 200)
                     jobs_to_submit = job_queue[:chunk_size]
-                    print(f"{Fore.GREEN}User {username}: Submitting {len(jobs_to_submit)} jobs")
+
+                    pbar.write(f"{Fore.GREEN}User {username}: Submitting {len(jobs_to_submit)} jobs")
+
                     batch = self.client.submit_prepared_jobs(jobs_to_submit)
                     batchs[username].extend(batch)
                     for j in batch:
                         self.job_ids[username].append(j.job_id)
                     job_queue = job_queue[chunk_size:]
 
+                    pbar.update(chunk_size)
+
                 elif job_queue:
                     if self._auth_pool and (self._user_index + 1 < len(self._username_pool)):
-                        print(f"{Fore.YELLOW}User {username} exhausted. Switching to next account...")
+                        pbar.write(f"{Fore.YELLOW}User {username} exhausted. Switching to next account...")
                         self._user_index += 1
                         for retry in range(3):
                             try:
@@ -131,10 +135,10 @@ class Hyp3_InSAR(Hyp3Processor):
                                                 password=self._password_pool[self._user_index])
                                 break
                             except AuthenticationError:
-                                print(f"{Fore.RED}Auth failed for {self._username_pool[self._user_index]}, retrying...")
+                                pbar.write(f"{Fore.RED}Auth failed for {self._username_pool[self._user_index]}, retrying...")
                                 continue
                     else:
-                        print(f"{Fore.RED}All accounts exhausted. {len(job_queue)} jobs remain.")
+                        pbar.write(f"{Fore.RED}All accounts exhausted. {len(job_queue)} jobs remain.")
                         sys.exit(1)
              
         print(f"{Fore.GREEN}All jobs submitted successfully.")

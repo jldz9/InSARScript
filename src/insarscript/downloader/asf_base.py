@@ -306,39 +306,56 @@ Check documentation for how to setup .netrc file.\n""")
         transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
         N = len(results_to_plot)
         cmap = plt.cm.get_cmap('hsv', N+1)
+
         fig, ax = plt.subplots(1, 1, figsize=(10,10), dpi=150)
+
         geom_aoi = transform(transformer.transform, wkt.loads(self.config.intersectsWith))
-        minx, miny, maxx, maxy =  geom_aoi.bounds
-        label_x_aoi = maxx - 0.01 * (maxx - minx)
-        label_y_aoi = maxy - 0.01 * (maxy - miny)
+        global_minx, global_miny, global_maxx, global_maxy = geom_aoi.bounds
         plotting.plot_polygon(geom_aoi, ax=ax, edgecolor='red', facecolor='none', linewidth=2, linestyle='--')
+
+        label_x_aoi = global_maxx - 0.01 * (global_maxx - global_minx)
+        label_y_aoi = global_maxy - 0.01 * (global_maxy - global_miny)
         plt.text(label_x_aoi, label_y_aoi,
              f"AOI",
              horizontalalignment='right', verticalalignment='top',
              fontsize=12, color='red', fontweight='bold',
              bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle='round,pad=0.3'))
+        
         for i, (key, results) in enumerate(results_to_plot.items()):
             geom = transform(transformer.transform, shape(results[0].geometry))
             minx, miny, maxx, maxy = geom.bounds
+
+            global_minx = min(global_minx, minx)
+            global_miny = min(global_miny, miny)
+            global_maxx = max(global_maxx, maxx)
+            global_maxy = max(global_maxy, maxy)
+
             label_x = maxx - 0.01 * (maxx - minx)
             label_y = maxy - 0.01 * (maxy - miny)
+
             plt.text(label_x, label_y,
              f"Path: {key[0]}\nFrame: {key[1]}\nStack: {len(results)}",
              horizontalalignment='right', verticalalignment='top',
              fontsize=12, color=cmap(i), fontweight='bold',
              bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle='round,pad=0.3'))
+            
             for result in results:
                 geom = transform(transformer.transform, shape(result.geometry))
                 x, y = geom.exterior.xy
                 ax.plot(x, y, color=cmap(i))
         
         ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik)
+
+        ax.set_xlim(global_minx, global_maxx)
+        ax.set_ylim(global_miny, global_maxy)
+
         ax.set_axis_off()
         if save_path is not None:
             save_path = Path(save_path).expanduser().resolve()
             plt.savefig(save_path.as_posix(), dpi=300, bbox_inches='tight')
             print(f"Footprint figure saved to {save_path}")
         else:
+            plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, hspace = 0, wspace = 0)
             plt.show()
         
     def filter(self, 

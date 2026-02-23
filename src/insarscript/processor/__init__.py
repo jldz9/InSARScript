@@ -1,1 +1,2 @@
-from .hyp3 import Hyp3_InSAR
+from .hyp3_insar import Hyp3_InSAR
+

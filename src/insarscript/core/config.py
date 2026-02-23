@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field, asdict
 from typing import List, Union, Optional, Any
 from pathlib import Path
+from asf_search import constants
 from insarscript import _env
 
 @dataclass
@@ -57,11 +58,41 @@ class ASF_Base_Config:
             self.output_dir = Path(self.output_dir).expanduser().resolve()
 
 @dataclass
-class Hyp3_InSAR_Base_Config:
+class S1_SLC_Config(ASF_Base_Config):
+    name:str = "S1_SLC_Config"
+    dataset: str | list[str] | None =  constants.DATASET.SENTINEL1
+    instrument: str | None = constants.INSTRUMENT.C_SAR
+    beamMode:str | None = constants.BEAMMODE.IW
+    polarization: str|list[str] | None = field(default_factory=lambda: [constants.POLARIZATION.VV, constants.POLARIZATION.VV_VH])
+    processingLevel: str | None = constants.PRODUCT_TYPE.SLC
+
+@dataclass
+class Hyp3_Base_Config:
+    """
+    Base configuration for any HyP3 job interaction.
+    """
+    name: str = "Hyp3_Base_Config"
+    output_dir: Path | str = field(default_factory=lambda: Path.cwd())
+    saved_job_path: Path | str | None = None
+    earthdata_credentials_pool: dict[str, str] | None = None
+    skip_existing: bool = True
+    submission_chunk_size: int = 200 
+    max_workers: int = 4 # Multithreading <8 to avoid overwhelming the API and to be mindful of local resources, also avoid bans from too many requests. 
+
+    def __post_init__(self):
+        # Auto-convert string paths to Path objects
+        if isinstance(self.output_dir, str):
+            self.output_dir = Path(self.output_dir).expanduser().resolve()
+        if self.saved_job_path and isinstance(self.saved_job_path, str):
+            self.saved_job_path = Path(self.saved_job_path).expanduser().resolve()
+
+
+@dataclass
+class Hyp3_InSAR_Config(Hyp3_Base_Config):
     '''
     Dataclass containing all configuration options for hyp3_sdk insar_gamma jobs.
     '''
-    name: str = "Hyp3_InSAR_Base_Config"
+    name: str = "Hyp3_InSAR_Config"
     pairs: list[tuple[str, str]] | None = None
     name_prefix: str | None = 'ifg'
     include_look_vectors:bool=True
@@ -73,14 +104,6 @@ class Hyp3_InSAR_Base_Config:
     apply_water_mask :bool=True
     include_displacement_maps:bool=True
     phase_filter_parameter :float=0.6
-    output_dir: Path | str = field(default_factory=lambda: Path.cwd())
-    saved_job_path : Path | str | None = None
-    earthdata_credentials_pool: dict[str, str] | None=None
-
-    def __post_init__(self):
-        if isinstance(self.output_dir, str):
-            self.output_dir = Path(self.output_dir).expanduser().resolve()
-
 
 @dataclass
 class Mintpy_SBAS_Base_Config:

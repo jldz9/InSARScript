@@ -102,7 +102,14 @@ Check documentation for how to setup .netrc file.\n""")
             self._session = asf.ASFSession()
        
     def _check_netrc(self, keyword: str) -> bool:
-        """Check if .netrc file exists in the home directory."""
+        """Check if .netrc file exists in the home directory with the specified keyword.
+        
+        Args:
+            keyword (str): The machine name to search for in .netrc file.
+            
+        Returns:
+            bool: True if .netrc file exists and contains the keyword, False otherwise.
+        """
         netrc_path = Path.home().joinpath('.netrc')
         if not netrc_path.is_file():            
             print(f"{Fore.RED}No .netrc file found in your home directory. Will prompt login.\n")
@@ -118,7 +125,14 @@ Check documentation for how to setup .netrc file.\n""")
                 
     
     def _get_group_key(self, result) -> tuple:
-        """Derive grouping key based on available properties, with fallback."""
+        """Derive grouping key based on available properties, with fallback.
+        
+        Args:
+            result: Search result object containing properties.
+            
+        Returns:
+            tuple: A tuple of (path_number, frame_identifier) used for grouping results.
+        """
         props = result.properties
         # Burst product — any burst ID field set in config takes highest priority
         if any([
@@ -158,7 +172,11 @@ Check documentation for how to setup .netrc file.\n""")
         return (props.get('pathNumber'), props.get('frameNumber'))
     
     def _get_property_keys(self) -> dict:
-        """Return the correct result.properties key mapping based on config."""
+        """Return the correct result.properties key mapping based on config.
+        
+        Returns:
+            dict: Mapping of property names to their corresponding keys in search results.
+        """
         if self.config.dataset:
             datasets = [self.config.dataset] if isinstance(self.config.dataset, str) else self.config.dataset
             for ds in datasets:
@@ -181,24 +199,41 @@ Check documentation for how to setup .netrc file.\n""")
                 
     @property
     def session(self):
+        """Get or create an authenticated ASF session.
+        
+        Returns:
+            ASFSession: Authenticated session for ASF downloads.
+        """
         if not hasattr(self, '_session') or self._session is None:
             self._asf_authorize()
         return self._session
     
     @property
     def active_results(self):
-        """
+        """Get the currently active results (filtered or full search results).
+        
         Returns the subset of results if a filter/pick is active, 
         otherwise returns the full search results.
+        
+        Returns:
+            dict: Dictionary of active search results grouped by (path, frame).
+            
+        Raises:
+            ValueError: If no search results are available.
         """
         if not hasattr(self, 'results'):
              raise ValueError(f"{Fore.RED}No search results found. Please run search() first.")
         return self._subset if self._subset is not None else self.results
                 
     def search(self) -> dict:
-        """
-        Search for data using the ASF Search API with the provided parameters.
-        Returns a list of search results.
+        """Search for data using the ASF Search API with the provided parameters.
+        
+        Returns:
+            dict: Dictionary of search results grouped by (path, frame) tuples.
+            
+        Raises:
+            ValueError: If search returns no results.
+            Exception: If search fails after 10 retry attempts.
         """
         self._subset = None
         print(f"Searching for SLCs....")
@@ -230,15 +265,19 @@ Check documentation for how to setup .netrc file.\n""")
         return grouped
     
     def reset(self):
-        """Resets the view to include all search results."""
+        """Reset the view to include all search results.
+        
+        Clears any active filters and restores the full result set.
+        """
         self._subset = None
         print(f"{Fore.GREEN}Selection reset. Now viewing all {len(self.results)} stacks.")
  
     def summary(self, ls=False):
-        """
-        Summarize the active results, separated by flight direction (Ascending/Descending).
+        """Summarize the active results, separated by flight direction.
         
-        :param ls: If True, list individual scene names and dates.
+        Args:
+            ls (bool, optional): If True, list individual scene names and dates. 
+                Defaults to False.
         """
         if not hasattr(self, 'results'):
             self.search()
@@ -294,9 +333,11 @@ Check documentation for how to setup .netrc file.\n""")
 
 
     def footprint(self, save_path: str | None = None):
-        """
-        Print the search result footprint and AOI use matplotlib
+        """Display or save the search result footprints and AOI using matplotlib.
         
+        Args:
+            save_path (str, optional): Path to save the figure. If None, displays interactively.
+                Defaults to None.
         """
         results_to_plot = self.active_results
         if not results_to_plot:
@@ -378,28 +419,40 @@ Check documentation for how to setup .netrc file.\n""")
                 latest_n: int | None = None,
                 earliest_n: int | None = None
                ) -> dict:
-        """        
-        Filter active results by various properties after search.
+        """Filter active results by various properties after search.
 
-        :param path_frame: A single (path, frame) tuple or list of tuples.
-        :param start: Start date string, e.g. '2021-01-01'.
-        :param end: End date string, e.g. '2023-12-31'.
-        :param frame: sensor native frame e.g. '50'
-        :param asfFrame: ASF internal frame e.g. '50'
-        :param flightDirection: 'ASCENDING' or 'DESCENDING'.
-        :param relativeOrbit: Relative orbit number(s) to keep.
-        :param absoluteOrbit: Absolute orbit number(s) to keep.
-        :param lookDirection: 'LEFT' or 'RIGHT'.
-        :param polarization: Polarization(s) to keep, e.g. 'VV' or ['VV', 'VH'].
-        :param processingLevel: Processing level to keep, e.g. 'SLC'.
-        :param beamMode: Beam mode to keep, e.g. 'IW'.
-        :param season: List of months (1-12) to keep, e.g. [6, 7, 8] for summer.
-        :param min_coverage: Minimum fractional overlap (0-1) between scene and AOI.
-        :param min_count: Drop stacks with fewer than this many scenes after filtering.
-        :param max_count: Keep at most this many scenes per stack (from earliest).
-        :param latest_n: Keep the N most recent scenes per stack.
-        :param earliest_n: Keep the N earliest scenes per stack.
-    """
+        Args:
+            path_frame (tuple | list[tuple], optional): A single (path, frame) tuple or list of tuples.
+                Defaults to None.
+            start (str, optional): Start date string, e.g. '2021-01-01'. Defaults to None.
+            end (str, optional): End date string, e.g. '2023-12-31'. Defaults to None.
+            frame (int | list[int], optional): Sensor native frame number(s), e.g. 50. Defaults to None.
+            asfFrame (int | list[int], optional): ASF internal frame number(s), e.g. 50. Defaults to None.
+            flightDirection (str, optional): 'ASCENDING' or 'DESCENDING'. Defaults to None.
+            relativeOrbit (int | list[int], optional): Relative orbit number(s) to keep. Defaults to None.
+            absoluteOrbit (int | list[int], optional): Absolute orbit number(s) to keep. Defaults to None.
+            lookDirection (str, optional): 'LEFT' or 'RIGHT'. Defaults to None.
+            polarization (str | list[str], optional): Polarization(s) to keep, e.g. 'VV' or ['VV', 'VH']. 
+                Defaults to None.
+            processingLevel (str, optional): Processing level to keep, e.g. 'SLC'. Defaults to None.
+            beamMode (str, optional): Beam mode to keep, e.g. 'IW'. Defaults to None.
+            season (list[int], optional): List of months (1-12) to keep, e.g. [6, 7, 8] for summer. 
+                Defaults to None.
+            min_coverage (float, optional): Minimum fractional overlap (0-1) between scene and AOI. 
+                Defaults to None.
+            min_count (int, optional): Drop stacks with fewer than this many scenes after filtering. 
+                Defaults to None.
+            max_count (int, optional): Keep at most this many scenes per stack (from earliest). 
+                Defaults to None.
+            latest_n (int, optional): Keep the N most recent scenes per stack. Defaults to None.
+            earliest_n (int, optional): Keep the N earliest scenes per stack. Defaults to None.
+            
+        Returns:
+            dict: Filtered results grouped by (path, frame).
+            
+        Raises:
+            ValueError: If no search results are available.
+        """
         
         if not hasattr(self, 'results'):
             raise ValueError(f"{Fore.RED}No search results found. Please run search() first.")
@@ -525,7 +578,15 @@ Check documentation for how to setup .netrc file.\n""")
         return filtered
     
     def dem(self, save_path: str | None = None):
-        """Download DEM for co-registration uses"""
+        """Download DEM for co-registration uses.
+        
+        Args:
+            save_path (str, optional): Directory to save DEM files. If None, uses config.output_dir.
+                Defaults to None.
+                
+        Returns:
+            tuple: (X, p) where X is the DEM array and p is the rasterio profile.
+        """
         output_dir = Path(save_path).expanduser().resolve() if save_path else self.config.output_dir
 
         for key, results in self.active_results.items():
@@ -547,11 +608,16 @@ Check documentation for how to setup .netrc file.\n""")
         return X, p
     
     def download(self, save_path: str | None = None, max_workers: int = 3):
-        """
-        Download the search results to the specified output directory.
-        :param save_path: set download path, if None will use config.output_dir
-        :param max_workers: Number of concurrent downloads. 3-5 recommended for ASF.
-                        Set to 1 to disable multithreading.
+        """Download the search results to the specified output directory.
+        
+        Args:
+            save_path (str, optional): Download path. If None, uses config.output_dir. 
+                Defaults to None.
+            max_workers (int, optional): Number of concurrent downloads. 3-5 recommended 
+                for ASF. Set to 1 to disable multithreading. Defaults to 3.
+                
+        Raises:
+            ValueError: If no search results are available.
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
         from threading import Event

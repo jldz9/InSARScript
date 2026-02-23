@@ -1,23 +1,12 @@
 import getpass
 import requests
-from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-from asf_search import constants
 from colorama import Fore
 from eof.download import download_eofs
 
-from insarscript.core.config import ASF_Base_Config
+from insarscript.core.config import S1_SLC_Config
 from .asf_base import ASF_Base_Downloader
-
-@dataclass
-class S1_SLC_Config(ASF_Base_Config):
-    name:str = "S1_SLC_Config"
-    dataset: str | list[str] | None =  constants.DATASET.SENTINEL1
-    instrument: str | None = constants.INSTRUMENT.C_SAR
-    beamMode:str | None = constants.BEAMMODE.IW
-    polarization: str|list[str] | None = field(default_factory=lambda: [constants.POLARIZATION.VV, constants.POLARIZATION.VV_VH])
-    processingLevel: str | None = constants.PRODUCT_TYPE.SLC
 
 class S1_SLC(ASF_Base_Downloader):
     name = "S1_SLC"
@@ -26,7 +15,22 @@ class S1_SLC(ASF_Base_Downloader):
     """
     A class to search and download Sentinel-1 data using ASF Search API."""
 
-    def download(self, save_path: str | None = None, force_asf: bool = False, download_orbit: bool = False):
+    def download(self, save_path: str | None = None, max_workers: int= 3, force_asf: bool = False, download_orbit: bool = False):
+        """Download SLC data and optionally associated orbit files.
+
+        This method downloads the primary SLC data using the base downloader functionality.
+        If `download_orbit` is True, it will also attempt to download orbit files from either
+        ASF or the Copernicus Data Space Ecosystem (CDSE). Users may be prompted to provide
+        CDSE credentials if not already configured in a `.netrc` file.
+
+        Args:
+            save_path (str | None): Optional path to save the downloaded files. Defaults to None.
+            force_asf (bool): If True, forces downloading orbit files from ASF instead of CDSE. Defaults to False.
+            download_orbit (bool): If True, attempts to download orbit files. Defaults to False.
+
+        Raises:
+            ValueError: If CDSE authentication fails and the user cannot provide valid credentials.
+        """
         super().download(save_path=save_path)
         if download_orbit:
             print(f"""

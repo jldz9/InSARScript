@@ -1,0 +1,59 @@
+from colorama import Fore
+from tqdm import tqdm
+
+from insarscript.core import Hyp3_InSAR_Config
+from insarscript.processor.hyp3_base import Hyp3Base 
+
+
+class Hyp3_InSAR(Hyp3Base):
+    name = "Hyp3_InSAR"
+    default_config = Hyp3_InSAR_Config
+    def __init__(self, config: Hyp3_InSAR_Config | None = None):
+        super().__init__(config)
+        # Fetch InSAR specific cost table
+        try:
+            self.cost = self.client.costs()['INSAR_GAMMA']['cost_table'][f'{self.config.looks}']
+        except Exception as e:
+            print(f"{Fore.YELLOW}Warning: Could not fetch InSAR cost table ({e}). Using local cost table.{Fore.RESET}")
+            if self.config.looks == "20x4":
+                self.cost = 10
+            elif self.config.looks == "10x2":
+                self.cost = 15
+            else:
+                raise ValueError(f"{Fore.RED}Unsupported looks configuration: {self.config.looks}. Please provide a valid cost for this looks setting.{Fore.RESET}")
+                
+    def submit(self):
+        """Submit InSAR jobs to HyP3 based on the provided configuration."""
+        
+        # Normalize pairs input
+        if isinstance(self.config.pairs, (list, tuple)) and all(isinstance(p, str) for p in self.config.pairs):
+                pairs = [(self.config.pairs[0], self.config.pairs[1])]
+        elif isinstance(self.config.pairs, (list, tuple)) and all(isinstance(p, tuple) for p in self.config.pairs):
+            pairs = self.config.pairs
+        else:
+            raise ValueError(f"{Fore.RED}Invalid pairs format. Provide a list of tuples or a tuple of two strings.\n")
+        
+        job_queue: list[dict] = []
+        
+        for (ref_id, sec_id) in pairs:
+            # We use the client to help format the dict, but we don't submit yet.
+            # We are preparing the payload for _submit_job_queue
+            job = self.client.prepare_insar_job(
+                granule1=ref_id,
+                granule2=sec_id,
+                name= f"{self.config.name_prefix}_{ref_id.split('_')[5]}_{sec_id.split('_')[5]}",
+                include_look_vectors=self.config.include_look_vectors,
+                include_inc_map = self.config.include_inc_map,
+                looks = self.config.looks,
+                include_dem=self.config.include_dem,
+                include_wrapped_phase=self.config.include_wrapped_phase,
+                apply_water_mask=self.config.apply_water_mask,
+                include_displacement_maps=self.config.include_displacement_maps,
+                phase_filter_parameter=self.config.phase_filter_parameter
+            )
+            job_queue.append(job)
+            
+        # Send to base class for batching and submission
+        batchs = self._submit_job_queue(job_queue)
+        self.batchs = batchs
+        return batchs

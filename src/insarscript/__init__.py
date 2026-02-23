@@ -87,8 +87,9 @@ from .core.base import (
 
 from .core.config import (
     ASF_Base_Config,
-    Hyp3_InSAR_Base_Config,
-    Mintpy_SBAS_Base_Config
+    Hyp3_Base_Config,
+    Mintpy_SBAS_Base_Config,
+    S1_SLC_Config
 )   
 
 from .downloader import (
@@ -124,11 +125,10 @@ __all__ = [
     "Processor",
     "Analyzer",
     "ASF_Base_Config",
-    "Hyp3_InSAR", 
-    "Hyp3_InSAR_Base_Config",
     "ASF_Base_Downloader",
     "S1_SLC",
     "S1_SLC_Config",
+     "Hyp3_InSAR", 
     "Mintpy_SBAS_Base_Config",
     "Mintpy_Base_Analyzer",
     "Hyp3_SBAS_Analyzer",

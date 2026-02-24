@@ -3,7 +3,6 @@
 InSAR Script is an open-source package designed to support the full InSAR processing pipeline.
 The primary goal of this package is to provide a streamlined and user-friendly InSAR processing experience across multiple satellite products.
 
-
 ## Table of Contents
 - Installation
 - Requirements
@@ -34,6 +33,7 @@ conda env create -f environment.yml -n insarscript_dev
 
 ## Requirements
 - Python >=3.11
+- numpy <2.0"
 - proj >=9.4
 - hyp3_sdk
 - mintpy
@@ -45,58 +45,112 @@ conda env create -f environment.yml -n insarscript_dev
 - contextily 
 - dem_stitcher 
 - hyp3_sdk 
-- python-box 
 - rasterio >=1.4
 - sentineleof 
-- tomli-w
 
 ## Usage 
 
-#### Search:
+### Downloader:
 
 ```python
-from insarscript import S1_SLC
+from insarscript import Downloader
+```
 
-s1 = S1_SLC(
-    platform=['Sentinel-1A', 'Sentinel-1B', 'Sentinel-1C'],
-    AscendingflightDirection=False,
-    bbox = [124.67, 46.38, 125.35, 46.85],
-    start='2020-01-01',
-    end='2020-12-31',
-    output_dir = '~/tmp',
-)
+#### View available downloaders
+
+```python
+Downloader.available()
+```
+#### Create downloader
+
+```python
+s1 = Downloader.create('S1_SLC', 
+                        intersectsWith=[-113.05, 37.74, -112.68, 38.00],
+                        start='2020-01-01', 
+                        end='2020-12-31',  
+                        relativeOrbit=100, 
+                        frame=466, 
+                        workdir='path/to/dir')
+```
 results = s1.search()
 
+#### Search
+```python
+results = dl.search()
 ```
 
-#### Interferogram Process
-
+#### Filter
 ```python
-from insarscript import S1_SLC
-from insarscript import select_pairs
-sbas_pairs = select_pairs(search_results= filter_results[(3,435)])
-
-from insarscript import Hyp3_InSAR_Processor
-hyp3_sbas = Hyp3_InSAR_Processor(
-    pairs = sbas_pairs,
-    out_dir = '~/tmp'
-)
-batch = hyp3_sbas.submit()
-hyp3_sbas.save()
-hyp3_sbas.refresh()
-hyp3_sbas.download()
-
+filter_result = dl.filter(start='2020-02-01')
 ```
 
-#### SBAS
+#### Download
 
 ```python
-from insarscript import Hyp3_SBAS
-sbas_run = Hyp3_SBAS(
-    hyp3_dir = '~/tmp'
-)
-sbas_run.prep_data()
-sbas_run.run()
+dl.download()
+```
+
+### Processor:
+
+```python
+from insarscript import Processor
+```
+#### View available processors
+```python
+Processor.available()
+```
+
+#### Create Processor
+
+```python
+processor = Processor.create('Hyp3_InSAR', workdir='/your/work/path', pairs=pairs)
+```
+
+#### Submit Jobs
+```python
+    jobs = processor.submit()
+```
+
+#### Refresh Jobs
+
+```python
+    jobs = processor.refresh()
+```
+#### Download Sucessed Jobs
+
+```python
+    processor.download()
+```
+
+
+### Analyzer
+
+```python
+from insarscript import Analyzer
+```
+#### View available analyzers
+
+```python
+Analyzer.available()
+```
+
+#### Create Analyzer
+
+```python
+    analyzer = Analyzer.create('Hyp3_SBAS_Analyzer', 
+                                workdir="/your/work/dir")
+    
+```
+
+#### Prepare data
+
+ ```python
+    analyzer.prep_data()
+```
+
+#### Run time-series analysis
+ ```python
+    analyzer.run()
 ```
 
 ## Documentation 

@@ -12,8 +12,6 @@ dependencies:
     - pip:
         - rasterio
         - asf_search
-        - python-box
-        - tomli_w
         - colorama
         - hyp3-sdk
         - dem-stitcher

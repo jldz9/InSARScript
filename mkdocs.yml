@@ -4,16 +4,23 @@ repo_name: jldz9/InSARScript
 site_url: https://jldz9.github.io/InSARScript/
 theme:
   name: material
+  font:
+    text: "sans-serif"
+    code: "Source Code Pro"
+  custom_dir: docs/overrides
   features:
     - navigation.instant
     - navigation.tabs
+    - navigation.tabs.sticky  
     - navigation.sections
     - navigation.expand
+    - navigation.instant
     - toc.follow
     - navigation.top
     - search.suggest
     - search.highlight
     - content.code.copy
+    - announce.dismiss
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -33,10 +40,14 @@ theme:
 nav: 
   - Home: index.md
   - QuickStart: 
-        - Setup: quickstart/install.md
-        - Workflow: quickstart/workflow.md
-  - API: 
-        - Downloader: API/downloader.md
+        - Installation: quickstart/install.md
+        - API Setup: quickstart/api_setup.md
+        - Running: quickstart/running.md
+        - Downloader: quickstart/downloader.md
+        - Processor: quickstart/processor.md
+        - Analyzer: quickstart/analyzer.md
+        - Utilities: quickstart/utilities.md
+
   - About: about.md
 
 extra:
@@ -77,4 +88,20 @@ extra_css:
   - stylesheets/extra.css
 plugins:
   - search
+  - mkdocstrings:
+       handlers:
+          python:
+            options:
+              show_docstring_description: false
+              show_docstring_parameters: true
+              show_docstring_returns: false
+              show_docstring_examples: false
+              show_docstring_other_parameters: true
+              show_docstring_attributes: true
+              show_docstring_raises: true
+              members: true
+              docstring_style: google
+              docstring_section_style: table
+              show_bases: false
+          
 

@@ -3,8 +3,11 @@ on:
   push:
     branches:
       - 'main'
+    tags:
+      - 'v*'
     paths:
       - 'docs/**'
+      - 'mkdocs.yml'
 permissions:
   contents: write
 jobs:
@@ -29,8 +32,14 @@ jobs:
           path: .cache
           restore-keys: |
             mkdocs-material-
-      - run: pip install mkdocs-material mike
+      - run: pip install mkdocs-material mike mkdocstrings[python]
+      - run: pip install -e .
       - run: |
            VERSION=${GITHUB_REF##*/}
-           mike deploy --push --update-aliases $VERSION latest   
-           mike set-default $VERSION --push 
+           if  [[ $GITHUB_REF == refs/tags/* ]]; then
+            mike deploy --push --update-aliases $VERSION latest   
+            mike set-default $VERSION --push 
+           else
+            mike deploy --push dev
+           fi
+              

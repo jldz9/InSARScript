@@ -89,9 +89,53 @@ class Hyp3_Base_Config:
 
 @dataclass
 class Hyp3_InSAR_Config(Hyp3_Base_Config):
-    '''
-    Dataclass containing all configuration options for hyp3_sdk insar_gamma jobs.
-    '''
+    """
+    Configuration options for `hyp3_sdk` InSAR GAMMA processing jobs.
+
+    This dataclass defines all parameters used when submitting
+    InSAR jobs to the ASF HyP3 service using the GAMMA workflow.
+
+    Attributes:
+        name (str):
+            Name of the configuration profile.
+
+        pairs (list[tuple[str, str]] | None):
+            List of Sentinel-1 scene ID pairs in the form
+            [(reference_scene, secondary_scene), ...].
+            If None, pairs must be provided during submission.
+
+        name_prefix (str | None):
+            Prefix added to generated HyP3 job names.
+
+        include_look_vectors (bool):
+            If True, include look vector layers in the output product.
+
+        include_los_displacement (bool):
+            If True, include line-of-sight (LOS) displacement maps.
+
+        include_inc_map (bool):
+            If True, include incidence angle maps.
+
+        looks (str):
+            Multi-looking factor in the format "range x azimuth"
+            (e.g., "20x4").
+
+        include_dem (bool):
+            If True, include the DEM used during processing.
+
+        include_wrapped_phase (bool):
+            If True, include wrapped interferometric phase output.
+
+        apply_water_mask (bool):
+            If True, apply a water mask during processing.
+
+        include_displacement_maps (bool):
+            If True, include unwrapped displacement maps.
+
+        phase_filter_parameter (float):
+            Phase filtering strength parameter (typically between 0 and 1).
+            Higher values apply stronger filtering.
+    """
     name: str = "Hyp3_InSAR_Config"
     pairs: list[tuple[str, str]] | None = None
     name_prefix: str | None = 'ifg'

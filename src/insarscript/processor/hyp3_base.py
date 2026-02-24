@@ -12,8 +12,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from asf_search.exceptions import ASFSearchError
-from asf_search import ASFProduct
 from collections import defaultdict
 from colorama import Fore, Style
 from dateutil.parser import isoparse
@@ -289,34 +287,43 @@ class Hyp3Base(Hyp3Processor):
             raise ValueError(f'No batches exist to save. Did you submit or refresh a job?')
     
     def download(self):
-        if not hasattr(self, 'batchs') or not self.batchs:
+        if not self.batchs and self.job_ids:
+            print(f"{Fore.CYAN}Loaded from file — refreshing job statuses...{Style.RESET_ALL}")
             self.batchs = self.refresh()
-            
+
         if not self.batchs:
             raise ValueError(f"{Fore.RED}No jobs found. Call submit or load jobs first.")
         
         exist_files = {p.name: p for p in self.output_dir.glob('*.zip')}
+        stop_event = threading.Event()
         def _is_valid_zip(path: Path) -> bool:
-            """Return True if path is a readable, non-corrupt ZIP file."""
+            """Check ZIP magic bytes at start and EOCD signature at end. No file reading."""
             try:
-                with zipfile.ZipFile(path, 'r') as zf:
-                    bad = zf.testzip()  # None = all good, else returns first bad filename
-                    return bad is None
-            except (zipfile.BadZipFile, OSError):
+                with open(path, 'rb') as f:
+                    # Check ZIP magic bytes at start (PK header)
+                    if f.read(4) != b'PK\x03\x04':
+                        return False
+                    # Check End-of-Central-Directory signature at end
+                    f.seek(-22, 2)
+                    return f.read(4) == b'PK\x05\x06'
+            except OSError:
                 return False
             
-        def _download_file(url: str, dest: Path, filename: str, lock: threading.Lock) -> tuple[str, bool, str]:
+        
+        def _download_file(url: str, dest: Path) -> None:
             """
             Stream-download a single file with a per-file tqdm bar.
             Returns (filename, success, error_message).
             """
+            if stop_event.is_set():
+                raise InterruptedError("Download cancelled by user.")
+            tmp_path = dest.parent.joinpath(dest.name + '.part')
             try:
                 with requests.get(url, stream=True, timeout=60) as resp:
                     resp.raise_for_status()
                     total = int(resp.headers.get('content-length', 0))
-                    tmp_path = dest.parent / (dest.name + '.part')
                     with open(tmp_path, 'wb') as f, tqdm(
-                        desc=filename,
+                        desc=dest.name,
                         total=total,
                         unit='B',
                         unit_scale=True,
@@ -325,14 +332,14 @@ class Hyp3Base(Hyp3Processor):
                         position=None,
                     ) as bar:
                         for chunk in resp.iter_content(chunk_size=1024 * 256):
+                            if stop_event.is_set():
+                                raise InterruptedError("Download cancelled by user.")
                             f.write(chunk)
                             bar.update(len(chunk))
-                    tmp_path.rename(dest)
-                return filename, True, ""
-            except Exception as e:
-                if tmp_path.exists():
-                    tmp_path.unlink(missing_ok=True)
-                return filename, False, str(e)
+                tmp_path.rename(dest)
+            except Exception:
+                tmp_path.unlink(missing_ok=True)
+                raise
 
         overall_results = {"downloaded": 0, "skipped": 0, "failed": 0, "corrupt": 0}
         
@@ -344,7 +351,7 @@ class Hyp3Base(Hyp3Processor):
                 print("No succeeded jobs found, skipping.")
                 continue
             
-            tasks: list[tuple[str, str, Path]] = [] # (job_name, url, dest_path)
+            tasks: list[tuple[str, str, Path]] = [] # (url, dest_path)
 
             for job in succeeded:
                 if not job.files:
@@ -355,19 +362,21 @@ class Hyp3Base(Hyp3Processor):
                     url = file_meta.get('url') or file_meta.get('s3_uri') or file_meta.get('download_url')
 
                     # Skip if already exists AND is a valid ZIP
-                    if fname in exist_files and _is_valid_zip(exist_files[fname]):
-                        print(f"{Fore.YELLOW}  ✓ {fname} already exists and is valid, skipping.{Style.RESET_ALL}")
-                        overall_results["skipped"] += 1
-                        continue
+                    if fname in exist_files:
+                        if _is_valid_zip(exist_files[fname]):
+                            if self.config.skip_existing:
+                                print(f"{Fore.YELLOW}  ✓ {fname} already exists and is valid, skipping.{Style.RESET_ALL}")
+                                overall_results["skipped"] += 1
+                                continue
 
                     # File exists but is corrupt — re-download
-                    if fname in exist_files and not _is_valid_zip(exist_files[fname]):
-                        print(f"{Fore.RED}  ✗ {fname} exists but is corrupt, re-downloading.{Style.RESET_ALL}")
-                        exist_files[fname].unlink(missing_ok=True)
-                        overall_results["corrupt"] += 1
+                        else:
+                            print(f"{Fore.RED}  ✗ {fname} exists but is corrupt, re-downloading.{Style.RESET_ALL}")
+                            exist_files[fname].unlink(missing_ok=True)
+                            overall_results["corrupt"] += 1
 
                     if url:
-                        tasks.append((job.name, url, dest))
+                        tasks.append((url, dest))
 
             if not tasks:
                 print(f"{Fore.YELLOW}  Nothing to download for {username}.{Style.RESET_ALL}")
@@ -376,34 +385,41 @@ class Hyp3Base(Hyp3Processor):
             print(f"{Fore.GREEN}  Downloading {len(tasks)} file(s) with "
                 f"{self.config.max_workers} threads...{Style.RESET_ALL}")
 
-            lock = threading.Lock()
-            with ThreadPoolExecutor(max_workers=self.config.max_workers) as pool:
-                futures = {
-                    pool.submit(_download_file, url, dest, dest.name, lock): (job_name, dest)
-                    for job_name, url, dest in tasks
-                }
-                with tqdm(total=len(futures), desc=f"  {username}", unit="file") as pbar:
-                    for future in as_completed(futures):
-                        job_name, dest = futures[future]
-                        fname, success, err = future.result()
-                        if success:
-                            # Post-download ZIP integrity check
-                            if _is_valid_zip(dest):
-                                pbar.write(f"{Fore.GREEN}  ✓ {fname}{Style.RESET_ALL}")
-                                overall_results["downloaded"] += 1
-                            else:
-                                pbar.write(f"{Fore.RED}  ✗ {fname} downloaded but failed ZIP check — deleting.{Style.RESET_ALL}")
-                                dest.unlink(missing_ok=True)
+            try:
+                with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
+                    futures = {executor.submit(_download_file, url, dest): dest for url, dest in tasks}
+                    with tqdm(total=len(futures), desc=f"  {username}", unit="file") as pbar:
+                        for future in as_completed(futures):
+                            dest = futures[future]
+                            fname = dest.name
+                            try:
+                                future.result()
+                                if _is_valid_zip(dest):
+                                    tqdm.write(f"{Fore.GREEN}  ✓ {fname} downloaded and verified.{Style.RESET_ALL}")
+                                    overall_results["downloaded"] += 1
+                                else:
+                                    tqdm.write(f"{Fore.RED}  ✗ {fname} failed ZIP check, deleting.{Style.RESET_ALL}")
+                                    dest.unlink(missing_ok=True)
+                                    overall_results["failed"] += 1
+                            except InterruptedError:                          # NEW: raised by stop_event
+                                tqdm.write(f"{Fore.YELLOW}  ⚠ {fname} cancelled.{Style.RESET_ALL}")
                                 overall_results["failed"] += 1
-                        else:
-                            pbar.write(f"{Fore.RED}  ✗ {fname} failed: {err}{Style.RESET_ALL}")
-                            overall_results["failed"] += 1
-                        pbar.update(1)
+                            except Exception as e:
+                                tqdm.write(f"{Fore.RED}  ✗ {fname} failed: {e}{Style.RESET_ALL}")
+                                overall_results["failed"] += 1
+                            pbar.update(1)
+
+            # NEW block: catches Ctrl+C, signals all threads, waits for clean shutdown
+            except KeyboardInterrupt:
+                print(f"\n{Fore.YELLOW}Ctrl+C detected — cancelling downloads...{Style.RESET_ALL}")
+                stop_event.set()
+                executor.shutdown(wait=True, cancel_futures=True)
+                print(f"{Fore.YELLOW}Downloads stopped. Partial files cleaned up.{Style.RESET_ALL}")
+                break    # NEW: stop processing remaining users too
 
         print(f"\n{Fore.CYAN}{Style.BRIGHT}Download Summary:{Style.RESET_ALL}")
         print(f"  {Fore.GREEN}Downloaded : {overall_results['downloaded']}{Style.RESET_ALL}")
         print(f"  {Fore.YELLOW}Skipped    : {overall_results['skipped']}{Style.RESET_ALL}")
-        print(f"  {Fore.RED}Corrupt    : {overall_results['corrupt']}{Style.RESET_ALL}")
         print(f"  {Fore.RED}Failed     : {overall_results['failed']}{Style.RESET_ALL}")
         return self.output_dir
                 

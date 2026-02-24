@@ -11,10 +11,9 @@ The primary goal of this package is to provide a streamlined and user-friendly I
 
 ## Installation 
 
-InSARScript can be installed using Conda
+InSARScript can be installed using Conda:
 ```bash
 conda install insarscript -c conda-forge
-
 ```
 Pip: 
 
@@ -35,8 +34,6 @@ conda env create -f environment.yml -n insarscript_dev
 - Python >=3.11
 - numpy <2.0"
 - proj >=9.4
-- hyp3_sdk
-- mintpy
 - gdal >=3.8
 - sqlite >=3.44
 - mintpy
@@ -56,67 +53,66 @@ conda env create -f environment.yml -n insarscript_dev
 from insarscript import Downloader
 ```
 
-#### View available downloaders
+- View available downloaders
 
-```python
-Downloader.available()
-```
-#### Create downloader
+    ```python
+    Downloader.available()
+    ```
+- Create downloader
 
-```python
-s1 = Downloader.create('S1_SLC', 
-                        intersectsWith=[-113.05, 37.74, -112.68, 38.00],
-                        start='2020-01-01', 
-                        end='2020-12-31',  
-                        relativeOrbit=100, 
-                        frame=466, 
-                        workdir='path/to/dir')
-```
-results = s1.search()
+    ```python
+    s1 = Downloader.create('S1_SLC', 
+                            intersectsWith=[-113.05, 37.74, -112.68, 38.00],
+                            start='2020-01-01', 
+                            end='2020-12-31',  
+                            relativeOrbit=100, 
+                            frame=466, 
+                            workdir='path/to/dir')
+    ```
 
-#### Search
-```python
-results = dl.search()
-```
+- Search
+    ```python
+    results = dl.search()
+    ```
 
-#### Filter
-```python
-filter_result = dl.filter(start='2020-02-01')
-```
+- Filter
+    ```python
+    filter_result = dl.filter(start='2020-02-01')
+    ```
 
-#### Download
+- Download
 
-```python
-dl.download()
-```
+    ```python
+    dl.download()
+    ```
 
 ### Processor:
 
 ```python
 from insarscript import Processor
 ```
-#### View available processors
+- View available processors
 ```python
 Processor.available()
 ```
 
-#### Create Processor
+- Create Processor
 
 ```python
 processor = Processor.create('Hyp3_InSAR', workdir='/your/work/path', pairs=pairs)
 ```
 
-#### Submit Jobs
+- Submit Jobs
 ```python
     jobs = processor.submit()
 ```
 
-#### Refresh Jobs
+- Refresh Jobs
 
 ```python
     jobs = processor.refresh()
 ```
-#### Download Sucessed Jobs
+- Download Sucessed Jobs
 
 ```python
     processor.download()
@@ -128,27 +124,23 @@ processor = Processor.create('Hyp3_InSAR', workdir='/your/work/path', pairs=pair
 ```python
 from insarscript import Analyzer
 ```
-#### View available analyzers
+- View available analyzers
+    ```python
+    Analyzer.available()
+    ```
+
+- Create Analyzer
 
 ```python
-Analyzer.available()
+    analyzer = Analyzer.create('Hyp3_SBAS_Analyzer', workdir="/your/work/dir")
 ```
-
-#### Create Analyzer
-
-```python
-    analyzer = Analyzer.create('Hyp3_SBAS_Analyzer', 
-                                workdir="/your/work/dir")
-    
-```
-
-#### Prepare data
+- Prepare data
 
  ```python
     analyzer.prep_data()
 ```
 
-#### Run time-series analysis
+- Run time-series analysis
  ```python
     analyzer.run()
 ```

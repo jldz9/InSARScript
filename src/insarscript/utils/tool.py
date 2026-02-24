@@ -8,10 +8,11 @@ import logging
 
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from datetime import datetime
 from dateutil.parser import isoparse
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, List, Dict
 from threading import Lock
 
 import geopandas as gpd
@@ -418,6 +419,47 @@ def _enforce_connectivity(
 
     return pairs
 
+def _to_wkt(geom_input) -> str | None:
+    """
+    Converts various input types to a WKT string.
+    Supported: 
+    1. List/Tuple of 4 numbers [min_lon, min_lat, max_lon, max_lat]
+    2. String path to a spatial file (GeoJSON, SHP, etc.)
+    3. Valid WKT string
+    """
+    if isinstance(geom_input, (list, tuple)):
+        if len(geom_input) != 4:
+            raise ValueError(f"BBox list must have exactly 4 elements, got {len(geom_input)}")
+        
+        if not all(isinstance(n, (int, float)) for n in geom_input):
+            raise TypeError("All elements in BBox list must be int or float.")
+        
+        return box(*geom_input).wkt
+    
+    if isinstance(geom_input, str):
+        geom_input = geom_input.strip()
+
+        if Path(geom_input).exists():
+            try:
+                # Use geopandas to read any spatial format (SHP, GeoJSON, KML)
+                gdf = gpd.read_file(geom_input)
+                # Combine all geometries in the file into one (unary_union)
+                return gdf.geometry.union_all().wkt
+            except Exception as e:
+                raise ValueError(f"Could not read spatial file at {geom_input}: {e}")
+            
+        try:
+            # Try to load it to see if it's valid WKT
+            decoded = wkt.loads(geom_input)
+            return decoded.wkt
+        except Exception:
+            raise ValueError(
+                "Input string is neither a valid file path nor a valid WKT string."
+            )
+    if not geom_input:
+        return None
+    raise TypeError(f"Unsupported input type: {type(geom_input)}. Expected list, tuple, or str.")
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  PUBLIC API
@@ -434,68 +476,48 @@ def select_pairs(
     force_connect: bool = True,
     max_workers: int = 8
 ) -> Union[PairGroup, list[Pair]]:
-    """
-    select_pairs.py
-    ===============
-    Select interferogram pairs from ASF search results based on temporal and
-    perpendicular baseline criteria.
-
-    Key design decisions
-    --------------------
-    - Local-first: uses data already on each ASFProduct (stateVectors or
-    insarBaseline) to compute baselines without any API calls.
-    - API fallback: scenes missing local data fall back to ref.stack() calls
-    via a thread pool (I/O-bound, GIL released during network wait).
-    - Graph-aware: enforces min_degree / max_degree connectivity constraints
-    after primary selection, protecting both endpoints when trimming.
-
-    Supported sensors
-    -----------------
-    - Sentinel-1 (CALCULATED)  : stateVectors + ascendingNodeTime  -> local
-    - ALOS / ERS / RADARSAT
-    (PRE_CALCULATED)         : insarBaseline scalar               -> local
-    - Any product missing data : ref.stack() API call               -> fallback
-    """
-
+    
     """
     Select interferogram pairs based on temporal and perpendicular baseline.
 
-    Parameters
-    ----------
-    search_results:
-        Either a flat ``list[ASFProduct]`` (single stack) or a
-        ``dict[tuple[int,int], list[ASFProduct]]`` keyed by (path, frame).
-    dt_targets:
-        Preferred temporal spacings [days].  A candidate pair passes if
-        ``|dt - target| <= dt_tol`` for at least one target.
-    dt_tol:
-        Tolerance [days] added to each entry in *dt_targets*.
-    dt_max:
-        Hard ceiling on temporal baseline [days].
-    pb_max:
-        Hard ceiling on perpendicular baseline [m].
-    min_degree:
-        Minimum interferogram connections per scene.
-        Enforced when *force_connect* is True.
-    max_degree:
-        Maximum interferogram connections per scene.
-    force_connect:
-        If a scene falls below *min_degree* after primary selection, add
-        its nearest-time neighbours that satisfy *pb_max* and *dt_max*.
-        May introduce lower-quality pairs; a warning is logged.
-    max_workers:
-        Threads for the API fallback path.
-        Has **no effect** when all products carry local baseline data
-        (the common case for Sentinel-1 and ALOS).
-        Set to 1 to disable threading entirely (useful for debugging).
+    This function selects interferogram pairs according to temporal spacing 
+    and perpendicular baseline constraints, optionally enforcing connectivity 
+    rules per scene.
 
-    Returns
-    -------
-    A flat ``list[Pair]`` when *search_results* was a list, otherwise a
-    ``dict[tuple[int,int], list[Pair]]`` keyed by (path, frame).
-    Each ``Pair`` is a ``(earlier_scene_name, later_scene_name)`` tuple
-    sorted by acquisition time.
+    Supported sensors:
+    - Sentinel-1 (CALCULATED)  : stateVectors + ascendingNodeTime → local
+    - ALOS / ERS / RADARSAT (PRE_CALCULATED) : insarBaseline scalar → local
+    - Any product missing data : ref.stack() API call → fallback
+
+    Args:
+        search_results (list[ASFProduct] | dict[tuple[int,int], list[ASFProduct]]):
+            Either a flat list (single stack) or a dictionary keyed by (path, frame).
+        dt_targets (list[float], optional):
+            Preferred temporal spacings in days. A candidate pair passes if 
+            |dt - target| <= dt_tol for at least one target.
+        dt_tol (float, optional):
+            Tolerance in days added to each entry in dt_targets.
+        dt_max (float, optional):
+            Maximum temporal baseline in days.
+        pb_max (float, optional):
+            Maximum perpendicular baseline in meters.
+        min_degree (int, optional):
+            Minimum interferogram connections per scene. Enforced when force_connect is True.
+        max_degree (int, optional):
+            Maximum interferogram connections per scene.
+        force_connect (bool, optional):
+            If a scene falls below min_degree after primary selection, add its nearest-time 
+            neighbors that satisfy pb_max and dt_max. May introduce lower-quality pairs; a warning is logged.
+        max_workers (int, optional):
+            Number of threads for API fallback. Has no effect if all products have local baseline 
+            data (common for Sentinel-1 and ALOS). Set to 1 to disable threading (useful for debugging).
+
+    Returns:
+        list[Pair] | dict[tuple[int,int], list[Pair]]:
+            A flat list of Pair tuples (earlier_scene_name, later_scene_name) sorted by acquisition time, 
+            if search_results was a list. Otherwise, a dictionary keyed by (path, frame) with lists of Pair tuples.
     """
+
     # ── normalise input ───────────────────────────────────────────────────
     input_is_list = isinstance(search_results, list)
     if input_is_list:
@@ -598,18 +620,58 @@ def get_config(config_path=None):
 
 def plot_pair_network(
     pairs: list[Pair] | PairGroup,
-    B: BaselineTable,                            # ✅ now required
+    baselines: BaselineTable,                           
     title: str = "Interferogram Network",
     figsize: tuple[int, int] = (18, 7),
     save_path: str |Path| None = None,
 ) -> plt.Figure:
-    """
-    Draw interferogram network + per-scene connection histogram.
 
-    Layout
-    ------
-    - Left  : network  (x=acquisition date, y=perpendicular baseline [m])
-    - Right : horizontal bar chart of connections per SAR scene
+    """
+    Plot an interferogram network along with per-scene connection statistics.
+
+    This function visualizes the relationships between SAR acquisitions in
+    terms of temporal and perpendicular baselines. The network graph is
+    shown on the left, while a horizontal bar chart summarizes the number
+    of connections per scene on the right.
+
+    The layout is as follows:
+        - Left  : Network graph (x-axis = days since first acquisition,
+                  y-axis = perpendicular baseline [m])
+        - Right : Horizontal bar chart showing the number of connections per SAR scene
+
+    Args:
+        pairs (list[Pair] | PairGroup):
+            A flat list of pairs or a dictionary keyed by (path, frame)
+            with lists of pairs. Each pair is a tuple `(earlier_scene, later_scene)`.
+        baselines (BaselineTable):
+            Table or mapping containing temporal and perpendicular baseline
+            information for each interferogram pair.
+        title (str, optional):
+            Main title of the network plot. Defaults to "Interferogram Network".
+        figsize (tuple[int, int], optional):
+            Figure size (width, height) in inches. Defaults to (18, 7).
+        save_path (str | Path | None, optional):
+            Path to save the generated figure. If None, figure is not saved.
+            Defaults to None.
+
+    Returns:
+        matplotlib.figure.Figure:
+            The created matplotlib figure containing the network and
+            per-scene connection histogram.
+
+    Raises:
+        TypeError:
+            If any scene name in `pairs` is not a string.
+        ValueError:
+            If a scene name cannot be parsed into a valid date.
+
+    Notes:
+        - Node positions: x = days since first acquisition, y = perpendicular baseline.
+        - Node color represents the node degree (number of connections).
+        - Edge color and width represent temporal baseline.
+        - Scenes with fewer than 2 connections are highlighted in red in the histogram.
+        - Legends show node degree, temporal baseline, and path/frame grouping.
+        - The top axis of the network plot shows real acquisition dates for reference.
     """
 
     # ── 0. Normalise input ────────────────────────────────────────────────
@@ -657,19 +719,19 @@ def plot_pair_network(
     if isinstance(pairs, dict):
         for (path, frame), pair_list in pairs.items():
             for a, b in pair_list:
-                dt, bp = B.get((a, b), (_MISSING, _MISSING))
+                dt, bp = baselines.get((a, b), (_MISSING, _MISSING))
                 G.add_edge(a, b, dt=dt, bp=bp, path=path, frame=frame)
     else:
         for a, b in flat_pairs:
-            dt, bp = B.get((a, b), (_MISSING, _MISSING))
+            dt, bp = baselines.get((a, b), (_MISSING, _MISSING))
             G.add_edge(a, b, dt=dt, bp=bp, path=0, frame=0)
 
     # ── 3. Node positions (x=days, y=bperp) ──────────────────────────────
     # Assign each scene a bperp position by averaging bperp of all its pairs.
-    # B stores absolute bperp; we recover a relative position by anchoring
+    # baselines stores absolute bperp; we recover a relative position by anchoring
     # the earliest scene at y=0 and walking forward in time.
     bperp_accum: dict[SceneID, list[float]] = defaultdict(list)
-    for (a, b), (dt, bp) in B.items():
+    for (a, b), (dt, bp) in baselines.items():
         if bp >= _MISSING:
             continue
         bperp_accum[a].append(-bp / 2.0)
@@ -867,7 +929,39 @@ def plot_pair_network(
 
 def earth_credit_pool(earthdata_credentials_pool_path = Path.home().joinpath('.credit_pool')) -> dict:
     """
-    Load Earthdata credit pool from a file.
+    Load Earthdata credentials from a local credit pool file.
+
+    The function reads a simple key-value file where each line contains
+    `username:password` (or `key:value`) pairs, and returns them as a dictionary.
+
+    Args:
+        earthdata_credentials_pool_path (Path, optional):
+            Path to the Earthdata credentials file. Defaults to
+            `~/.credit_pool`. The path is expanded and resolved to an absolute path.
+
+    Returns:
+        dict:
+            Dictionary mapping credential keys to their corresponding values.
+            Example:
+            ```
+            {
+                "username1": "password1",
+                "username2": "password2",
+            }
+            ```
+
+    Raises:
+        FileNotFoundError:
+            If the specified credentials file does not exist.
+        ValueError:
+            If any line in the file does not contain a single ':' separating key and value.
+        OSError:
+            For any other I/O related errors while reading the file.
+
+    Notes:
+        - Each line of the file must be formatted as `key:value`.
+        - Leading/trailing whitespace is stripped from both key and value.
+        - Useful for managing multiple Earthdata credentials for automated downloads.
     """
     earthdata_credentials_pool_path = Path(earthdata_credentials_pool_path).expanduser().resolve()
     earthdata_credentials_pool = {}
@@ -877,144 +971,154 @@ def earth_credit_pool(earthdata_credentials_pool_path = Path.home().joinpath('.c
             earthdata_credentials_pool[key] = value
     return earthdata_credentials_pool
 
-def generate_slurm_script(
-    job_name="my_job",
-    output_file="job_%j.out",    # %j = jobID
-    error_file="job_%j.err",
-    time="04:00:00",
-    partition="all",
-    nodes=1,
-    nodelist=None,            # e.g., "node[01-05]"
-    ntasks=1,
-    cpus_per_task=1,
-    mem="4G",
-    gpus=None,                   # e.g., "1" or "2" or "1g"
-    array=None,                  # e.g., "0-9" or "1-100%10"
-    dependency=None,             # e.g., "afterok:123456"
-    mail_user=None,
-    mail_type="ALL",             # BEGIN, END, FAIL, ALL
-    account=None,
-    qos=None,
-    modules=None,                # list of modules to load
-    conda_env=None,              # name of conda env to activate
-    export_env=None,             # dict of env variables
-    command="echo Hello SLURM!",
-    filename="job.slurm"
-    ):
-    """
-    Generate a full SLURM batch script with many options.
-    """
-
-    lines = ["#!/bin/bash"]
-
-    # Basic job setup
-    lines.append(f"#SBATCH --job-name={job_name}")
-    lines.append(f"#SBATCH --output={output_file}")
-    lines.append(f"#SBATCH --error={error_file}")
-    lines.append(f"#SBATCH --time={time}")
-    lines.append(f"#SBATCH --partition={partition}")
-    lines.append(f"#SBATCH --nodes={nodes}")
-    lines.append(f"#SBATCH --ntasks={ntasks}")
-    lines.append(f"#SBATCH --cpus-per-task={cpus_per_task}")
-    lines.append(f"#SBATCH --mem={mem}")
-
-    # Optional extras
-    if gpus:
-        lines.append(f"#SBATCH --gres=gpu:{gpus}")
-    if array:
-        lines.append(f"#SBATCH --array={array}")
-    if dependency:
-        lines.append(f"#SBATCH --dependency={dependency}")
-    if mail_user:
-        lines.append(f"#SBATCH --mail-user={mail_user}")
-        lines.append(f"#SBATCH --mail-type={mail_type}")
-    if account:
-        lines.append(f"#SBATCH --account={account}")
-    if qos:
-        lines.append(f"#SBATCH --qos={qos}")
-    if nodelist:
-        lines.append(f"#SBATCH --nodelist={nodelist}")
-
-    lines.append("")  # blank line
-
-    # Environment setup
-    if modules:
-        for mod in modules:
-            lines.append(f"module load {mod}")
-    if conda_env:
-        lines.append(f"source activate {conda_env}")
-    if export_env:
-        for k, v in export_env.items():
-            lines.append(f"export {k}={v}")
-
-    lines.append("")  # blank line
-
-    # Execution
-    lines.append("echo \"Starting job on $(date)\"")
-    lines.append(command)
-    lines.append("echo \"Job finished on $(date)\"")
-
-    script_content = "\n".join(lines)
-
-    with open(filename, "w") as f:
-        f.write(script_content)
-
-    return filename 
-
-def batch_rename(
-    dirs : list[str],
-    pattern: str = "velocity.tif",
-    ):
-
-    for path in dirs:
-        path = Path(path).expanduser().resolve()
-        if not path.is_dir():
-            print(f"{path} is not a valid directory, skip.")
-            continue
-        tif_files = list(path.rglob(f'*{pattern}'))
-        for tif in tif_files:
-            new_name = f"velocity_{tif.parent.name}.tif"
-            new_path = tif.parent.joinpath(new_name)
-            tif.rename(new_path)
-            print(f"Renamed {tif.name} to {new_name}")
-
-def _to_wkt(geom_input) -> str | None:
-    """
-    Converts various input types to a WKT string.
-    Supported: 
-    1. List/Tuple of 4 numbers [min_lon, min_lat, max_lon, max_lat]
-    2. String path to a spatial file (GeoJSON, SHP, etc.)
-    3. Valid WKT string
-    """
-    if isinstance(geom_input, (list, tuple)):
-        if len(geom_input) != 4:
-            raise ValueError(f"BBox list must have exactly 4 elements, got {len(geom_input)}")
-        
-        if not all(isinstance(n, (int, float)) for n in geom_input):
-            raise TypeError("All elements in BBox list must be int or float.")
-        
-        return box(*geom_input).wkt
+@dataclass
+class Slurmjob_Config:
+    """Configuration for a SLURM job submission script.
     
-    if isinstance(geom_input, str):
-        geom_input = geom_input.strip()
+    This class encapsulates all parameters needed to generate a SLURM batch script,
+    including resource allocation, job settings, environment configuration, and
+    execution commands.
+    
+    Attributes:
+        job_name: Name of the SLURM job.
+        output_file: Path for standard output. Use %j for job ID.
+        error_file: Path for standard error. Use %j for job ID.
+        time: Maximum wall time in HH:MM:SS format.
+        partition: SLURM partition name to submit to.
+        nodes: Number of nodes to allocate.
+        ntasks: Number of tasks to run.
+        cpus_per_task: CPUs per task.
+        mem: Memory allocation per node (e.g., "4G", "500M").
+        nodelist: Specific nodes to use (e.g., "node[01-05]").
+        gpus: GPU allocation (e.g., "1", "2", "1g").
+        array: Array job specification (e.g., "0-9", "1-100%10").
+        dependency: Job dependency condition (e.g., "afterok:123456").
+        mail_user: Email address for job notifications.
+        mail_type: When to send email notifications (BEGIN, END, FAIL, ALL).
+        account: Account to charge resources to.
+        qos: Quality of Service specification.
+        modules: List of environment modules to load.
+        conda_env: Name of conda environment to activate.
+        export_env: Dictionary of environment variables to export.
+        command: Bash command(s) to execute.
+    
+    Examples:
+        Basic job configuration:
+        
+        >>> config = SlurmJobConfig(
+        ...     job_name="my_analysis",
+        ...     time="02:00:00",
+        ...     command="python analyze.py"
+        ... )
+        >>> config.to_script("analysis.slurm")
+        PosixPath('analysis.slurm')
+        
+        GPU job with conda environment:
+        
+        >>> config = SlurmJobConfig(
+        ...     job_name="training",
+        ...     time="12:00:00",
+        ...     mem="32G",
+        ...     gpus="2",
+        ...     conda_env="pytorch",
+        ...     modules=["cuda/11.8"],
+        ...     command="python train.py --epochs 100"
+        ... )
+        >>> config.to_script("train.slurm")
+        PosixPath('train.slurm')
+        
+        Array job with environment variables:
+        
+        >>> config = SlurmJobConfig(
+        ...     job_name="param_sweep",
+        ...     array="0-99",
+        ...     export_env={"PARAM_ID": "$SLURM_ARRAY_TASK_ID"},
+        ...     command="python run_experiment.py $PARAM_ID"
+        ... )
+        >>> config.to_script()
+        PosixPath('job.slurm')
+    """
+    job_name: str = "my_job"
+    output_file: str = "job_%j.out"
+    error_file: str = "job_%j.err"
+    time: str = "04:00:00"
+    partition: str = "all"
+    nodes: int = 1
+    ntasks: int = 1
+    cpus_per_task: int = 1
+    mem: str = "4G"
+    
+    # Optional parameters
+    nodelist: Optional[str] = None
+    gpus: Optional[str] = None
+    array: Optional[str] = None
+    dependency: Optional[str] = None
+    mail_user: Optional[str] = None
+    mail_type: str = "ALL"
+    account: Optional[str] = None
+    qos: Optional[str] = None
+    
+    # Environment
+    modules: List[str] = field(default_factory=list)
+    conda_env: Optional[str] = None
+    export_env: Dict[str, str] = field(default_factory=dict)
+    
+    # Execution
+    command: str = "echo Hello SLURM!"
+    
+    def to_script(self, filename: str = "job.slurm") -> Path:
+        """Generate the SLURM script file."""
+        lines = ["#!/bin/bash"]
+        
+        # Required directives
+        lines.extend([
+            f"#SBATCH --job-name={self.job_name}",
+            f"#SBATCH --output={self.output_file}",
+            f"#SBATCH --error={self.error_file}",
+            f"#SBATCH --time={self.time}",
+            f"#SBATCH --partition={self.partition}",
+            f"#SBATCH --nodes={self.nodes}",
+            f"#SBATCH --ntasks={self.ntasks}",
+            f"#SBATCH --cpus-per-task={self.cpus_per_task}",
+            f"#SBATCH --mem={self.mem}",
+        ])
+        
+        # Optional directives
+        if self.gpus:
+            lines.append(f"#SBATCH --gres=gpu:{self.gpus}")
+        if self.array:
+            lines.append(f"#SBATCH --array={self.array}")
+        if self.dependency:
+            lines.append(f"#SBATCH --dependency={self.dependency}")
+        if self.mail_user:
+            lines.append(f"#SBATCH --mail-user={self.mail_user}")
+            lines.append(f"#SBATCH --mail-type={self.mail_type}")
+        if self.account:
+            lines.append(f"#SBATCH --account={self.account}")
+        if self.qos:
+            lines.append(f"#SBATCH --qos={self.qos}")
+        if self.nodelist:
+            lines.append(f"#SBATCH --nodelist={self.nodelist}")
+        
+        lines.append("")
+        
+        # Environment setup
+        lines.extend([f"module load {mod}" for mod in self.modules])
+        if self.conda_env:
+            lines.append(f"source activate {self.conda_env}")
+        lines.extend([f"export {k}={v}" for k, v in self.export_env.items()])
+        
+        lines.append("")
+        
+        # Execution
+        lines.extend([
+            'echo "Starting job on $(date)"',
+            self.command,
+            'echo "Job finished on $(date)"'
+        ])
+        
+        filepath = Path(filename).expanduser().resolve()
+        filepath.write_text("\n".join(lines))
+        
+        return filepath
 
-        if Path(geom_input).exists():
-            try:
-                # Use geopandas to read any spatial format (SHP, GeoJSON, KML)
-                gdf = gpd.read_file(geom_input)
-                # Combine all geometries in the file into one (unary_union)
-                return gdf.geometry.union_all().wkt
-            except Exception as e:
-                raise ValueError(f"Could not read spatial file at {geom_input}: {e}")
-            
-        try:
-            # Try to load it to see if it's valid WKT
-            decoded = wkt.loads(geom_input)
-            return decoded.wkt
-        except Exception:
-            raise ValueError(
-                "Input string is neither a valid file path nor a valid WKT string."
-            )
-    if not geom_input:
-        return None
-    raise TypeError(f"Unsupported input type: {type(geom_input)}. Expected list, tuple, or str.")

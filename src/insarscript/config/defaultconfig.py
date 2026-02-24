@@ -51,11 +51,11 @@ class ASF_Base_Config:
     season: list[int] | None = None
     stack_from_id: str | None = None
     maxResults: int | None = None
-    output_dir: Path | str = field(default_factory=lambda: Path.cwd()) 
+    workdir: Path | str = field(default_factory=lambda: Path.cwd()) 
 
     def __post_init__(self):
-        if isinstance(self.output_dir, str):
-            self.output_dir = Path(self.output_dir).expanduser().resolve()
+        if isinstance(self.workdir, str):
+            self.workdir = Path(self.workdir).expanduser().resolve()
 
 @dataclass
 class S1_SLC_Config(ASF_Base_Config):
@@ -75,7 +75,7 @@ class Hyp3_Base_Config:
     submitting, managing, and downloading jobs from the HyP3 API.
 
     Attributes:
-        output_dir (Path | str):
+        workdir (Path | str):
             Directory where downloaded products will be stored.
             If provided as a string, it will be converted to a
             resolved ``Path`` object during initialization.
@@ -105,7 +105,7 @@ class Hyp3_Base_Config:
     """
 
     name: str = "Hyp3_Base_Config"
-    output_dir: Path | str = field(default_factory=lambda: Path.cwd())
+    workdir: Path | str = field(default_factory=lambda: Path.cwd())
     saved_job_path: Path | str | None = None
     earthdata_credentials_pool: dict[str, str] | None = None
     skip_existing: bool = True
@@ -114,8 +114,8 @@ class Hyp3_Base_Config:
 
     def __post_init__(self):
         # Auto-convert string paths to Path objects
-        if isinstance(self.output_dir, str):
-            self.output_dir = Path(self.output_dir).expanduser().resolve()
+        if isinstance(self.workdir, str):
+            self.workdir = Path(self.workdir).expanduser().resolve()
         if self.saved_job_path and isinstance(self.saved_job_path, str):
             self.saved_job_path = Path(self.saved_job_path).expanduser().resolve()
 
@@ -190,8 +190,8 @@ class Mintpy_SBAS_Base_Config:
     debug: bool = False 
 
     ## computing resource configuration
-    compute_maxMemory : float = _env['memory']
-    compute_cluster : str = 'local' # Mintpy's slurm parallel processing is kind of buggy, so we will handle parallel processing with dask instead. Switch to none to turn off parallel processing to save memory.
+    compute_maxMemory : float | int = _env['memory']
+    compute_cluster : str = 'local' # Mintpy's slurm parallel processing is buggy, so we will handle parallel processing with dask instead. Switch to none to turn off parallel processing to save memory.
     compute_numWorker : int = _env['cpu']
     compute_config: str = 'none'
 
@@ -233,13 +233,13 @@ class Mintpy_SBAS_Base_Config:
     subset_lalo: str = 'auto'
     ##---------multilook (optional):
     multilook_method: str = 'auto'
-    multilook_ystep: str = 'auto'
-    multilook_xstep: str = 'auto'
+    multilook_ystep: str | int = 'auto'
+    multilook_xstep: str | int= 'auto'
 
     # 2. Modify Network
-    network_tempBaseMax: str = 'auto'
-    network_perpBaseMax: str = 'auto'
-    network_connNumMax: str = 'auto'
+    network_tempBaseMax: str | float = 'auto'
+    network_perpBaseMax: str | float = 'auto'
+    network_connNumMax: str | int = 'auto'
     network_startDate: str = 'auto'
     network_endDate: str = 'auto'
     network_excludeDate: str = 'auto'
@@ -248,10 +248,10 @@ class Mintpy_SBAS_Base_Config:
     network_referenceFile: str = 'auto'
     ## 2) Data-driven network modification
     network_coherenceBased: str = 'auto'
-    network_minCoherence: str = 'auto'
+    network_minCoherence: str |float = 'auto'
     ## b - Effective Coherence Ratio network modification = (threshold + MST) by default
     network_areaRatioBased: str = 'auto'
-    network_minAreaRatio: str = 'auto'
+    network_minAreaRatio: str |float= 'auto'
     ## Additional common parameters for the 2) data-driven network modification
     network_keepMinSpanTree: str = 'auto'
     network_maskFile: str = 'auto'
@@ -263,17 +263,17 @@ class Mintpy_SBAS_Base_Config:
     reference_lalo: str = 'auto'
     reference_maskFile: str = 'auto'
     reference_coherenceFile: str = 'auto'
-    reference_minCoherence: str = 'auto'
+    reference_minCoherence: str |float = 'auto'
 
     # 4. Correct Unwrap Error
     unwrapError_method: str = 'auto'
     unwrapError_waterMaskFile: str = 'auto'
-    unwrapError_connCompMinArea: str = 'auto'
+    unwrapError_connCompMinArea: str |float = 'auto'
     ## phase_closure options:
-    unwrapError_numSample: str = 'auto'
+    unwrapError_numSample: str | int= 'auto'
     ## bridging options:
     unwrapError_ramp: str = 'auto'
-    unwrapError_bridgePtsRadius: str = 'auto'
+    unwrapError_bridgePtsRadius: str | int= 'auto'
 
     # 5. Invert Network
     networkInversion_weightFunc: str = 'auto'
@@ -281,11 +281,11 @@ class Mintpy_SBAS_Base_Config:
     networkInversion_minNormVelocity: str = 'auto'
     ## mask options for unwrapPhase of each interferogram before inversion (recommend if weightFunct=no):
     networkInversion_maskDataset: str = 'auto'
-    networkInversion_maskThreshold: str = 'auto'
-    networkInversion_minRedundancy: str = 'auto'
+    networkInversion_maskThreshold: str | float = 'auto'
+    networkInversion_minRedundancy: str | float = 'auto'
     ## Temporal coherence is calculated and used to generate the mask as the reliability measure
-    networkInversion_minTempCoh: str = 'auto'
-    networkInversion_minNumPixel: str = 'auto'
+    networkInversion_minTempCoh: str | float = 'auto'
+    networkInversion_minNumPixel: str | int = 'auto'
     networkInversion_shadowMask: str = 'auto'
 
     # 6. Correct SET (Solid Earth Tides)
@@ -303,9 +303,9 @@ class Mintpy_SBAS_Base_Config:
     troposphericDelay_weatherDir: str = 'auto'
     
     ## Notes for height_correlation:
-    troposphericDelay_polyOrder: str = 'auto'
-    troposphericDelay_looks: str = 'auto'
-    troposphericDelay_minCorrelation: str = 'auto'
+    troposphericDelay_polyOrder: str | int = 'auto'
+    troposphericDelay_looks: str | int = 'auto'
+    troposphericDelay_minCorrelation: str | float = 'auto'
     ## Notes for gacos:
     troposphericDelay_gacosDir: str = 'auto'
 
@@ -324,7 +324,7 @@ class Mintpy_SBAS_Base_Config:
     # 11.1 Residual RMS
     residualRMS_maskFile: str = 'auto'
     residualRMS_deramp: str = 'auto'
-    residualRMS_cutoff: str = 'auto'
+    residualRMS_cutoff: str | float = 'auto'
 
     # 11.2 Reference Date
     reference_date: str = 'auto'
@@ -334,7 +334,7 @@ class Mintpy_SBAS_Base_Config:
     timeFunc_endDate: str = 'auto'
     timeFunc_excludeDate: str = 'auto'
     ## Fit a suite of time functions
-    timeFunc_polynomial: str = 'auto'
+    timeFunc_polynomial: str | int = 'auto'
     timeFunc_periodic: str = 'auto'
     timeFunc_stepDate: str = 'auto'
     timeFunc_exp: str = 'auto'
@@ -342,14 +342,14 @@ class Mintpy_SBAS_Base_Config:
     ## Uncertainty quantification methods:
     timeFunc_uncertaintyQuantification: str = 'auto'
     timeFunc_timeSeriesCovFile: str = 'auto'
-    timeFunc_bootstrapCount: str = 'auto'
+    timeFunc_bootstrapCount: str | int = 'auto'
 
     # 13.1 Geocode
     geocode: str = 'auto'
     geocode_SNWE: str = 'auto'
     geocode_laloStep: str = 'auto'
     geocode_interpMethod: str = 'auto'
-    geocode_fillValue: str = 'auto'
+    geocode_fillValue: str | float = 'auto'
 
     # 13.2 Google Earth
     save_kmz: str = 'auto'
@@ -361,8 +361,8 @@ class Mintpy_SBAS_Base_Config:
 
     # 13.4 Plot
     plot: str = 'auto'
-    plot_dpi: str = 'auto'
-    plot_maxMemory: str = 'auto'
+    plot_dpi: str | int = 'auto'
+    plot_maxMemory: str | int = 'auto'
 
     def __post_init__(self):
         if isinstance(self.workdir, str):
@@ -393,5 +393,17 @@ class Mintpy_SBAS_Base_Config:
 
         return Path(outpath).resolve()
 
-      
+
+@dataclass
+class Hyp3_SBAS_Config(Mintpy_SBAS_Base_Config):
+    name: str = "Hyp3_SBAS_Config"
+    load_processor: str = "hyp3"
+    deramp: str = 'linear'
+    troposphericDelay_method: str = 'pyaps'
+    networkInversion_maskDataset: str = 'coherence'
+    networkInversion_maskThreshold: str | float = 0.5
+    network_coherenceBased : str = 'yes'
+    network_minCoherence : str| float = 0.7
+    plot : str = 'no'
+    save_kmz: str = 'no'
 

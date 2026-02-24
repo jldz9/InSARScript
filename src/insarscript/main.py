@@ -117,7 +117,7 @@ def search(args):
             bbox=args.bbox,
             start = args.start_date,
             end = args.end_date,
-            output_dir=Path(args.output_dir).expanduser().resolve() if args.output_dir else None,
+            workdir=Path(args.output_dir).expanduser().resolve() if args.output_dir else None,
             download_orbit=args.download_orbit
         )
         s1.footprint(save_path=args.output_dir)

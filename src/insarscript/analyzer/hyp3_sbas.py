@@ -10,25 +10,10 @@ from colorama import Fore, Style
 from osgeo import gdal
 from tqdm import tqdm
 
-from .mintpy_base import Mintpy_Base_Analyzer
-from ..core.config import Mintpy_SBAS_Base_Config
+from .mintpy_base import Mintpy_SBAS_Base_Analyzer
+from insarscript.config.defaultconfig import Hyp3_SBAS_Config
 
-
-
-@dataclass
-class Hyp3_SBAS_Config(Mintpy_SBAS_Base_Config):
-    name: str = "Hyp3_SBAS_Config"
-    load_processor: str = "hyp3"
-    deramp: str = 'linear'
-    troposphericDelay_method: str = 'pyaps'
-    networkInversion_maskDataset: str = 'coherence'
-    networkInversion_maskThreshold: float = 0.5
-    network_coherenceBased : str = 'yes'
-    network_minCoherence : float = 0.7
-    plot : str = 'no'
-    save_kmz: str = 'no'
-
-class Hyp3_SBAS_Analyzer(Mintpy_Base_Analyzer):
+class Hyp3_SBAS_Analyzer(Mintpy_SBAS_Base_Analyzer):
     name = 'Hyp3_SBAS'
     default_config = Hyp3_SBAS_Config
     required = ['unw_phase.tif', 'corr.tif',  'dem.tif'] # also need meta files to get the date and other info
@@ -37,6 +22,29 @@ class Hyp3_SBAS_Analyzer(Mintpy_Base_Analyzer):
         super().__init__(config)
 
     def prep_data(self):
+        """
+        Prepare input data for analysis by performing unzipping, collection, clipping, and parameter setup.
+
+        This method orchestrates the preprocessing steps required before running the analysis workflow. 
+        It ensures that all input files are available, aligned, and properly configured.
+
+        Steps performed:
+            1. `_unzip_hyp3()`: Extracts any compressed Hyp3 output files.
+            2. `_collect_files()`: Gathers relevant input files (e.g., DEMs, interferograms).
+            3. `_get_common_overlap(files['dem'])`: Computes the spatial overlap extent among input rasters.
+            4. `_clip_rasters(files, overlap_extent)`: Clips input rasters to the common overlapping area.
+            5. `_set_load_parameters()`: Sets parameters required for loading the preprocessed data into memory.
+
+        Raises:
+            FileNotFoundError: If required input files are missing.
+            ValueError: If no common overlap region can be determined among rasters.
+            Exception: Propagates any unexpected errors during preprocessing.
+
+        Notes:
+            - This method must be called before running the analysis workflow.
+            - Designed for workflows using Hyp3-derived Sentinel-1 products.
+            - Ensures consistent spatial coverage across all input datasets.
+        """
         self._unzip_hyp3()
         files = self._collect_files()
         overlap_extent = self._get_common_overlap(files['dem'])

@@ -1,7 +1,7 @@
 from colorama import Fore
 from tqdm import tqdm
 
-from insarscript.core import Hyp3_InSAR_Config
+from insarscript.config import Hyp3_InSAR_Config
 from insarscript.processor.hyp3_base import Hyp3Base 
 
 

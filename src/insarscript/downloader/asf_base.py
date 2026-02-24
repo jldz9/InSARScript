@@ -23,7 +23,7 @@ from shapely.geometry import shape
 from tqdm import tqdm
 
 from insarscript.core.base import BaseDownloader
-from insarscript.core.config import ASF_Base_Config
+from insarscript.config import ASF_Base_Config
 from insarscript.utils.tool import _to_wkt
 
 class ASF_Base_Downloader(BaseDownloader): 
@@ -64,9 +64,6 @@ class ASF_Base_Downloader(BaseDownloader):
         """
         Initialize the Downloader with search parameters. Options was adapted from asf_search searching api. 
         You may check https://docs.asf.alaska.edu/asf_search/searching/ for more info, below only list customized parameters.
-
-        :param bbox: Bounding box coordinates in the format [west_lon, south_lat, east_lon, north_lat]. Will then convert to WKT format. to filled as intersectsWith parameter in asf_search.
-        :param output_dir: Directory where downloaded files will be saved. Relative path will be resolved to current workdir.
         """
         print(f"""
 This downloader relies on the ASF API. Please ensure you to create an account at https://search.asf.alaska.edu/. 
@@ -238,7 +235,7 @@ Check documentation for how to setup .netrc file.\n""")
         self._subset = None
         print(f"Searching for SLCs....")
         search_opts = {k: v for k, v in asdict(self.config).items() 
-                       if v is not None and k not in ['output_dir', 'name', 'bbox']}
+                       if v is not None and k not in ['workdir', 'name', 'bbox']}
         
         for attempt in range(1, 11):
             try:
@@ -261,7 +258,7 @@ Check documentation for how to setup .netrc file.\n""")
             grouped[key].append(result)
         self.results = grouped
         if len(grouped) > 1: 
-            print(f"{Fore.YELLOW}The AOI crosses {len(grouped)} stacks, you can use .summary() or .footprint() to check footprints and .pick((path_frame)) to specific the stack of scence you would like to download. If use .download() directly will create subfolders under {self.config.output_dir} for each stack")
+            print(f"{Fore.YELLOW}The AOI crosses {len(grouped)} stacks, you can use .summary() or .footprint() to check footprints and .pick((path_frame)) to specific the stack of scence you would like to download. If use .download() directly will create subfolders under {self.config.workdir} for each stack")
         return grouped
     
     def reset(self):
@@ -581,13 +578,13 @@ Check documentation for how to setup .netrc file.\n""")
         """Download DEM for co-registration uses.
         
         Args:
-            save_path (str, optional): Directory to save DEM files. If None, uses config.output_dir.
+            save_path (str, optional): Directory to save DEM files. If None, uses config.workdir.
                 Defaults to None.
                 
         Returns:
             tuple: (X, p) where X is the DEM array and p is the rasterio profile.
         """
-        output_dir = Path(save_path).expanduser().resolve() if save_path else self.config.output_dir
+        output_dir = Path(save_path).expanduser().resolve() if save_path else self.config.workdir
 
         for key, results in self.active_results.items():
             download_path = output_dir.joinpath(f'dem',f'p{key[0]}_f{key[1]}')
@@ -611,7 +608,7 @@ Check documentation for how to setup .netrc file.\n""")
         """Download the search results to the specified output directory.
         
         Args:
-            save_path (str, optional): Download path. If None, uses config.output_dir. 
+            save_path (str, optional): Download path. If None, uses config.workdir. 
                 Defaults to None.
             max_workers (int, optional): Number of concurrent downloads. 3-5 recommended 
                 for ASF. Set to 1 to disable multithreading. Defaults to 3.
@@ -621,7 +618,7 @@ Check documentation for how to setup .netrc file.\n""")
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
         from threading import Event
-        output_dir = Path(save_path).expanduser().resolve() if save_path else self.config.output_dir
+        output_dir = Path(save_path).expanduser().resolve() if save_path else self.config.workdir
 
         self.download_dir = output_dir.joinpath('data')
         self.download_dir.mkdir(exist_ok=True, parents=True)

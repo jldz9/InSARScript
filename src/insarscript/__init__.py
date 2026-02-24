@@ -85,7 +85,7 @@ from .core.base import (
     BaseAnalyzer,
 )
 
-from .core.config import (
+from .config.defaultconfig import (
     ASF_Base_Config,
     Hyp3_Base_Config,
     Mintpy_SBAS_Base_Config,
@@ -102,7 +102,7 @@ from .processor import (
 )
 
 from .analyzer import (
-    Mintpy_Base_Analyzer,
+    Mintpy_SBAS_Base_Analyzer,
     Hyp3_SBAS_Analyzer,
     Hyp3_SBAS_Config
     
@@ -128,9 +128,9 @@ __all__ = [
     "ASF_Base_Downloader",
     "S1_SLC",
     "S1_SLC_Config",
-     "Hyp3_InSAR", 
+    "Hyp3_InSAR", 
     "Mintpy_SBAS_Base_Config",
-    "Mintpy_Base_Analyzer",
+    "Mintpy_SBAS_Base_Analyzer",
     "Hyp3_SBAS_Analyzer",
     "Hyp3_SBAS_Config",
 

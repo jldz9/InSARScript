@@ -19,7 +19,8 @@ from hyp3_sdk import HyP3, Batch, Job
 from hyp3_sdk.exceptions import AuthenticationError, HyP3Error
 from tqdm import tqdm
 
-from insarscript.core import Hyp3Processor, Hyp3_Base_Config
+from insarscript.core import Hyp3Processor
+from insarscript.config import Hyp3_Base_Config
 
 
 class Hyp3Base(Hyp3Processor):
@@ -50,12 +51,12 @@ class Hyp3Base(Hyp3Processor):
                 
                 # Update output_dir from save file if present, else use config
                 saved_out = data.get("out_dir")
-                self.output_dir = Path(saved_out).resolve() if saved_out else self.config.output_dir
+                self.output_dir = Path(saved_out).resolve() if saved_out else self.config.workdir
             else:
                 raise ValueError(f"{Fore.RED}Job file {self.config.saved_job_path} not found.\n")
         else:
             self.job_ids = defaultdict(list)
-            self.output_dir = self.config.output_dir
+            self.output_dir = self.config.workdir
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.batchs = defaultdict(list)

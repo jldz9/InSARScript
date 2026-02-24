@@ -9,13 +9,13 @@ from colorama import Fore, Style
 from mintpy.utils import readfile
 from mintpy.smallbaselineApp import TimeSeriesAnalysis
 
-from ..core.config import Mintpy_SBAS_Base_Config
-from ..core.base import BaseAnalyzer
+from insarscript.config.defaultconfig import Mintpy_SBAS_Base_Config
+from insarscript.core.base import BaseAnalyzer
 
 
-class Mintpy_Base_Analyzer(BaseAnalyzer):
+class Mintpy_SBAS_Base_Analyzer(BaseAnalyzer):
 
-    name = 'Mintpy_Base_Analyzer'
+    name = 'Mintpy_SBAS_Base_Analyzer'
     default_config = Mintpy_SBAS_Base_Config
     '''
     Base class for Mintpy SBAS analysis. This class provides a template for implementing 
@@ -68,6 +68,38 @@ class Mintpy_Base_Analyzer(BaseAnalyzer):
                     return False
     
     def run(self, steps=None):
+        """
+        Run the MintPy SBAS time-series analysis workflow.
+
+        This method writes the MintPy configuration file, optionally authorizes
+        CDS access for tropospheric correction, and executes the selected
+        MintPy processing steps using TimeSeriesAnalysis.
+
+        Args:
+            steps (list[str] | None, optional):
+                List of MintPy processing steps to execute. If None, the
+                default full workflow is executed:
+                    [
+                        'load_data', 'modify_network', 'reference_point',
+                        'invert_network', 'correct_LOD', 'correct_SET',
+                        'correct_ionosphere', 'correct_troposphere',
+                        'deramp', 'correct_topography', 'residual_RMS',
+                        'reference_date', 'velocity', 'geocode',
+                        'google_earth', 'hdfeos5'
+                    ]
+
+        Raises:
+            RuntimeError: If tropospheric delay method requires CDS authorization
+                and authorization fails.
+            Exception: Propagates exceptions raised during MintPy execution.
+
+        Notes:
+            - If `troposphericDelay_method` is set to 'pyaps', CDS
+            authorization is performed before running MintPy.
+            - The configuration file is written to `self.cfg_path`.
+            - Processing is executed inside `self.workdir`.
+            - This method wraps MintPy TimeSeriesAnalysis for SBAS workflows.
+        """
         if self.config.troposphericDelay_method == 'pyaps':
             self._cds_authorize()
         self.config.write_mintpy_config(self.cfg_path)
@@ -84,6 +116,29 @@ class Mintpy_Base_Analyzer(BaseAnalyzer):
         app.run(steps=run_steps)
 
     def cleanup(self):
+        """
+        Remove temporary files and directories generated during processing.
+
+        This method deletes the temporary working directories and any `.zip`
+        archives in `self.workdir`. If debug mode is enabled, temporary files
+        are preserved and a message is printed instead.
+
+        Behavior:
+            - Deletes `self.tmp_dir` and `self.clip_dir` if they exist.
+            - Deletes all `.zip` files in `self.workdir`.
+            - Prints informative messages for each removal or failure.
+            - Respects `self.config.debug`; no files are deleted in debug mode.
+
+        Raises:
+            Exception: Propagates any unexpected errors raised during removal.
+
+        Notes:
+            - Useful for freeing disk space after large InSAR or MintPy
+            processing workflows.
+            - Temporary directories should contain only non-essential files
+            to avoid accidental data loss.
+        """
+
         if self.config.debug:
             print(f"{Fore.YELLOW}Debug mode is enabled. Keeping temporary files at: {self.workdir}{Fore.RESET}")
             return

@@ -69,8 +69,41 @@ class S1_SLC_Config(ASF_Base_Config):
 @dataclass
 class Hyp3_Base_Config:
     """
-    Base configuration for any HyP3 job interaction.
+    Base configuration for HyP3 job interaction.
+
+    This dataclass defines shared configuration options used for
+    submitting, managing, and downloading jobs from the HyP3 API.
+
+    Attributes:
+        output_dir (Path | str):
+            Directory where downloaded products will be stored.
+            If provided as a string, it will be converted to a
+            resolved ``Path`` object during initialization.
+
+        saved_job_path (Path | str | None):
+            Optional path to a saved job JSON file for reloading
+            previously submitted jobs. If provided as a string,
+            it will be converted to a resolved ``Path`` object.
+
+        earthdata_credentials_pool (dict[str, str] | None):
+            Dictionary mapping usernames to passwords for managing
+            multiple Earthdata accounts. Used for parallel or
+            quota-aware submissions.
+
+        skip_existing (bool):
+            If True, skip submission or download of products that
+            already exist locally.
+
+        submission_chunk_size (int):
+            Number of jobs submitted per batch request to the API.
+            Helps avoid request size limits and API throttling.
+
+        max_workers (int):
+            Maximum number of worker threads used for concurrent
+            submissions or downloads. Recommended to keep below 8
+            to avoid overwhelming the API or triggering rate limits.
     """
+
     name: str = "Hyp3_Base_Config"
     output_dir: Path | str = field(default_factory=lambda: Path.cwd())
     saved_job_path: Path | str | None = None
@@ -96,9 +129,6 @@ class Hyp3_InSAR_Config(Hyp3_Base_Config):
     InSAR jobs to the ASF HyP3 service using the GAMMA workflow.
 
     Attributes:
-        name (str):
-            Name of the configuration profile.
-
         pairs (list[tuple[str, str]] | None):
             List of Sentinel-1 scene ID pairs in the form
             [(reference_scene, secondary_scene), ...].
@@ -136,6 +166,7 @@ class Hyp3_InSAR_Config(Hyp3_Base_Config):
             Phase filtering strength parameter (typically between 0 and 1).
             Higher values apply stronger filtering.
     """
+
     name: str = "Hyp3_InSAR_Config"
     pairs: list[tuple[str, str]] | None = None
     name_prefix: str | None = 'ifg'

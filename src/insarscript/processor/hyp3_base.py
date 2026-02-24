@@ -195,7 +195,15 @@ class Hyp3Base(Hyp3Processor):
             print(f"{Fore.CYAN}Remaining credits for {self._username_pool[self._user_index]}: {credits}{Fore.RESET}")
     
     def refresh(self):
-        """Refresh job statuses."""
+        """
+        Refresh the status of all jobs.
+
+        Returns:
+            dict: Dictionary mapping usernames to updated Batch objects.
+
+        Raises:
+            ValueError: If no jobs are loaded in memory.
+        """
         user_job_map = defaultdict(list)
         if hasattr(self, 'batchs') and self.batchs:
             for username, jobs in self.batchs.items():
@@ -240,6 +248,14 @@ class Hyp3Base(Hyp3Processor):
         return refreshed_batchs
     
     def retry(self):
+        """
+        Retry all failed jobs by re-submitting them.
+
+        Saves a retry batch JSON file with timestamp.
+
+        Returns:
+            dict: Dictionary mapping usernames to re-submitted Batch objects.
+        """
         if not hasattr(self, 'failed_jobs') or not self.failed_jobs:
             print(f"{Fore.CYAN}No failed jobs in memory. Refreshing status...{Fore.RESET}")
             self.refresh()
@@ -266,6 +282,25 @@ class Hyp3Base(Hyp3Processor):
         return results
     
     def save(self, save_path: Path | str | None = None):
+        """
+        Save the current HyP3 job batch information to a JSON file.
+
+        This allows resuming or reloading jobs later by storing job IDs
+        and the output directory.
+
+        Args:
+            save_path (Path | str | None, optional):
+                Path to save the batch JSON file. If None, defaults to
+                `hyp3_jobs.json` in `self.output_dir`.
+
+        Returns:
+            Path:
+                The resolved path where the batch file was saved.
+
+        Raises:
+            ValueError: If no job batches exist to save.
+        """
+
         if hasattr(self, 'batchs') and self.batchs:
             job_ids_to_save = {user: [job.job_id for job in batch] for user, batch in self.batchs.items()}
             
@@ -287,6 +322,15 @@ class Hyp3Base(Hyp3Processor):
             raise ValueError(f'No batches exist to save. Did you submit or refresh a job?')
     
     def download(self):
+        """
+        Download all succeeded jobs for all users.
+
+        Skips files that already exist and are valid ZIPs.
+        Re-downloads corrupt or missing files using multithreading.
+
+        Returns:
+            Path: Output directory where files were saved.
+        """
         if not self.batchs and self.job_ids:
             print(f"{Fore.CYAN}Loaded from file — refreshing job statuses...{Style.RESET_ALL}")
             self.batchs = self.refresh()
@@ -424,28 +468,57 @@ class Hyp3Base(Hyp3Processor):
         return self.output_dir
                 
     def watch(self, refresh_interval: int = 300):
+        """
+        Continuously monitor jobs and download completed outputs.
+
+        Periodically refreshes job status and downloads succeeded jobs
+        every `refresh_interval` seconds until all jobs are completed.
+
+        Args:
+            refresh_interval (int): Time interval (in seconds) between refreshes.
+        """
         print(f"{Fore.GREEN}Watching job status every {refresh_interval} seconds. Press Ctrl+C to stop.{Fore.RESET}")
+        downloaded_jobs = set()
         try:
             while True:
                 with open(os.devnull, 'w') as f, redirect_stdout(f):
                     self.refresh()
-                    self.download()
                 
                 total_jobs = 0
                 active_jobs = 0
                 failed_jobs = 0
                 succeeded_jobs = 0
+
+                temp_batchs = defaultdict(Batch)
                 
                 for username, batch in self.batchs.items():
                     total_jobs += len(batch)
-                    active_jobs += len(batch.filter_jobs(status_code=['RUNNING', 'PENDING']))
-                    failed_jobs += len(batch.filter_jobs(status_code='FAILED'))
-                    succeeded_jobs += len(batch.filter_jobs(status_code='SUCCEEDED'))
+                    active_jobs += len(batch.filter_jobs(running=True, pending=True, succeeded=False, failed=False))
+                    failed_jobs += len(batch.filter_jobs(running=False, pending=False, succeeded=False, failed=True))
+                    succeeded = batch.filter_jobs(running=False, pending=False, succeeded=True, failed=False)
+    
+                    succeeded_jobs += len(succeeded)
+                    new_for_user = [job for job in succeeded if job.job_id not in downloaded_jobs]
+
+                    if new_for_user:
+                    # FIX 1: wrap in Batch, not a plain list
+                        temp_batchs[username] = Batch(new_for_user)
+                        for job in new_for_user:
+                            downloaded_jobs.add(job.job_id)
+
+                if temp_batchs:
+                    newly_count = sum(len(b) for b in temp_batchs.values())
+                    print(f"{Fore.GREEN}Found {newly_count} new succeeded job(s). Downloading...{Fore.RESET}")
+                    # Wrap in a temporary batch dict to reuse download()
+                    old_batchs   = self.batchs
+                    self.batchs  = temp_batchs
+                    self.download()
+                    self.batchs  = old_batchs
                 
                 timestamp = time.strftime("%H:%M:%S")
                 print(f"[{timestamp}] Progress: {Fore.CYAN}{succeeded_jobs}/{total_jobs} Done{Fore.RESET} | "
-                    f"{Fore.YELLOW}{active_jobs} Running{Fore.RESET} | "
-                    f"{Fore.RED}{failed_jobs} Failed{Fore.RESET}", end='\r')
+                  f"{Fore.YELLOW}{active_jobs} Running{Fore.RESET} | "
+                  f"{Fore.RED}{failed_jobs} Failed{Fore.RESET}")
 
                 if active_jobs == 0 and total_jobs > 0:
                     print(f"\n{Fore.GREEN}All jobs processed!{Fore.RESET}")

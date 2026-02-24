@@ -23,7 +23,32 @@ class Hyp3_InSAR(Hyp3Base):
                 raise ValueError(f"{Fore.RED}Unsupported looks configuration: {self.config.looks}. Please provide a valid cost for this looks setting.{Fore.RESET}")
                 
     def submit(self):
-        """Submit InSAR jobs to HyP3 based on the provided configuration."""
+        """
+        Submit InSAR jobs to HyP3 based on the current configuration.
+
+        Prepares job payloads from the `pairs` in the configuration
+        and submits them via `_submit_job_queue`, handling user rotation,
+        batching, and credit checks.
+
+        The job names are automatically generated using the `name_prefix`
+        and scene IDs.
+
+        Raises:
+            ValueError: If `self.config.pairs` is not a tuple of two strings
+                        or a list of tuples of two strings.
+
+        Returns:
+            dict:
+                A dictionary mapping usernames to lists of submitted `Batch` objects.
+
+        Example:
+            ```python
+            processor = Hyp3InSARProcessor(config)
+            batches = processor.submit()
+            for user, batch in batches.items():
+                print(f"{user} submitted {len(batch)} jobs")
+            ```
+        """
         
         # Normalize pairs input
         if isinstance(self.config.pairs, (list, tuple)) and all(isinstance(p, str) for p in self.config.pairs):

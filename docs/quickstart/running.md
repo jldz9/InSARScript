@@ -145,7 +145,7 @@ After locating SAR scene stack(s), the next step is to generate unwrapped interf
 
 HyP3 is an online processing platform provided by ASF. InSARSciprt has wrapped [hyp3_sdk](https://github.com/ASFHyP3/hyp3-sdk) as a `Processor`:
 
-Hyp3 InSAR Processor takes a `reference_granule_id` and a `secondary_granule_id` to generate an interferogram pair. To automate the pair selection process: 
+Hyp3 InSAR Processor takes a pair of `reference_granule_id` and a `secondary_granule_id` to generate an interferogram. To automate the pair selection process: 
 
 ```python
 from insarscript.utils import select_pairs, plot_pair_network

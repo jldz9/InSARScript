@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 import time
 import logging
+import zipfile
+import shutil
 
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -20,6 +22,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import networkx as nx
 import numpy as np
+import rasterio
+from rasterio.mask import mask
 from asf_search import ASFProduct, ASFSearchError
 from asf_search.baseline.calc import calculate_perpendicular_baselines
 from box import Box as Config
@@ -675,7 +679,8 @@ def plot_pair_network(
     """
 
     # ── 0. Normalise input ────────────────────────────────────────────────
-    save_path = Path(save_path).expanduser()
+    if save_path is not None:
+        save_path = Path(save_path).expanduser()
     
     if isinstance(pairs, dict):
         flat_pairs: list[Pair] = []
@@ -922,7 +927,7 @@ def plot_pair_network(
         )
 
     if save_path:
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        fig.savefig(save_path.as_posix(), dpi=300, bbox_inches="tight")
         print(f"Saved → {save_path}")
 
     return fig
@@ -970,6 +975,119 @@ def earth_credit_pool(earthdata_credentials_pool_path = Path.home().joinpath('.c
             key, value = line.strip().split(':')
             earthdata_credentials_pool[key] = value
     return earthdata_credentials_pool
+
+def clip_hyp3_insar(workdir: Path | str, aoi: list[float] | str | Path, file_suffixes=None):
+    """
+    Clips Hyp3 zip contents to an AOI and saves them in a MintPy-ready structure.
+    
+    Args:
+        workdir (Path | str): Path to folder containing Hyp3 .zip files.
+        aoi (list[float] | str | Path): AOI coordinates or path to AOI file (geojson/shp). Can be EPSG:4326.
+        file_suffixes (list): List of file suffixes to process. 
+                              Default includes standard MintPy requirements.
+    """
+    if file_suffixes is None:
+        file_suffixes = [
+            '_unw_phase.tif', '_corr.tif', '_dem.tif', 
+            '_lv_theta.tif', '_lv_phi.tif', '_water_mask.tif'
+        ]
+    print(f"Loading AOI: {aoi}")
+    raw_aoi = gpd.read_file(aoi) if isinstance(aoi, (str, Path)) else gpd.GeoDataFrame({'geometry': [box(*aoi, ccw=True)]}, crs="EPSG:4326")
+
+    if isinstance(workdir, str):
+        workdir = Path(workdir).expanduser().resolve()
+
+    outdir = workdir.joinpath('clipped')
+    outdir.mkdir(exist_ok=True)
+    zip_files = list(workdir.glob("*.zip"))
+
+    with tqdm(zip_files, unit="zip") as pbar:
+
+        for zip_path in pbar:
+            
+            base_name = zip_path.stem
+            pbar.set_description(f"Processing {base_name[:20]}...")
+            temp_dir = outdir.joinpath("temp_processing", base_name)
+            temp_dir.mkdir(parents=True, exist_ok=True)
+
+            files_processed_count = 0
+            for suffix in file_suffixes:
+                internal_path = f"{base_name}/{base_name}{suffix}"
+                full_zip_url = f"zip+file://{zip_path.as_posix()}!/{internal_path}"
+                temp_output_path = temp_dir / f"{base_name}{suffix}"
+
+                try:
+                    with rasterio.open(full_zip_url) as src:
+                        # --- CRS & CLIP ---
+                        # Project AOI to match raster CRS
+                        aoi_projected = raw_aoi.to_crs(src.crs)
+
+                        # Clip
+                        # If AOI doesn't overlap, mask() raises ValueError
+                        out_image, out_transform = mask(src, aoi_projected.geometry, crop=True)
+                        out_meta = src.meta.copy()
+
+                        pred = 3 if "float" in out_meta['dtype'] else 2
+
+                        out_meta.update({
+                            "driver": "GTiff",
+                            "height": out_image.shape[1],
+                            "width": out_image.shape[2],
+                            "transform": out_transform,
+                            "compress": "deflate", 
+                            "predictor": pred,
+                            "tiled": True
+                        })
+
+                        with rasterio.open(temp_output_path, "w", **out_meta) as dest:
+                            dest.write(out_image)
+
+                        files_processed_count += 1
+                except ValueError:
+                # Skip if file missing in zip or AOI doesn't overlap
+                    pass
+
+
+            try:
+                with zipfile.ZipFile(zip_path, 'r') as z:
+                    # The file is usually named "S1AA_... .txt"
+                    txt_filename = f"{base_name}/{base_name}.txt"
+                    try:
+                        # Extract to temp_dir, but zipfile extracts with full path structure
+                        # so we need to move it or read/write it manually to flatten structure
+                        source = z.read(txt_filename)
+                        with open(temp_dir / f"{base_name}.txt", 'wb') as f:
+                            f.write(source)
+                    except KeyError:
+                        tqdm.write(f"Warning: {txt_filename} not found in {zip_path.name}")
+            except Exception as e:
+               tqdm.write(f"Error reading zip {zip_path.name}: {e}")
+
+            if files_processed_count > 0:
+                new_zip_path = outdir / zip_path.name
+                
+                with zipfile.ZipFile(new_zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    for file_path in temp_dir.glob("*"):
+                        # Force internal zip structure to use forward slashes
+                        # irrespective of the OS running the script
+                        arcname = f"{base_name}/{file_path.name}"
+                        zf.write(file_path, arcname=arcname)
+                
+            else:
+                 tqdm.write(f"Skipping {base_name} (No AOI overlap)")
+
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+
+    parent_temp = outdir / "temp_processing"
+    if parent_temp.exists():
+        shutil.rmtree(parent_temp)
+
+    print("\nBatch Processing Complete.")
+
+        
+
+
 
 @dataclass
 class Slurmjob_Config:

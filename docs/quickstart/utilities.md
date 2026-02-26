@@ -36,7 +36,7 @@ Plot selected interferogram pairs SBAS network from select_pairs based on tempor
 
 from insarscript.utils import plot_pair_network
 
-fig = plot_pair_network(pairs=pairs, B=baselines)
+fig = plot_pair_network(pairs=pairs, baselines=baselines)
 ```
 
 Example: 

@@ -26,7 +26,6 @@ import rasterio
 from rasterio.mask import mask
 from asf_search import ASFProduct, ASFSearchError
 from asf_search.baseline.calc import calculate_perpendicular_baselines
-from box import Box as Config
 from colorama import Fore
 from shapely.geometry import box
 from shapely import wkt

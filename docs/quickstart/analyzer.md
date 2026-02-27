@@ -85,10 +85,10 @@ InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's 
             show_source: false
             heading_level: 5
 
-### Hyp3_SBAS_Analyzer
- The `Hyp3_SBAS_Analyzer` is specialized analyzer that extends Mintpy_SBAS_Base_Analyzer, preconfigured specifically for processing Time-series data for Hyp3 InSAR product.
+### Hyp3_SBAS
+ The `Hyp3_SBAS` is specialized analyzer that extends Mintpy_SBAS_Base_Analyzer, preconfigured specifically for processing Time-series data for Hyp3 InSAR product.
 
-::: insarscript.analyzer.Hyp3_SBAS_Analyzer
+::: insarscript.analyzer.Hyp3_SBAS
     options:
         members: false
         heading_level: 0
@@ -100,21 +100,21 @@ InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's 
     Initialize a analyzer instance
 
     ```python
-    analyzer = Analyzer.create('Hyp3_SBAS_Analyzer', 
+    analyzer = Analyzer.create('Hyp3_SBAS', 
                                 workdir="/your/work/dir")
     
     ```
     OR
     ```python
     params = {"workdir":"/your/work/dir"}
-    analyzer = Analyzer.create('Mintpy_SBAS_Base_Analyzer', **params)
+    analyzer = Analyzer.create('Hyp3_SBAS', **params)
     ```
     OR
 
     ```python
     from insarscript.config import Mintpy_SBAS_Base_Config
     cfg = Mintpy_SBAS_Base_Config(workdir="/your/work/dir")
-    analyzer = Analyzer.create('Mintpy_SBAS_Base_Analyzer', config=cfg)
+    analyzer = Analyzer.create('Hyp3_SBAS', config=cfg)
     ```
 
     - **Prepare data**
@@ -124,7 +124,7 @@ InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's 
     analyzer.prep_data()
     ```
 
-    ::: insarscript.analyzer.Hyp3_SBAS_Analyzer.prep_data
+    ::: insarscript.analyzer.Hyp3_SBAS.prep_data
             options:
                 members: false
                 heading_level: 5
@@ -136,7 +136,7 @@ InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's 
     analyzer.run()
     ```
 
-    ::: insarscript.analyzer.Hyp3_SBAS_Analyzer.run
+    ::: insarscript.analyzer.Hyp3_SBAS.run
         options:
             members: false
             heading_level: 5

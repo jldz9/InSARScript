@@ -13,7 +13,7 @@ from tqdm import tqdm
 from .mintpy_base import Mintpy_SBAS_Base_Analyzer
 from insarscript.config.defaultconfig import Hyp3_SBAS_Config
 
-class Hyp3_SBAS_Analyzer(Mintpy_SBAS_Base_Analyzer):
+class Hyp3_SBAS(Mintpy_SBAS_Base_Analyzer):
     name = 'Hyp3_SBAS'
     default_config = Hyp3_SBAS_Config
     required = ['unw_phase.tif', 'corr.tif',  'dem.tif'] # also need meta files to get the date and other info

@@ -103,7 +103,7 @@ from .processor import (
 
 from .analyzer import (
     Mintpy_SBAS_Base_Analyzer,
-    Hyp3_SBAS_Analyzer,
+    Hyp3_SBAS,
     Hyp3_SBAS_Config
     
 )
@@ -131,7 +131,7 @@ __all__ = [
     "Hyp3_InSAR", 
     "Mintpy_SBAS_Base_Config",
     "Mintpy_SBAS_Base_Analyzer",
-    "Hyp3_SBAS_Analyzer",
+    "Hyp3_SBAS",
     "Hyp3_SBAS_Config",
 
 ]

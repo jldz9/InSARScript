@@ -132,7 +132,7 @@ from insarscript import Analyzer
 - Create Analyzer
 
     ```python
-    analyzer = Analyzer.create('Hyp3_SBAS_Analyzer', workdir="/your/work/dir")
+    analyzer = Analyzer.create('Hyp3_SBAS', workdir="/your/work/dir")
     ```
 - Prepare data
 

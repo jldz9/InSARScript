@@ -30,6 +30,7 @@ InSAR Script is currently under active development, to set up a the latest dev v
 git clone https://github.com/jldz9/InSARScript.git
 cd InSARScript
 conda env create -f environment.yml -n insar_dev
+conda activate insar_dev
 pip install -e .
 ```
 

@@ -151,5 +151,14 @@ processor = Processor.create('Hyp3_InSAR', config=cfg)
             show_source: false
             heading_level: 5
 
+- **Load saved job**
+    Load previously saved json file and resume the work. 
+
+    ```python
+    processor = Processor.create('Hyp3_InSAR', saved_job_path='path/to/your/json/file.json')
+    ```
+
+    when load back saved job, you can resume the work to check/download jobs submitted to Hyp3 Server.
 
 *[HyP3]: Hybrid Pluggable Processing Pipeline
+

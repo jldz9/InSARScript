@@ -1084,9 +1084,6 @@ def clip_hyp3_insar(workdir: Path | str, aoi: list[float] | str | Path, file_suf
 
     print("\nBatch Processing Complete.")
 
-        
-
-
 
 @dataclass
 class Slurmjob_Config:

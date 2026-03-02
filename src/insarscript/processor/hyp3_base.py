@@ -440,7 +440,6 @@ class Hyp3Base(Hyp3Processor):
                             try:
                                 future.result()
                                 if _is_valid_zip(dest):
-                                    tqdm.write(f"{Fore.GREEN}  ✓ {fname} downloaded and verified.{Style.RESET_ALL}")
                                     overall_results["downloaded"] += 1
                                 else:
                                     tqdm.write(f"{Fore.RED}  ✗ {fname} failed ZIP check, deleting.{Style.RESET_ALL}")

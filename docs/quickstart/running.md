@@ -86,26 +86,26 @@ This will output the summary of availiable Sentinel-1 scenes that covers the AOI
 ??? output
     ```bash
     === ASCENDING ORBITS (14 Stacks) ===
-    Path 20 Frame 117 | Count: 10 | 2015-04-05 --> 2016-11-19
-    Path 20 Frame 118 | Count: 155 | 2016-12-13 --> 2026-02-12
-    Path 20 Frame 119 | Count: 2 | 2015-03-24 --> 2015-12-25
-    Path 20 Frame 120 | Count: 12 | 2014-10-31 --> 2016-09-14
-    Path 20 Frame 121 | Count: 6 | 2015-04-05 --> 2015-08-27
-    Path 20 Frame 122 | Count: 4 | 2016-05-05 --> 2016-11-19
-    Path 20 Frame 123 | Count: 150 | 2016-12-13 --> 2026-02-12
-    Path 93 Frame 116 | Count: 85 | 2014-11-05 --> 2021-12-16
-    Path 93 Frame 117 | Count: 24 | 2015-03-29 --> 2026-02-17
-    Path 93 Frame 118 | Count: 5 | 2016-10-07 --> 2017-01-11
-    Path 93 Frame 119 | Count: 1 | 2017-02-10 --> 2017-02-10
-    Path 93 Frame 120 | Count: 14 | 2015-11-12 --> 2025-07-04
-    Path 93 Frame 121 | Count: 85 | 2014-11-05 --> 2021-12-16
-    Path 93 Frame 122 | Count: 21 | 2025-05-05 --> 2026-02-17
+    relativeOrbit 20 frame 117 | Count: 10 | 2015-04-05 --> 2016-11-19
+    relativeOrbit 20 frame 118 | Count: 156 | 2016-12-13 --> 2026-02-24
+    relativeOrbit 20 frame 119 | Count: 2 | 2015-03-24 --> 2015-12-25
+    relativeOrbit 20 frame 120 | Count: 12 | 2014-10-31 --> 2016-09-14
+    relativeOrbit 20 frame 121 | Count: 6 | 2015-04-05 --> 2015-08-27
+    relativeOrbit 20 frame 122 | Count: 4 | 2016-05-05 --> 2016-11-19
+    relativeOrbit 20 frame 123 | Count: 151 | 2016-12-13 --> 2026-02-24
+    relativeOrbit 93 frame 116 | Count: 85 | 2014-11-05 --> 2021-12-16
+    relativeOrbit 93 frame 117 | Count: 25 | 2015-03-29 --> 2026-03-01
+    relativeOrbit 93 frame 118 | Count: 5 | 2016-10-07 --> 2017-01-11
+    relativeOrbit 93 frame 119 | Count: 1 | 2017-02-10 --> 2017-02-10
+    relativeOrbit 93 frame 120 | Count: 14 | 2015-11-12 --> 2025-07-04
+    relativeOrbit 93 frame 121 | Count: 85 | 2014-11-05 --> 2021-12-16
+    relativeOrbit 93 frame 122 | Count: 22 | 2025-05-05 --> 2026-03-01
 
     === DESCENDING ORBITS (4 Stacks) ===
-    Path 100 Frame 464 | Count: 118 | 2015-11-24 --> 2026-02-11
-    Path 100 Frame 465 | Count: 20 | 2014-11-29 --> 2017-01-05
-    Path 100 Frame 466 | Count: 161 | 2017-02-22 --> 2022-07-02
-    Path 100 Frame 469 | Count: 118 | 2015-11-24 --> 2026-02-11
+    relativeOrbit 100 frame 464 | Count: 119 | 2015-11-24 --> 2026-02-23
+    relativeOrbit 100 frame 465 | Count: 20 | 2014-11-29 --> 2017-01-05
+    relativeOrbit 100 frame 466 | Count: 161 | 2017-02-22 --> 2022-07-02
+    relativeOrbit 100 frame 469 | Count: 119 | 2015-11-24 --> 2026-02-23
     ```
 
 The program identified 18 potential stacks (14 ascending, 4 descending). We can narrowed the dataset to the descending track Path 100, Frame 466 in year 2020 by:

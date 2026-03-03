@@ -31,7 +31,7 @@ InSARScript wrapped [asf_search](https://github.com/asfadmin/Discovery-asf_searc
 
     Initialize a downloader instance with search criteria
 ```python
-s1 = Downloader.create('ASF_base_Downloader', 
+s1 = Downloader.create('ASF_Base_Downloader', 
                         intersectsWith=[-113.05, 37.74, -112.68, 38.00],
                         dataset='SENTINEL-1',
                         instrument='C-SAR',
@@ -59,7 +59,7 @@ params = {
     "frame": 466,
     "workdir": "path/to/dir"
 }
-dl = Downloader.create('ASF_base_Downloader', **params)
+dl = Downloader.create('ASF_Base_Downloader', **params)
 ```
 OR
 ```python
@@ -75,7 +75,7 @@ cfg = ASF_Base_Config(intersectsWith=[-113.05, 37.74, -112.68, 38.00],
                         relativeOrbit=100, 
                         frame=466, 
                         workdir='path/to/dir')
-dl = Downloader.create('ASF_base_Downloader', config=cfg)
+dl = Downloader.create('ASF_Base_Downloader', config=cfg)
 ```
 
     The base configure `ASF_Base_Config` contains all parameters from asf_search keywords. For detailed descriptions and usage of each parameter, please refer to the [official ASF Search documentation](https://docs.asf.alaska.edu/asf_search/searching/#searching).

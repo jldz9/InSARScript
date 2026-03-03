@@ -30,7 +30,7 @@ class ASF_Base_Downloader(BaseDownloader):
     """
     Simplify searching and downloading satellite data using ASF Search API.
     """
-    name = "ASF_base_Downloader"
+    name = "ASF_Base_Downloader"
     default_config = ASF_Base_Config
     _DATASET_GROUP_KEYS = {
         'SENTINEL-1': ('pathNumber', 'frameNumber'),
@@ -312,7 +312,7 @@ Check documentation for how to setup .netrc file.\n""")
                     start_date = min(dates).date()
                     end_date = max(dates).date()
                     
-                    print(f"Path {key[0]} Frame {key[1]} | Count: {count} | {start_date} --> {end_date}")
+                    print(f"relativeOrbit {key[0]} frame {key[1]} | Count: {count} | {start_date} --> {end_date}")
                     
                     if ls:
                         # Sort scenes by date

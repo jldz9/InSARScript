@@ -17,6 +17,8 @@ dependencies = [
 "hyp3_sdk",
 "matplotlib",
 "mintpy",
+"panel>=1.4",
+"param",
 "rasterio>1.4",
 "sentineleof",
 ]
@@ -25,6 +27,10 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
+
+[project.scripts]
+insarscript = "insarscript.cli.main:main"
+insarscript-app = "insarscript.app.main:serve"
 
 [project.urls]
 homepage = "https://jldz9.github.io/InSARScript"

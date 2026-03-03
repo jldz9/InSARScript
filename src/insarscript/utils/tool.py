@@ -543,6 +543,7 @@ def select_pairs(
         return _near_target(dt) and dt <= dt_max and bp <= pb_max
 
     pairs_group: PairGroup = defaultdict(list)
+    baseline_group: dict[tuple[int, int], BaselineTable] = {}
 
     # ── process each (path, frame) key ───────────────────────────────────
     for key, search_result in working_dict.items():
@@ -572,7 +573,7 @@ def select_pairs(
 
         # ── 1. Build pairwise baseline table ─────────────────────────────
         B = _build_baseline_table(prods, ids, id_time_dt, max_workers=max_workers)
-
+        baseline_group[key] = B
         # ── 2. Primary pair selection ─────────────────────────────────────
         pairs: set[Pair] = {
             e for e, (dt, bp) in B.items() if _passes_primary(dt, bp)
@@ -601,7 +602,7 @@ def select_pairs(
         )
     pairs = pairs_group[(0, 0)] if input_is_list else pairs_group
 
-    return pairs, B
+    return pairs, baseline_group
 
 def get_config(config_path=None):
 
@@ -627,7 +628,7 @@ def plot_pair_network(
     title: str = "Interferogram Network",
     figsize: tuple[int, int] = (18, 7),
     save_path: str |Path| None = None,
-) -> plt.Figure:
+) -> plt.Figure| dict:
 
     """
     Plot an interferogram network along with per-scene connection statistics.
@@ -678,20 +679,58 @@ def plot_pair_network(
     """
 
     # ── 0. Normalise input ────────────────────────────────────────────────
-    if save_path is not None:
-        save_path = Path(save_path).expanduser()
     
     if isinstance(pairs, dict):
-        flat_pairs: list[Pair] = []
-        group_labels: list[str] = []
-        for (path, frame), pair_list in pairs.items():
-            flat_pairs.extend(pair_list)
-            group_labels.append(f"P{path}/F{frame}: {len(pair_list)} pairs")
-        subtitle = " | ".join(group_labels)
-    else:
-        flat_pairs = pairs
-        subtitle = f"{len(flat_pairs)} pairs"
+        figures = {}
 
+        save_path_obj = None
+        save_is_dir = False
+
+        if save_path is not None:
+            save_path_obj = Path(save_path).expanduser()
+
+            if save_path_obj.suffix == "":
+                save_is_dir = True
+                save_path_obj.mkdir(parents=True, exist_ok=True)
+            else:
+                # Has suffix → treat as file template
+                save_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+        for (path, frame), group_pairs in pairs.items():
+            group_title = f"{title} — P{path}/F{frame}"
+            group_save_path = None
+
+            if save_path_obj is not None:
+                if save_is_dir:
+                    # Case 1: directory given
+                    group_save_path = (
+                        save_path_obj.joinpath(f"network_P{path}_F{frame}.png")
+                    )
+                else:
+                    # Case 2: file with suffix given
+                    group_save_path = (
+                        save_path_obj.parent
+                        / f"{save_path_obj.stem}_P{path}_F{frame}{save_path_obj.suffix}"
+                    )
+
+            fig = plot_pair_network(
+                    pairs=group_pairs,
+                    baselines=baselines[(path, frame)],
+                    title=group_title,
+                    figsize=figsize,
+                    save_path=group_save_path,
+                )
+
+            figures[(path, frame)] = fig
+
+        return figures
+        
+
+
+    flat_pairs = pairs
+    subtitle = f"{len(flat_pairs)} pairs"
+    if save_path is not None:
+        save_path = Path(save_path).expanduser()
     # ── 1. Parse dates ────────────────────────────────────────────────────
     scenes: set[SceneID] = set()
     for a, b in flat_pairs:

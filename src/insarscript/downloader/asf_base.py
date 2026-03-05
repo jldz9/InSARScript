@@ -258,7 +258,7 @@ Check documentation for how to setup .netrc file.\n""")
             grouped[key].append(result)
         self.results = grouped
         if len(grouped) > 1: 
-            print(f"{Fore.YELLOW}The AOI crosses {len(grouped)} stacks, you can use .summary() or .footprint() to check footprints and .pick((path_frame)) to specific the stack of scence you would like to download. If use .download() directly will create subfolders under {self.config.workdir} for each stack")
+            print(f"{Fore.YELLOW}The AOI crosses {len(grouped)} stacks")
         return grouped
     
     def reset(self):

@@ -7,6 +7,7 @@ import time
 import threading
 import getpass
 import zipfile  
+import io
 from contextlib import redirect_stdout
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
@@ -51,7 +52,16 @@ class Hyp3Base(Hyp3Processor):
                 
                 # Update output_dir from save file if present, else use config
                 saved_out = data.get("out_dir")
-                self.output_dir = Path(saved_out).resolve() if saved_out else self.config.workdir
+                if saved_out:
+                    resolved = Path(saved_out).resolve()
+                    if not resolved.exists():
+                        print(f"{Fore.YELLOW}Warning: saved out_dir '{resolved}' does not exist. "
+                              f"Using config workdir instead.{Fore.RESET}")
+                        self.output_dir = self.config.workdir
+                    else:
+                        self.output_dir = resolved
+                else:
+                    self.output_dir = self.config.workdir
             else:
                 raise ValueError(f"{Fore.RED}Job file {self.config.saved_job_path} not found.\n")
         else:
@@ -481,7 +491,7 @@ class Hyp3Base(Hyp3Processor):
         downloaded_jobs = set()
         try:
             while True:
-                with open(os.devnull, 'w') as f, redirect_stdout(f):
+                with redirect_stdout(io.StringIO()):
                     self.refresh()
                 
                 total_jobs = 0

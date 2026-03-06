@@ -5,7 +5,7 @@ from pathlib import Path
 from colorama import Fore
 from eof.download import download_eofs
 
-from insarscript.config import S1_SLC_Config
+from insarhub.config import S1_SLC_Config
 from .asf_base import ASF_Base_Downloader
 
 class S1_SLC(ASF_Base_Downloader):

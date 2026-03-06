@@ -1,10 +1,10 @@
-The InSARScript analyzer module provides workflow for InSAR time-series analysis.
+The InSARHub analyzer module provides workflow for InSAR time-series analysis.
 
 - **Import analyzer**
 
     Import the Analyzer class to access all time-series analysis functionality
 ```python
-from insarscript import Analyzer
+from insarhub import Analyzer
 ```
 
 - **View Available Analyzers**
@@ -17,9 +17,9 @@ Analyzer.available()
 ## Available Analyzers
 
 ### Mintpy_SBAS_Base_Analyzer
-InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's analysis backends. The `Mintpy_SBAS_Base_Analyzer` is implemented on top of a reusable base configuration class, which provides the full `smallbaselineApp` logic of Mintpy. Provides users with an experience similar to using MintPy directly, allowing full customization of processing parameters and steps.
+InSARHub wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's analysis backends. The `Mintpy_SBAS_Base_Analyzer` is implemented on top of a reusable base configuration class, which provides the full `smallbaselineApp` logic of Mintpy. Provides users with an experience similar to using MintPy directly, allowing full customization of processing parameters and steps.
 
-::: insarscript.analyzer.mintpy_base.Mintpy_SBAS_Base_Analyzer
+::: insarhub.analyzer.mintpy_base.Mintpy_SBAS_Base_Analyzer
     options:
         members: false
         heading_level: 0
@@ -44,7 +44,7 @@ InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's 
     OR
 
     ```python
-    from insarscript.config import Mintpy_SBAS_Base_Config
+    from insarhub.config import Mintpy_SBAS_Base_Config
     cfg = Mintpy_SBAS_Base_Config(workdir="/your/work/dir",
                                   load_processor= "hyp3",
                                   ....)
@@ -53,7 +53,7 @@ InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's 
 
     The base configure `Mintpy_SBAS_Base_Config` contains all parameters from Mintpy `smallbaselineApp.cfg`. For detailed descriptions and usage of each parameters, please refer to the [official Mintpy config documentation](https://github.com/insarlab/MintPy/blob/054c6010b5e40e98fe16e283121fdd1ae4bc1732/src/mintpy/defaults/smallbaselineApp.cfg). 
 
-    ::: insarscript.config.Mintpy_SBAS_Base_Config
+    ::: insarhub.config.Mintpy_SBAS_Base_Config
         options:
             members: false
             heading_level: 0
@@ -65,7 +65,7 @@ InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's 
     analyzer.run()
     ```
 
-    ::: insarscript.analyzer.Mintpy_SBAS_Base_Analyzer.run
+    ::: insarhub.analyzer.Mintpy_SBAS_Base_Analyzer.run
         options:
             members: true
             show_source: false
@@ -79,7 +79,7 @@ InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's 
     analyzer.cleanup()
     ```
 
-    ::: insarscript.analyzer.Mintpy_SBAS_Base_Analyzer.cleanup
+    ::: insarhub.analyzer.Mintpy_SBAS_Base_Analyzer.cleanup
         options:
             members: true
             show_source: false
@@ -88,7 +88,7 @@ InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's 
 ### Hyp3_SBAS
  The `Hyp3_SBAS` is specialized analyzer that extends Mintpy_SBAS_Base_Analyzer, preconfigured specifically for processing Time-series data for Hyp3 InSAR product.
 
-::: insarscript.analyzer.Hyp3_SBAS
+::: insarhub.analyzer.Hyp3_SBAS
     options:
         members: false
         heading_level: 0
@@ -112,7 +112,7 @@ InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's 
     OR
 
     ```python
-    from insarscript.config import Mintpy_SBAS_Base_Config
+    from insarhub.config import Mintpy_SBAS_Base_Config
     cfg = Mintpy_SBAS_Base_Config(workdir="/your/work/dir")
     analyzer = Analyzer.create('Hyp3_SBAS', config=cfg)
     ```
@@ -124,7 +124,7 @@ InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's 
     analyzer.prep_data()
     ```
 
-    ::: insarscript.analyzer.Hyp3_SBAS.prep_data
+    ::: insarhub.analyzer.Hyp3_SBAS.prep_data
             options:
                 members: false
                 heading_level: 5
@@ -136,7 +136,7 @@ InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's 
     analyzer.run()
     ```
 
-    ::: insarscript.analyzer.Hyp3_SBAS.run
+    ::: insarhub.analyzer.Hyp3_SBAS.run
         options:
             members: false
             heading_level: 5
@@ -150,7 +150,7 @@ InSARScript wrapped [Mintpy](https://github.com/insarlab/MintPy) as one of it's 
     analyzer.cleanup()
     ```
 
-    ::: insarscript.analyzer.Mintpy_SBAS_Base_Analyzer.cleanup
+    ::: insarhub.analyzer.Mintpy_SBAS_Base_Analyzer.cleanup
         options:
             members: true
             show_source: false

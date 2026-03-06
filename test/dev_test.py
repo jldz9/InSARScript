@@ -16,7 +16,7 @@ import cartopy.crs as ccrs
 pn.extension()
 hv.extension('bokeh')
 
-from insarscript.utils.postprocess import _crs_from_attrs
+from insarhub.utils.postprocess import _crs_from_attrs
 
 # --- 1. Load Data with Xarray ---
 # We write a robust loader to handle MintPy's HDF5 structure

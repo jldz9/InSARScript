@@ -1,4 +1,4 @@
-from insarscript.core.base import BaseAnalyzer
+from insarhub.core.base import BaseAnalyzer
 from .base import BaseCommand, CommandResult
 
 

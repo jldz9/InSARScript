@@ -1,10 +1,10 @@
-The InSARScript Downloader module provides a streamlined interface for searching and downloading satellite data.
+The InSARHub Downloader module provides a streamlined interface for searching and downloading satellite data.
 
 - **Import downloader**
 
     Import the Downloader class to access all downloader functionality
 ```python
-from insarscript import Downloader
+from insarhub import Downloader
 ```
 
 - **View available downloaders**
@@ -18,9 +18,9 @@ Downloader.available()
 
 ### ASF Base Downloader
 
-InSARScript wrapped [asf_search](https://github.com/asfadmin/Discovery-asf_search) as one of its download backends. The `ASF_Base_Downloader` is implemented on top of a reusable base configuration class, which provides the full searching, filtering, and downloading logic of asf_search.
+InSARHub wrapped [asf_search](https://github.com/asfadmin/Discovery-asf_search) as one of its download backends. The `ASF_Base_Downloader` is implemented on top of a reusable base configuration class, which provides the full searching, filtering, and downloading logic of asf_search.
 
-::: insarscript.downloader.asf_base.ASF_Base_Downloader
+::: insarhub.downloader.asf_base.ASF_Base_Downloader
     options:
         heading_level: 0
         members: false
@@ -63,7 +63,7 @@ dl = Downloader.create('ASF_Base_Downloader', **params)
 ```
 OR
 ```python
-from insarscript.config import ASF_Base_Config
+from insarhub.config import ASF_Base_Config
 cfg = ASF_Base_Config(intersectsWith=[-113.05, 37.74, -112.68, 38.00],
                         dataset='SENTINEL-1',
                         instrument='C-SAR',
@@ -80,7 +80,7 @@ dl = Downloader.create('ASF_Base_Downloader', config=cfg)
 
     The base configure `ASF_Base_Config` contains all parameters from asf_search keywords. For detailed descriptions and usage of each parameter, please refer to the [official ASF Search documentation](https://docs.asf.alaska.edu/asf_search/searching/#searching).
 
-    ::: insarscript.config.ASF_Base_Config
+    ::: insarhub.config.ASF_Base_Config
         options:
             heading_level: 0
             members: false
@@ -93,7 +93,7 @@ dl = Downloader.create('ASF_Base_Downloader', config=cfg)
 results = dl.search()
 ```
 
-    ::: insarscript.downloader.ASF_Base_Downloader.search
+    ::: insarhub.downloader.ASF_Base_Downloader.search
         options:
             show_source: false
             heading_level: 5
@@ -105,7 +105,7 @@ results = dl.search()
 filter_result = dl.filter(start='2020-02-01')
 ```
 
-    ::: insarscript.downloader.ASF_Base_Downloader.filter
+    ::: insarhub.downloader.ASF_Base_Downloader.filter
         options:
             show_source: false
             heading_level: 5
@@ -116,7 +116,7 @@ filter_result = dl.filter(start='2020-02-01')
 ```python
 dl.reset()
 ```
-    ::: insarscript.downloader.ASF_Base_Downloader.reset
+    ::: insarhub.downloader.ASF_Base_Downloader.reset
         options:
             show_source: false
             heading_level: 5
@@ -127,7 +127,7 @@ dl.reset()
 ```python
 dl.summary()
 ```
-    ::: insarscript.downloader.ASF_Base_Downloader.summary
+    ::: insarhub.downloader.ASF_Base_Downloader.summary
         options:
             show_source: false
             heading_level: 5
@@ -139,7 +139,7 @@ dl.summary()
 dl.footprint()
 ```
 
-    ::: insarscript.downloader.ASF_Base_Downloader.footprint
+    ::: insarhub.downloader.ASF_Base_Downloader.footprint
             options:
                 show_source: false
                 heading_level: 5
@@ -151,7 +151,7 @@ dl.footprint()
 dl.download()
 ```
 
-    ::: insarscript.downloader.ASF_Base_Downloader.download
+    ::: insarhub.downloader.ASF_Base_Downloader.download
         options:
             show_source: false
             heading_level: 5
@@ -163,7 +163,7 @@ dl.download()
 ```python
 dl.dem()
 ```
-    ::: insarscript.downloader.ASF_Base_Downloader.dem
+    ::: insarhub.downloader.ASF_Base_Downloader.dem
         options:
             show_source: false
             heading_level: 5
@@ -172,7 +172,7 @@ dl.dem()
 
 S1_SLC is a specialized downloader that extends ASF_Base_Downloader, preconfigured specifically for downloading Sentinel-1 SLC data.
 
-::: insarscript.downloader.s1_slc.S1_SLC
+::: insarhub.downloader.s1_slc.S1_SLC
     options:
         show_source: true
         heading_level: 0
@@ -206,7 +206,7 @@ dl = Downloader.create('S1_SLC', **params)
 ```
 OR
 ```python
-from insarscript.config import S1_SLC_Config
+from insarhub.config import S1_SLC_Config
 cfg = S1_SLC_Config(intersectsWith= [-113.05, 37.74, -112.68, 38.00],
                     start= "2020-01-01",
                     end= "2020-12-31",
@@ -220,7 +220,7 @@ dl = Downloader.create('S1_SLC', config=cfg)
 
     The configure `S1_SLC_config` contains pre-defined parameters specifically for Sentinel-1 data. For detailed descriptions and usage of each parameter, please refer to the [official ASF Search documentation](https://docs.asf.alaska.edu/asf_search/searching/#searching).
 
-    ::: insarscript.downloader.s1_slc.S1_SLC_Config
+    ::: insarhub.downloader.s1_slc.S1_SLC_Config
         options:
             heading_level: 0
             members: false
@@ -233,7 +233,7 @@ dl = Downloader.create('S1_SLC', config=cfg)
 results = dl.search()
 ```
 
-    ::: insarscript.downloader.s1_slc.S1_SLC.search
+    ::: insarhub.downloader.s1_slc.S1_SLC.search
         options:
             show_source: false
             heading_level: 5
@@ -245,7 +245,7 @@ results = dl.search()
 filter_result = dl.filter(start='2020-02-01')
 ```
 
-    ::: insarscript.downloader.s1_slc.S1_SLC.filter
+    ::: insarhub.downloader.s1_slc.S1_SLC.filter
         options:
             show_source: false
             heading_level: 5
@@ -256,7 +256,7 @@ filter_result = dl.filter(start='2020-02-01')
 ```python
 dl.reset()
 ```
-    ::: insarscript.downloader.s1_slc.S1_SLC.reset
+    ::: insarhub.downloader.s1_slc.S1_SLC.reset
         options:
             show_source: false
             heading_level: 5
@@ -267,7 +267,7 @@ dl.reset()
 ```python
 dl.summary()
 ```
-    ::: insarscript.downloader.s1_slc.S1_SLC.summary
+    ::: insarhub.downloader.s1_slc.S1_SLC.summary
         options:
             show_source: false
             heading_level: 5
@@ -279,7 +279,7 @@ dl.summary()
 dl.footprint()
 ```
 
-    ::: insarscript.downloader.s1_slc.S1_SLC.footprint
+    ::: insarhub.downloader.s1_slc.S1_SLC.footprint
             options:
                 show_source: false
                 heading_level: 5
@@ -291,7 +291,7 @@ dl.footprint()
 dl.download()
 ```
 
-    ::: insarscript.downloader.s1_slc.S1_SLC.download
+    ::: insarhub.downloader.s1_slc.S1_SLC.download
         options:
             show_source: false
             heading_level: 5
@@ -303,7 +303,7 @@ dl.download()
 ```python
 dl.dem()
 ```
-    ::: insarscript.downloader.s1_slc.S1_SLC.dem
+    ::: insarhub.downloader.s1_slc.S1_SLC.dem
         options:
             show_source: false
             heading_level: 5

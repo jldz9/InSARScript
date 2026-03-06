@@ -6,8 +6,8 @@ Select interferogram pairs from ASF search results based on temporal and
     perpendicular baseline criteria.
 
 ```python
-from insarscript import Downloader
-from insarscript.utils import select_pairs 
+from insarhub import Downloader
+from insarhub.utils import select_pairs 
 s1 = Downloader.create('S1_SLC', 
                     intersectsWith=[-113.05, 37.74, -112.68, 38.00],
                     start='2020-01-01', 
@@ -21,7 +21,7 @@ pairs, baselines = select_pairs(search_results=results)
 
 ```
 
-::: insarscript.utils.select_pairs
+::: insarhub.utils.select_pairs
     options:
         members: flase
         heading_level: 0
@@ -34,7 +34,7 @@ Plot selected interferogram pairs SBAS network from select_pairs based on tempor
 
 ```python
 
-from insarscript.utils import plot_pair_network
+from insarhub.utils import plot_pair_network
 
 fig = plot_pair_network(pairs=pairs, baselines=baselines)
 ```
@@ -44,7 +44,7 @@ Example:
 ![networks](fig/ifgs_network.png){:  margin: auto;" }
 
 
-::: insarscript.utils.plot_pair_network
+::: insarhub.utils.plot_pair_network
     options:
         members: flase
         heading_level: 0
@@ -64,11 +64,11 @@ ec_pool = earth_credit_pool()
 You may then pass this into processor for seameless switch across multiple Earthdata credentials
 
 ```python
-from insarscript import Processor
+from insarhub import Processor
 processor= Processor.create('Hyp3_InSAR', earthdata_credentials_pool=ec_pool, ....)
 ```
 
-::: insarscript.utils.earth_credit_pool
+::: insarhub.utils.earth_credit_pool
     options:
         members: flase
         heading_level: 0
@@ -80,7 +80,7 @@ This class encapsulates all parameters needed to generate a SLURM batch script,
     execution commands.
 
 ```python
-from insarscript.utils import Slurmjob_Config
+from insarhub.utils import Slurmjob_Config
 config = SlurmJobConfig(
             job_name="my_analysis",
             time="02:00:00",
@@ -89,7 +89,7 @@ config = SlurmJobConfig(
 config.to_script("analysis.slurm")
 ```
 
-::: insarscript.utils.Slurmjob_Config
+::: insarhub.utils.Slurmjob_Config
     options:
         members: flase
         heading_level: 0

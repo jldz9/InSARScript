@@ -1,6 +1,6 @@
 
 
-## Welcome to InSARScript ! :tada:
+## Welcome to InSARHub ! :tada:
 InSAR Script is an open-source package designed to support the full InSAR processing pipeline.
 The primary goal of this package is to provide a streamlined and user-friendly InSAR processing experience across multiple satellite products.
 
@@ -20,7 +20,7 @@ This document will assume you have fundimental understanding of:
 
 ## System Requirement 
 
-InSARScript is designed to run on Unix-based systems. Internet connection is required. 
+InSARHub is designed to run on Unix-based systems. Internet connection is required. 
 Windows compatibility is under testing and may not function reliably.
 
 The package has been tested under Ubuntu 22.04.4 LTS 
@@ -42,7 +42,7 @@ This package is provided "as-is" without any warranties, express or implied. The
 
 ## Need Help? 
 
-Meanwhile, if you have any question relate to the package or the documentation, please feel free to submit [![GitHub](https://img.shields.io/badge/Issue-%2312100E?logo=github&logoColor=black&color=white)](https://github.com/jldz9/InSARScript/issues), 
+Meanwhile, if you have any question relate to the package or the documentation, please feel free to submit [![GitHub](https://img.shields.io/badge/Issue-%2312100E?logo=github&logoColor=black&color=white)](https://github.com/jldz9/InSARHub/issues), 
 join [![Discord](https://img.shields.io/badge/Discord-%235865F2?logo=discord&logoColor=white)](https://discord.gg/RJJM42MBUU), 
 or send me [![Email](https://img.shields.io/badge/Email-%23EA4335?logo=gmail&logoColor=white)](mailto:jiaweiliwork@outlook.com)
 

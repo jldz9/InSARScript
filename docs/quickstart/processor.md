@@ -1,11 +1,11 @@
-The InSARScript Processor module provides functionality specifically for interferogram processing.
+The InSARHub Processor module provides functionality specifically for interferogram processing.
 
 
 - **Import processor**
 
     Import the Processor class to access all dprocessor functionality
 ```python
-from insarscript import Processor
+from insarhub import Processor
 ```
 
 - **View available processors**
@@ -19,11 +19,11 @@ Processor.available()
 
 ### Hyp3_InSAR
 The HyP3 InSAR processor is a cloud-based processing service provided by the ASF HyP3 system for generating interferograms from Sentinel-1 SAR data.
-InSARScript wrapped [hyp3_sdk](https://github.com/ASFHyP3/hyp3-sdk) as one of its process backends. 
+InSARHub wrapped [hyp3_sdk](https://github.com/ASFHyP3/hyp3-sdk) as one of its process backends. 
 
 The `Hyp3_InSAR` is specificially wrap `insar_job` in hype_sdk to provide InSAR SLC processing workflows. 
 
-::: insarscript.processor.hyp3_insar.Hyp3_InSAR
+::: insarhub.processor.hyp3_insar.Hyp3_InSAR
     options:
         heading_level: 0
         members: false
@@ -46,20 +46,20 @@ processor = Processor.create('Hyp3_InSAR', **params)
 ```
 OR
 ```python
-from insarscript.config import Hyp3_InSAR_Config
+from insarhub.config import Hyp3_InSAR_Config
 cfg = Hyp3_InSAR_Config(workdir='/your/work/path', pairs=pairs)
 processor = Processor.create('Hyp3_InSAR', config=cfg)
 ```
 
 
 
-    ::: insarscript.config.Hyp3_Base_Config
+    ::: insarhub.config.Hyp3_Base_Config
         options:
             members: false
             show_source: false
             heading_level: 0
 
-    ::: insarscript.config.Hyp3_InSAR_Config
+    ::: insarhub.config.Hyp3_InSAR_Config
         options:
             members: false
             heading_level: 0
@@ -73,7 +73,7 @@ processor = Processor.create('Hyp3_InSAR', config=cfg)
     ```
 
 
-    ::: insarscript.processor.hyp3_insar.Hyp3_InSAR.submit
+    ::: insarhub.processor.hyp3_insar.Hyp3_InSAR.submit
         options:
                 members: false
                 show_source: false
@@ -87,7 +87,7 @@ processor = Processor.create('Hyp3_InSAR', config=cfg)
     jobs = processor.refresh()
     ```
 
-    ::: insarscript.processor.hyp3_insar.Hyp3_InSAR.refresh
+    ::: insarhub.processor.hyp3_insar.Hyp3_InSAR.refresh
         options:
                 members: false
                 show_source: false
@@ -101,7 +101,7 @@ processor = Processor.create('Hyp3_InSAR', config=cfg)
     jobs = processor.retry()
     ```
 
-    ::: insarscript.processor.hyp3_insar.Hyp3_InSAR.retry
+    ::: insarhub.processor.hyp3_insar.Hyp3_InSAR.retry
         options:
                 members: false
                 show_source: false
@@ -116,7 +116,7 @@ processor = Processor.create('Hyp3_InSAR', config=cfg)
     processor.download()
     ```
 
-    ::: insarscript.processor.hyp3_insar.Hyp3_InSAR.download
+    ::: insarhub.processor.hyp3_insar.Hyp3_InSAR.download
         options:
                 members: false
                 show_source: false
@@ -130,7 +130,7 @@ processor = Processor.create('Hyp3_InSAR', config=cfg)
     processor.save()
     ```
 
-    ::: insarscript.processor.hyp3_insar.Hyp3_InSAR.save
+    ::: insarhub.processor.hyp3_insar.Hyp3_InSAR.save
         options:
                 members: false
                 show_source: false
@@ -145,7 +145,7 @@ processor = Processor.create('Hyp3_InSAR', config=cfg)
     processor.watch()
     ```
 
-    ::: insarscript.processor.hyp3_insar.Hyp3_InSAR.watch
+    ::: insarhub.processor.hyp3_insar.Hyp3_InSAR.watch
         options:
             members: false
             show_source: false

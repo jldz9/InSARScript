@@ -11,7 +11,7 @@ from osgeo import gdal
 from tqdm import tqdm
 
 from .mintpy_base import Mintpy_SBAS_Base_Analyzer
-from insarscript.config.defaultconfig import Hyp3_SBAS_Config
+from insarhub.config.defaultconfig import Hyp3_SBAS_Config
 
 class Hyp3_SBAS(Mintpy_SBAS_Base_Analyzer):
     name = 'Hyp3_SBAS'

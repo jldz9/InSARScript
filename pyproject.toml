@@ -3,7 +3,7 @@ requires = ['setuptools>=61.0', 'wheel']
 build-backend = 'setuptools.build_meta'
 
 [project]
-name = "insarscript"
+name = "insarhub"
 dynamic= ["version"]
 authors = [{name="jldz9", email="Jiaweiliwork@outlook.com"}]
 description = "Hassle-free InSAR processing scripts for multiple satellites"
@@ -29,8 +29,8 @@ classifiers = [
 ]
 
 [project.scripts]
-insarscript = "insarscript.cli.main:main"
-insarscript-app = "insarscript.app.main:serve"
+insarhub = "insarhub.cli.main:main"
+insarhub-app = "insarhub.app.main:serve"
 
 [project.urls]
 homepage = "https://jldz9.github.io/InSARScript"
@@ -40,4 +40,4 @@ repository = "https://github.com/jldz9/InSARScript"
 where = ['src']
 
 [tool.setuptools.dynamic]
-version = {attr = "insarscript._version.__version__"}
+version = {attr = "insarhub._version.__version__"}

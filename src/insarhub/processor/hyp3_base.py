@@ -20,8 +20,8 @@ from hyp3_sdk import HyP3, Batch, Job
 from hyp3_sdk.exceptions import AuthenticationError, HyP3Error
 from tqdm import tqdm
 
-from insarscript.core import Hyp3Processor
-from insarscript.config import Hyp3_Base_Config
+from insarhub.core import Hyp3Processor
+from insarhub.config import Hyp3_Base_Config
 
 
 class Hyp3Base(Hyp3Processor):

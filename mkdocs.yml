@@ -1,7 +1,7 @@
-site_name: InSARScript
-repo_url: https://github.com/jldz9/InSARScript
-repo_name: jldz9/InSARScript
-site_url: https://jldz9.github.io/InSARScript/
+site_name: InSARHub
+repo_url: https://github.com/jldz9/InSARHub
+repo_name: jldz9/InSARHub
+site_url: https://jldz9.github.io/InSARHub/
 theme:
   name: material
   font:

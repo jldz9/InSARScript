@@ -6,9 +6,9 @@ is no duplicated business logic.
 
 Launch
 ------
-    insarscript-app                  # starts on http://localhost:5006
-    insarscript-app --port 8080
-    panel serve src/insarscript/app/main.py --port 5006 --allow-websocket-origin='*'
+    insarhub-app                  # starts on http://localhost:5006
+    insarhub-app --port 8080
+    panel serve src/insarhub/app/main.py --port 5006 --allow-websocket-origin='*'
 """
 
 import argparse
@@ -122,8 +122,8 @@ class DownloaderPage(pn.viewable.Viewer):
     # -- handlers --
 
     def _on_search(self, event):
-        from insarscript import Downloader
-        from insarscript.commands import SearchCommand
+        from insarhub import Downloader
+        from insarhub.commands import SearchCommand
 
         self._btn_search.disabled = True
         self._log.value = ""
@@ -168,7 +168,7 @@ class DownloaderPage(pn.viewable.Viewer):
         _run_in_thread(_run)
 
     def _on_footprint(self, event):
-        from insarscript.commands import FootprintCommand
+        from insarhub.commands import FootprintCommand
         if self._downloader is None:
             return
 
@@ -182,7 +182,7 @@ class DownloaderPage(pn.viewable.Viewer):
         _run_in_thread(_run)
 
     def _on_summary(self, event):
-        from insarscript.commands import SummaryCommand
+        from insarhub.commands import SummaryCommand
         if self._downloader is None:
             return
 
@@ -194,14 +194,14 @@ class DownloaderPage(pn.viewable.Viewer):
         _run_in_thread(_run)
 
     def _on_reset(self, event):
-        from insarscript.commands import ResetCommand
+        from insarhub.commands import ResetCommand
         if self._downloader is None:
             return
         result = ResetCommand(self._downloader).run()
         _set_status(self._status, result)
 
     def _on_download(self, event):
-        from insarscript.commands import DownloadScenesCommand
+        from insarhub.commands import DownloadScenesCommand
         if self._downloader is None:
             return
 
@@ -289,7 +289,7 @@ class ProcessorPage(pn.viewable.Viewer):
         self._btn_credits.on_click(self._on_credits)
 
     def _build_processor(self, pairs=None):
-        from insarscript import Processor
+        from insarhub import Processor
 
         workdir  = Path(self._workdir.value or ".").expanduser().resolve()
         job_file = self._job_file.value.strip() or None
@@ -324,7 +324,7 @@ class ProcessorPage(pn.viewable.Viewer):
         return pairs or None
 
     def _on_submit(self, event):
-        from insarscript.commands import SubmitCommand, SaveJobsCommand
+        from insarhub.commands import SubmitCommand, SaveJobsCommand
 
         self._btn_submit.disabled = True
         self._log.value = ""
@@ -348,7 +348,7 @@ class ProcessorPage(pn.viewable.Viewer):
         _run_in_thread(_run)
 
     def _on_refresh(self, event):
-        from insarscript.commands import RefreshCommand
+        from insarhub.commands import RefreshCommand
 
         def _run():
             if self._processor is None:
@@ -360,7 +360,7 @@ class ProcessorPage(pn.viewable.Viewer):
         _run_in_thread(_run)
 
     def _on_download(self, event):
-        from insarscript.commands import DownloadResultsCommand
+        from insarhub.commands import DownloadResultsCommand
 
         def _run():
             if self._processor is None:
@@ -372,7 +372,7 @@ class ProcessorPage(pn.viewable.Viewer):
         _run_in_thread(_run)
 
     def _on_retry(self, event):
-        from insarscript.commands import RetryCommand
+        from insarhub.commands import RetryCommand
 
         def _run():
             if self._processor is None:
@@ -384,7 +384,7 @@ class ProcessorPage(pn.viewable.Viewer):
         _run_in_thread(_run)
 
     def _on_watch(self, event):
-        from insarscript.commands import WatchCommand
+        from insarhub.commands import WatchCommand
 
         self._btn_watch.disabled = True
 
@@ -403,7 +403,7 @@ class ProcessorPage(pn.viewable.Viewer):
         _run_in_thread(_run)
 
     def _on_save(self, event):
-        from insarscript.commands import SaveJobsCommand
+        from insarhub.commands import SaveJobsCommand
 
         if self._processor is None:
             return
@@ -411,7 +411,7 @@ class ProcessorPage(pn.viewable.Viewer):
         _set_status(self._status, result)
 
     def _on_credits(self, event):
-        from insarscript.commands import CheckCreditsCommand
+        from insarhub.commands import CheckCreditsCommand
 
         def _run():
             if self._processor is None:
@@ -477,7 +477,7 @@ class AnalyzerPage(pn.viewable.Viewer):
         self._btn_prep_and_analyze.on_click(self._on_prep_and_analyze)
 
     def _build_analyzer(self):
-        from insarscript import Analyzer
+        from insarhub import Analyzer
 
         workdir = Path(self._workdir.value or ".").expanduser().resolve()
         return Analyzer.create("Hyp3_SBAS", workdir=workdir)
@@ -489,7 +489,7 @@ class AnalyzerPage(pn.viewable.Viewer):
         return [s.strip() for s in text.splitlines() if s.strip()]
 
     def _on_prep(self, event):
-        from insarscript.commands import PrepDataCommand
+        from insarhub.commands import PrepDataCommand
 
         self._btn_prep.disabled = True
 
@@ -505,7 +505,7 @@ class AnalyzerPage(pn.viewable.Viewer):
         _run_in_thread(_run)
 
     def _on_analyze(self, event):
-        from insarscript.commands import AnalyzeCommand
+        from insarhub.commands import AnalyzeCommand
 
         self._btn_analyze.disabled = True
 
@@ -524,7 +524,7 @@ class AnalyzerPage(pn.viewable.Viewer):
         _run_in_thread(_run)
 
     def _on_prep_and_analyze(self, event):
-        from insarscript.commands import PrepDataCommand, AnalyzeCommand
+        from insarhub.commands import PrepDataCommand, AnalyzeCommand
 
         self._btn_prep_and_analyze.disabled = True
 
@@ -586,8 +586,8 @@ def create_app():
 # ---------------------------------------------------------------------------
 
 def serve():
-    """Entry point for the `insarscript-app` CLI command."""
-    parser = argparse.ArgumentParser(prog="insarscript-app",
+    """Entry point for the `insarhub-app` CLI command."""
+    parser = argparse.ArgumentParser(prog="insarhub-app",
                                      description="Launch the InSARScript Panel web UI")
     parser.add_argument("--port",  type=int, default=5006, help="Server port (default: 5006)")
     parser.add_argument("--host",  type=str, default="localhost", help="Bind address (default: localhost)")
@@ -605,7 +605,7 @@ def serve():
     )
 
 
-# Allow `panel serve src/insarscript/app/main.py` to discover the app
+# Allow `panel serve src/insarhub/app/main.py` to discover the app
 app = create_app()
 
 if __name__ == "__main__":

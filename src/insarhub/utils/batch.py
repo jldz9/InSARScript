@@ -14,8 +14,8 @@ from osgeo import gdal
 from pathlib import Path
 from tqdm import tqdm
 
-from insarscript import Downloader, Processor
-from insarscript.utils import select_pairs
+from insarhub import Downloader, Processor
+from insarhub.utils import select_pairs
 def hyp3_insar_batch_check(
         root_dir: str,
         download : bool = False,

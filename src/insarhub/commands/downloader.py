@@ -1,4 +1,4 @@
-from insarscript.core.base import BaseDownloader
+from insarhub.core.base import BaseDownloader
 from .base import BaseCommand, CommandResult
 
 

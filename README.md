@@ -1,4 +1,4 @@
-# InSARScript
+# InSARHub
 
 InSAR Script is an open-source package designed to support the full InSAR processing pipeline.
 The primary goal of this package is to provide a streamlined and user-friendly InSAR processing experience across multiple satellite products.
@@ -11,23 +11,23 @@ The primary goal of this package is to provide a streamlined and user-friendly I
 
 ## Installation 
 
-InSARScript can be installed using Conda:
+InSARHub can be installed using Conda:
 ```bash
-conda install insarscript -c conda-forge
+conda install insarhub -c conda-forge
 ```
 Pip: 
 
 ```bash
-Pip install insarscript
+Pip install insarhub
 conda install gdal
 ```
 
 From source: 
 
 ```bash
-git clone https://github.com/jldz9/InSARScript.git
-cd InSARScript
-conda env create -f environment.yml -n insarscript_dev
+git clone https://github.com/jldz9/InSARHub.git
+cd InSARHub
+conda env create -f environment.yml -n insarhub_dev
 ```
 
 ## Requirements
@@ -50,7 +50,7 @@ conda env create -f environment.yml -n insarscript_dev
 ### Downloader:
 
 ```python
-from insarscript import Downloader
+from insarhub import Downloader
 ```
 
 - View available downloaders
@@ -89,7 +89,7 @@ from insarscript import Downloader
 ### Processor:
 
 ```python
-from insarscript import Processor
+from insarhub import Processor
 ```
 - View available processors
     ```python
@@ -122,7 +122,7 @@ from insarscript import Processor
 ### Analyzer
 
 ```python
-from insarscript import Analyzer
+from insarhub import Analyzer
 ```
 - View available analyzers
     ```python
@@ -147,5 +147,5 @@ from insarscript import Analyzer
 
 ## Documentation 
 
-[InSARScript documentation](https://jldz9.github.io/InSARScript/)
+[InSARHub documentation](https://jldz9.github.io/InSARHub/)
 

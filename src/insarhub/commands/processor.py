@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from insarscript.core.base import Hyp3Processor
+from insarhub.core.base import Hyp3Processor
 from .base import BaseCommand, CommandResult
 
 

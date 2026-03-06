@@ -1,6 +1,6 @@
 This section provides an overview of the complete InSAR time-series processing workflow, guiding you through each stage of the analysis pipeline.
 
- [![Try Live Demo](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jldz9/InSARScript/blob/tutorial/InSARScript_Tutorial_V110.ipynb)
+ [![Try Live Demo](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jldz9/InSARHub/blob/tutorial/InSARHub_Tutorial_V110.ipynb)
 
 
 ## Modules 
@@ -11,7 +11,7 @@ The InSAR script is designed with three config-based main modules to cover the e
 You can click on each module to view detailed information later. For now, let's begin by running the program using the basic example.
 ## Workflow
 
-The basic workflow of InSARScript can be brifely described as: 
+The basic workflow of InSARHub can be brifely described as: 
 <div style="text-align: center;">
 ```mermaid
 graph
@@ -33,7 +33,7 @@ graph
 
 ### Set AOI
 
-InSARScript allows to define the AOI using **bounding box**, **shapefiles**, or **WKT**:
+InSARHub allows to define the AOI using **bounding box**, **shapefiles**, or **WKT**:
 
 #### Bounding box
 ```python
@@ -55,7 +55,7 @@ AOI = 'POLYGON((-113.05 37.74, -113.05 38.00, -112.68 38.00, -112.68 37.74, -113
 Once the AOI is defined, you can perform searches using the Downloader.
 
 ```python
-from insarscript import Downloader
+from insarhub import Downloader
 AOI = [-113.05, 37.74, -112.68, 38.00]
 s1 = Downloader.create('S1_SLC', intersectsWith=AOI)
 results = s1.search()
@@ -66,7 +66,7 @@ results = s1.search()
     -- A total of 991 results found. 
 
     The AOI crosses 18 stacks, you can use .summary() or .footprint() to check footprints and .pick((path_frame)) to specific the stack of scence 
-    you would like to download. If use .download() directly will create subfolders under /home/jldz9/dev/InSARScript for each stack
+    you would like to download. If use .download() directly will create subfolders under /home/jldz9/dev/InSARHub for each stack
     ```
 
 ### Result Filtering
@@ -139,7 +139,7 @@ s1.reset()
 
 ### Interferogram
 
-After locating SAR scene stack(s), the next step is to generate unwrapped interferograms in preparation for the time-series analysis. InSARScript currently support:
+After locating SAR scene stack(s), the next step is to generate unwrapped interferograms in preparation for the time-series analysis. InSARHub currently support:
 
 - **HyP3**: Use the [HyP3 platform](https://hyp3-docs.asf.alaska.edu/)
  provided by ASF to run the interferometric processing in the cloud and download the resulting interferograms.
@@ -151,7 +151,7 @@ HyP3 is an online processing platform provided by ASF. InSARSciprt has wrapped [
 Hyp3 InSAR Processor takes a pair of `reference_granule_id` and a `secondary_granule_id` to generate an interferogram. To automate the pair selection process: 
 
 ```python
-from insarscript.utils import select_pairs, plot_pair_network
+from insarhub.utils import select_pairs, plot_pair_network
 pair_stacks, B = select_pairs(filter_results, max_degree=5) # We set the maximum connections to 5 to limit interferograms
 fig = plot_pair_network(pair_stacks, B)
 fig.show()
@@ -163,7 +163,7 @@ If the network is healthy without any disconnections, you are ready to submit yo
 To submit your pairs to Hyp3 server for online interferogram processing:
 
 ```python
-from insarscript import Processor
+from insarhub import Processor
 for (path, frame), pairs in pair_stacks.items():   
     processor = Processor.create('Hyp3_InSAR', pairs=pairs, workdir=f'your/directory/p{path}_f{frame}')
     batch = processor.submit()
@@ -277,7 +277,7 @@ Once all downloads are complete, we are ready to move to time-series analysis!
 
 ### Time-series Analysis
 
-After generated all unwrapped interferograms, time-series analysis is recommended for long term deformation monitoring. InSARScript currently support:
+After generated all unwrapped interferograms, time-series analysis is recommended for long term deformation monitoring. InSARHub currently support:
 
 - [**Mintpy**](https://github.com/insarlab/MintPy): an open-source Python package for InSAR time-series analysis.
 
@@ -285,7 +285,7 @@ After generated all unwrapped interferograms, time-series analysis is recommende
 InSARSciprt has wrapped Mintpy's `SmallbaselineApp` as an analyzer, to connect Mintpy with Hyp3 product: 
 
 ```python
-from insarscript import Analyzer
+from insarhub import Analyzer
 workdir = 'your/directory/p*_f*'
 hyp3_sbas = Analyzer.create('Hyp3_SBAS', workdir=workdir)
 hyp3_sbas.prep_data()

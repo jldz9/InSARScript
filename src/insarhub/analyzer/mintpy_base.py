@@ -9,8 +9,8 @@ from colorama import Fore, Style
 from mintpy.utils import readfile
 from mintpy.smallbaselineApp import TimeSeriesAnalysis
 
-from insarscript.config.defaultconfig import Mintpy_SBAS_Base_Config
-from insarscript.core.base import BaseAnalyzer
+from insarhub.config.defaultconfig import Mintpy_SBAS_Base_Config
+from insarhub.core.base import BaseAnalyzer
 
 
 class Mintpy_SBAS_Base_Analyzer(BaseAnalyzer):

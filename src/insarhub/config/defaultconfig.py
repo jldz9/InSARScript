@@ -2,7 +2,7 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Union, Optional, Any
 from pathlib import Path
 from asf_search import constants
-from insarscript import _env
+from insarhub import _env
 
 @dataclass
 class ASF_Base_Config:

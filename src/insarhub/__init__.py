@@ -12,7 +12,7 @@ init(autoreset=True)
 from colorama import Fore, Style, Back
 
 logging.disable(logging.CRITICAL)
-from insarscript._version import __version__
+from insarhub._version import __version__
 _system_info = platform.system()
 
 # ---------------------MintPy Configuration---------------------------

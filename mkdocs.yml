@@ -37,16 +37,19 @@ theme:
   icon:
     repo: fontawesome/brands/github
 
-nav: 
+nav:
   - Home: index.md
-  - QuickStart: 
+  - QuickStart:
         - Installation: quickstart/install.md
         - API Setup: quickstart/api_setup.md
-        - Running: quickstart/running.md
-        - Downloader: quickstart/downloader.md
-        - Processor: quickstart/processor.md
-        - Analyzer: quickstart/analyzer.md
-        - Utilities: quickstart/utilities.md
+        - Running: 
+          - API: quickstart/running.md
+          - CLI: quickstart/cli.md
+  - Advanced:
+        - Downloader: advanced/downloader.md
+        - Processor: advanced/processor.md
+        - Analyzer: advanced/analyzer.md
+        - Utilities: advanced/utilities.md
 
   - About: about.md
 

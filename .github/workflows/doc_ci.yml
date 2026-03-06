@@ -32,7 +32,7 @@ jobs:
           path: .cache
           restore-keys: |
             mkdocs-material-
-      - run: pip install mkdocs-material mike mkdocstrings[python]
+      - run: pip install mkdocs-material mike mkdocstrings[python] pymdown-extensions
       - run: pip install -e .
       - run: |
            VERSION=${GITHUB_REF##*/}

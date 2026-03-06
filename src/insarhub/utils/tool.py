@@ -109,7 +109,7 @@ def _build_baseline_table_local(
     prods: list[ASFProduct],
     ids: set[SceneID],
     id_time_dt: dict[SceneID, DateFloat],
-) -> BaselineTable:
+) -> tuple[BaselineTable, dict]:
     """
     Compute the full pairwise (dt_days, bperp_m) table from data already
     stored on each ASFProduct — **zero network calls**.
@@ -145,7 +145,7 @@ def _build_baseline_table_local(
         logger.warning(
             "Local baseline calculation failed (%s); table will be empty.", exc
         )
-        return B
+        return B, {}
 
     for i, a in enumerate(prods):
         for b in prods[i + 1:]:
@@ -171,7 +171,11 @@ def _build_baseline_table_local(
     logger.info(
         "Local baseline table: %d pairs from %d scenes.", len(B), len(prods)
     )
-    return B
+    # Return signed per-scene bperp (relative to anchor prods[0]) alongside the table
+    scene_bperp: dict[SceneID, float] = {
+        k: float(v) for k, v in bp_vector.items() if v is not None
+    }
+    return B, scene_bperp
 
 
 def _build_baseline_table_api(
@@ -256,15 +260,15 @@ def _build_baseline_table(
     ids: set[SceneID],
     id_time_dt: dict[SceneID, DateFloat],
     max_workers: int,
-) -> BaselineTable:
+) -> tuple[BaselineTable, dict]:
     """
     Route each product to the fastest available baseline source.
 
     - Products with stateVectors or insarBaseline  →  local (no network)
     - Products missing that data                   →  API fallback (threaded)
 
-    The two result dicts are merged; API results take precedence for any
-    overlap (unlikely, but safe).
+    Returns (BaselineTable, scene_bperp) where scene_bperp maps scene name
+    to signed perpendicular baseline relative to the anchor scene.
     """
     local_prods = [p for p in prods if _has_local_baseline(p)]
     api_prods   = [p for p in prods if not _has_local_baseline(p)]
@@ -281,14 +285,17 @@ def _build_baseline_table(
         )
 
     B: BaselineTable = {}
+    scene_bperp: dict = {}
 
     if local_prods:
-        B.update(_build_baseline_table_local(local_prods, ids, id_time_dt))
+        local_B, local_bp = _build_baseline_table_local(local_prods, ids, id_time_dt)
+        B.update(local_B)
+        scene_bperp.update(local_bp)
 
     if api_prods:
         B.update(_build_baseline_table_api(api_prods, ids, id_time_dt, max_workers))
 
-    return B
+    return B, scene_bperp
 
 
 def _enforce_connectivity(
@@ -516,9 +523,25 @@ def select_pairs(
             data (common for Sentinel-1 and ALOS). Set to 1 to disable threading (useful for debugging).
 
     Returns:
-        list[Pair] | dict[tuple[int,int], list[Pair]]:
-            A flat list of Pair tuples (earlier_scene_name, later_scene_name) sorted by acquisition time, 
-            if search_results was a list. Otherwise, a dictionary keyed by (path, frame) with lists of Pair tuples.
+        tuple of three elements:
+
+        pairs (list[Pair] | dict[tuple[int,int], list[Pair]]):
+            A flat list of Pair tuples ``(earlier_scene, later_scene)`` if
+            *search_results* was a list, or a dict keyed by ``(path, frame)``
+            with lists of Pair tuples if *search_results* was a dict.
+
+        baselines (BaselineTable | dict[tuple[int,int], BaselineTable]):
+            Pairwise baseline table mapping ``(scene_a, scene_b)`` →
+            ``(dt_days, bperp_m)`` where ``bperp_m = |bp_a − bp_b|`` (always
+            positive). Mirrors the structure of *pairs* (flat or grouped).
+
+        scene_bperp (dict[str, float] | dict[tuple[int,int], dict[str, float]]):
+            Signed perpendicular baseline for each scene relative to the
+            anchor (earliest) scene, as returned by
+            ``calculate_perpendicular_baselines``. Values can be negative or
+            positive. Use this for network plots to reproduce the MintPy-style
+            y-axis (negative/positive spread around zero). Mirrors the
+            structure of *pairs* (flat or grouped).
     """
 
     # ── normalise input ───────────────────────────────────────────────────
@@ -544,6 +567,7 @@ def select_pairs(
 
     pairs_group: PairGroup = defaultdict(list)
     baseline_group: dict[tuple[int, int], BaselineTable] = {}
+    scene_bperp_group: dict[tuple[int, int], dict] = {}
 
     # ── process each (path, frame) key ───────────────────────────────────
     for key, search_result in working_dict.items():
@@ -572,8 +596,9 @@ def select_pairs(
         names: list[SceneID] = [p.properties["sceneName"] for p in prods]
 
         # ── 1. Build pairwise baseline table ─────────────────────────────
-        B = _build_baseline_table(prods, ids, id_time_dt, max_workers=max_workers)
+        B, scene_bp = _build_baseline_table(prods, ids, id_time_dt, max_workers=max_workers)
         baseline_group[key] = B
+        scene_bperp_group[key] = scene_bp
         # ── 2. Primary pair selection ─────────────────────────────────────
         pairs: set[Pair] = {
             e for e, (dt, bp) in B.items() if _passes_primary(dt, bp)
@@ -601,8 +626,9 @@ def select_pairs(
             "Key %s — final pair count: %d.", key, len(pairs_group[key])
         )
     pairs = pairs_group[(0, 0)] if input_is_list else pairs_group
+    scene_bperp = scene_bperp_group.get((0, 0), {}) if input_is_list else scene_bperp_group
 
-    return pairs, baseline_group
+    return pairs, baseline_group, scene_bperp
 
 def get_config(config_path=None):
 
@@ -624,7 +650,8 @@ def get_config(config_path=None):
 
 def plot_pair_network(
     pairs: list[Pair] | PairGroup,
-    baselines: BaselineTable,                           
+    baselines: BaselineTable,
+    scene_baselines: dict | None = None,
     title: str = "Interferogram Network",
     figsize: tuple[int, int] = (18, 7),
     save_path: str |Path| None = None,
@@ -716,6 +743,7 @@ def plot_pair_network(
             fig = plot_pair_network(
                     pairs=group_pairs,
                     baselines=baselines[(path, frame)],
+                    scene_baselines=scene_baselines.get((path, frame)) if isinstance(scene_baselines, dict) else scene_baselines,
                     title=group_title,
                     figsize=figsize,
                     save_path=group_save_path,
@@ -770,24 +798,27 @@ def plot_pair_network(
             G.add_edge(a, b, dt=dt, bp=bp, path=0, frame=0)
 
     # ── 3. Node positions (x=days, y=bperp) ──────────────────────────────
-    # Assign each scene a bperp position by averaging bperp of all its pairs.
-    # baselines stores absolute bperp; we recover a relative position by anchoring
-    # the earliest scene at y=0 and walking forward in time.
-    bperp_accum: dict[SceneID, list[float]] = defaultdict(list)
-    for (a, b), (dt, bp) in baselines.items():
-        if bp >= _MISSING:
-            continue
-        bperp_accum[a].append(-bp / 2.0)
-        bperp_accum[b].append(+bp / 2.0)
-
-    bperp_pos: dict[SceneID, float] = {
-        s: float(np.mean(v)) if v else 0.0
-        for s, v in bperp_accum.items()
-    }
-    # anchor earliest scene to y=0
-    sorted_by_time = sorted(scenes, key=lambda s: id_days[s])
-    offset = bperp_pos.get(sorted_by_time[0], 0.0)
-    bperp_pos = {s: bperp_pos.get(s, 0.0) - offset for s in scenes}
+    if scene_baselines:
+        # Use signed per-scene bperp relative to anchor — same as MintPy display
+        # (negative = scene orbited closer than anchor, positive = further)
+        bperp_pos: dict[SceneID, float] = {
+            s: float(scene_baselines.get(s, 0.0)) for s in scenes
+        }
+    else:
+        # Fallback: reconstruct from pairwise table (loses sign info, may trend upward)
+        bperp_accum: dict[SceneID, list[float]] = defaultdict(list)
+        for (a, b), (dt, bp) in baselines.items():
+            if bp >= _MISSING:
+                continue
+            bperp_accum[a].append(-bp / 2.0)
+            bperp_accum[b].append(+bp / 2.0)
+        bperp_pos = {
+            s: float(np.mean(v)) if v else 0.0
+            for s, v in bperp_accum.items()
+        }
+        sorted_by_time = sorted(scenes, key=lambda s: id_days[s])
+        offset = bperp_pos.get(sorted_by_time[0], 0.0)
+        bperp_pos = {s: bperp_pos.get(s, 0.0) - offset for s in scenes}
 
     pos: dict[SceneID, tuple[float, float]] = {
         s: (id_days[s], bperp_pos[s]) for s in scenes

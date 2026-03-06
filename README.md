@@ -7,6 +7,7 @@ The primary goal of this package is to provide a streamlined and user-friendly I
 - Installation
 - Requirements
 - Usage
+- CLI
 - Documentation
 
 ## Installation 
@@ -15,10 +16,10 @@ InSARHub can be installed using Conda:
 ```bash
 conda install insarhub -c conda-forge
 ```
-Pip: 
+Pip:
 
 ```bash
-Pip install insarhub
+pip install insarhub
 conda install gdal
 ```
 
@@ -145,7 +146,52 @@ from insarhub import Analyzer
     analyzer.run()
     ```
 
-## Documentation 
+## CLI
+
+InSARHub includes a command-line interface for running the full pipeline without writing Python code, suitable for HPC batch jobs and scripted workflows.
+
+```bash
+insarhub <command> [options]
+```
+
+### End-to-end example
+
+```bash
+# Search scenes and select interferogram pairs
+insarhub downloader -N S1_SLC \
+    --AOI -113.05 37.74 -112.68 38.00 \
+    --start 2020-01-01 --end 2020-12-31 \
+    --stacks 100:466 \
+    -w /data/bryce \
+    --select-pairs
+
+# Submit pairs to HyP3 (auto-reads pairs_p*_f*.json from workdir subfolders)
+insarhub processor submit -w /data/bryce
+
+# Wait for jobs and download results automatically
+insarhub processor watch -w /data/bryce
+
+# Run MintPy time-series analysis
+insarhub analyzer -N Hyp3_SBAS -w /data/bryce run
+```
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `insarhub downloader` | Search scenes, select pairs, and download data |
+| `insarhub processor submit` | Submit interferogram pairs to HyP3 |
+| `insarhub processor watch` | Poll HyP3 and download results when complete |
+| `insarhub analyzer run` | Prepare data and run MintPy SBAS analysis |
+| `insarhub utils clip` | Clip HyP3 zip contents to an AOI |
+| `insarhub utils select-pairs` | Select pairs from a saved search GeoJSON |
+| `insarhub utils plot-network` | Plot interferogram network |
+| `insarhub utils slurm` | Generate a SLURM batch script |
+| `insarhub utils era5-download` | Download ERA5 weather data for tropospheric correction |
+
+Use `insarhub <command> --help` for full option details, or see the [CLI Reference](https://jldz9.github.io/InSARHub/quickstart/cli/).
+
+## Documentation
 
 [InSARHub documentation](https://jldz9.github.io/InSARHub/)
 

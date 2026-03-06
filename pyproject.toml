@@ -11,6 +11,7 @@ readme = 'README.md'
 dependencies = [
 "numpy<2.0",
 "asf_search",
+"cdsapi",
 "colorama",
 "contextily",
 "dem_stitcher",
@@ -19,8 +20,9 @@ dependencies = [
 "mintpy",
 "panel>=1.4",
 "param",
-"rasterio>1.4",
+"rasterio>=1.4",
 "sentineleof",
+"tqdm",
 ]
 requires-python = ">=3.11"
 classifiers = [
@@ -33,8 +35,8 @@ insarhub = "insarhub.cli.main:main"
 insarhub-app = "insarhub.app.main:serve"
 
 [project.urls]
-homepage = "https://jldz9.github.io/InSARScript"
-repository = "https://github.com/jldz9/InSARScript"
+homepage = "https://jldz9.github.io/InSARHub"
+repository = "https://github.com/jldz9/InSARHub"
 
 [tool.setuptools.packages.find]
 where = ['src']

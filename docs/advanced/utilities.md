@@ -41,7 +41,7 @@ fig = plot_pair_network(pairs=pairs, baselines=baselines)
 
 Example: 
 
-![networks](fig/ifgs_network.png){:  margin: auto;" }
+![networks](../quickstart/fig/ifgs_network.png){:  margin: auto;" }
 
 
 ::: insarhub.utils.plot_pair_network

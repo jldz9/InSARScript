@@ -29,6 +29,10 @@ class Mintpy_SBAS_Base_Analyzer(BaseAnalyzer):
         self.clip_dir = self.workdir.joinpath('clip')
         self.cfg_path = self.workdir.joinpath('mintpy.cfg')
 
+    def prep_data(self):
+        """Write the MintPy config file to workdir."""
+        self.config.write_mintpy_config(self.cfg_path)
+
     def _cds_authorize(self):
         if self._check_cdsapirc:
            return True
@@ -102,7 +106,6 @@ class Mintpy_SBAS_Base_Analyzer(BaseAnalyzer):
         """
         if self.config.troposphericDelay_method == 'pyaps':
             self._cds_authorize()
-        self.config.write_mintpy_config(self.cfg_path)
 
         run_steps = steps or [
             'load_data', 'modify_network', 'reference_point', 'invert_network',

@@ -50,6 +50,7 @@ class Hyp3_SBAS(Mintpy_SBAS_Base_Analyzer):
         overlap_extent = self._get_common_overlap(files['dem'])
         self._clip_rasters(files, overlap_extent)
         self._set_load_parameters()
+        super().prep_data()
 
     def _unzip_hyp3(self):
         print(f'{Fore.CYAN}Unzipping HyP3 Products...{Fore.RESET}')

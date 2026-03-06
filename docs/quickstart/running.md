@@ -1,4 +1,4 @@
-This section provides an overview of the complete InSAR time-series processing workflow, guiding you through each stage of the analysis pipeline.
+This section provides an overview of the complete InSAR time-series processing workflow using Python API, guiding you through each stage of the analysis pipeline.
 
  [![Try Live Demo](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jldz9/InSARHub/blob/tutorial/InSARHub_Tutorial_V110.ipynb)
 
@@ -6,7 +6,7 @@ This section provides an overview of the complete InSAR time-series processing w
 ## Modules 
 The InSAR script is designed with three config-based main modules to cover the entire InSAR processing workflow:
 
-[Downloader](./downloader.md){.md-button .md-button--lg} [Processor](./processor.md){ .md-button .md-button--lg} [Analyzer](./analyzer.md){ .md-button .md-button--lg}
+[Downloader](../advanced/downloader.md){.md-button .md-button--lg} [Processor](../advanced/processor.md){ .md-button .md-button--lg} [Analyzer](../advanced/analyzer.md){ .md-button .md-button--lg}
 
 You can click on each module to view detailed information later. For now, let's begin by running the program using the basic example.
 ## Workflow

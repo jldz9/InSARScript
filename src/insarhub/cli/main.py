@@ -10,8 +10,18 @@ Pipeline subcommands
 insarhub downloader -N S1_SLC --AOI -113.05 37.74 -112.68 38.00 --start 2021-01-01 --end 2022-01-01
 insarhub downloader ... --select-pairs --download --orbit-files
 insarhub processor  -N Hyp3_InSAR --workdir /data/bryce
-insarhub analyzer   -N Hyp3_SBAS  --workdir /data/bryce --prep-first
-insarhub analyzer   -N Hyp3_SBAS  --workdir /data/bryce --prep-only
+insarhub analyzer   -N Hyp3_SBAS -w /data/bryce run
+insarhub analyzer   -N Hyp3_SBAS -w /data/bryce cleanup
+
+Utilities
+---------
+insarhub utils clip           --workdir /data/bryce --aoi -113.05 37.74 -112.68 38.00
+insarhub utils h5-to-raster   --input velocity.h5
+insarhub utils save-footprint --input velocity.h5
+insarhub utils select-pairs   --input results.geojson --dt-max 120 --pb-max 150 -o pairs.json
+insarhub utils plot-network   --input pairs.json -o network.png
+insarhub utils slurm          --job-name insar_run --cpus 8 --mem 32G --command "insarhub analyzer -N Hyp3_SBAS -w /data/bryce run"
+insarhub utils era5-download  -w /data/bryce -o /data/era5
 
 Job management (under processor)
 ---------------------------------
@@ -92,6 +102,9 @@ def create_parser() -> argparse.ArgumentParser:
     )
     g_dl.add_argument("-w", "--workdir", metavar="PATH",
                       help="Working directory (default: current directory)")
+    g_dl.add_argument("--config", metavar="PATH", nargs="?", const="__default__", default=None,
+                      help="Path to a saved downloader config JSON; "
+                           "omit the value to use <workdir>/downloader_config.json")
     g_dl.add_argument(
         "--AOI", nargs="+", metavar="AOI",
         help="Area of interest: shapefile/GeoJSON path, WKT string, or 4 floats W S E N. "
@@ -186,6 +199,9 @@ def create_parser() -> argparse.ArgumentParser:
     )
     g_sub.add_argument("-w", "--workdir", metavar="PATH", default=None,
                        help="Working directory (default: current directory)")
+    g_sub.add_argument("--config", metavar="PATH", nargs="?", const="__default__", default=None,
+                       help="Path to a saved processor config JSON; "
+                            "omit the value to use <workdir>/processor_config.json")
     g_sub.add_argument("--credential-pool", metavar="PATH",
                        help="JSON {username: password} for multi-account HyP3 submission")
     g_sub_common = p_proc_submit.add_argument_group("common processing options")
@@ -246,45 +262,270 @@ def create_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------ #
     # analyzer — prepare + run MintPy SBAS time-series analysis
     #
+    # Actions: prep | run | cleanup
     # Config fields for the chosen analyzer are passed as extra --KEY VALUE
-    # flags and resolved dynamically at runtime.
+    # flags (run only) and resolved dynamically at runtime.
     # ------------------------------------------------------------------ #
+    _step_table = (
+        "Available steps for --step:\n"
+        "\n"
+        "  Keyword       Description\n"
+        "  ----------    ----------------------------------------\n"
+        "  prep          Prepare HyP3 data (unzip, clip, configure)\n"
+        "  all           prep + all MintPy steps below (default if --step omitted)\n"
+        "\n"
+        "  MintPy step             \n"
+        "  --------------------\n"
+        + "".join(f"  {s}\n" for s in _MINTPY_ALL_STEPS)
+        + "\n"
+        "Examples:\n"
+        "  insarhub analyzer -N Hyp3_SBAS run\n"
+        "  insarhub analyzer -N Hyp3_SBAS --compute_maxMemory 30 run --step velocity\n"
+        "  insarhub analyzer -N Hyp3_SBAS --list-options\n"
+        "  insarhub analyzer -N Hyp3_SBAS cleanup\n"
+    )
     p_analyzer = sub.add_parser(
         "analyzer",
         help="Prepare data and run MintPy SBAS time-series analysis",
         description=(
-            "Run any registered analyzer (default: Hyp3_SBAS).\n"
-            "Analyzer config fields are passed as extra --KEY VALUE flags.\n"
-            "Run with --list-options to see all available fields."
+            "Prepare HyP3 data and run MintPy SBAS time-series analysis.\n"
+            "Select the analyzer and set config options here; then choose an action.\n"
+            "Config fields are passed as extra --KEY VALUE flags (see --list-options).\n"
+            "\nActions:\n"
+            "  run              Run analysis workflow (see --step below)\n"
+            "  cleanup          Remove temporary files\n"
+            "\n"
+            + _step_table
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-
-    g_az = p_analyzer.add_argument_group("analyzer")
-    g_az.add_argument(
-        "--list-analyzers", action="store_true",
-        help="Print all registered analyzers and exit",
-    )
-    g_az.add_argument(
+    p_analyzer.add_argument(
         "-N", "--name", metavar="STR", default="Hyp3_SBAS", dest="analyzer_name",
         help="Analyzer name (default: Hyp3_SBAS; see --list-analyzers)",
     )
-    g_az.add_argument(
-        "--list-options", action="store_true",
-        help="Print all additional config fields for the selected analyzer",
+    p_analyzer.add_argument("-w", "--workdir", metavar="PATH", default=None,
+                            help="Working directory containing HyP3 results (default: current directory)")
+    p_analyzer.add_argument(
+        "--list-analyzers", action="store_true",
+        help="Print all registered analyzers and exit",
     )
-    g_az.add_argument("-w", "--workdir", metavar="PATH", default=None,
-                      help="Working directory containing HyP3 results (default: current directory)")
+    p_analyzer.add_argument(
+        "--list-options", action="store_true",
+        help="Print all config fields for the selected analyzer and exit",
+    )
+    # Pre-register analyzer config fields so argparse knows they consume a value
+    # and won't treat their argument as the ACTION subcommand.
+    # Use SUPPRESS default so only explicitly set fields appear in args namespace.
+    try:
+        from insarhub.config.defaultconfig import Hyp3_SBAS_Config
+        import dataclasses as _dc, typing as _typing
+        _hints = _typing.get_type_hints(Hyp3_SBAS_Config)
+        for _f in _dc.fields(Hyp3_SBAS_Config):
+            if _f.name in _ANALYZER_SKIP_FIELDS:
+                continue
+            _kwargs = _field_argparse_kwargs(_hints.get(_f.name, str), None)
+            _kwargs["default"] = argparse.SUPPRESS
+            _kwargs["help"] = argparse.SUPPRESS
+            try:
+                p_analyzer.add_argument("--" + _f.name, dest=_f.name, **_kwargs)
+            except argparse.ArgumentError:
+                pass
+    except Exception:
+        pass
 
-    g_az_common = p_analyzer.add_argument_group("common analysis options")
-    g_az_common.add_argument("--steps", metavar="STEP", nargs="+",
-                             help="Specific MintPy steps to run (default: full workflow)")
-    g_az_common.add_argument("--prep-first", action="store_true",
-                             help="Run prep_data before analysis")
-    g_az_common.add_argument("--prep-only", action="store_true",
-                             help="Run only prep_data and exit")
-    g_az_common.add_argument("--debug", action="store_true",
-                             help="Enable MintPy debug mode")
+    az_sub = p_analyzer.add_subparsers(dest="az_action", required=False, metavar="ACTION")
+
+    # --- run ----------------------------------------------------------- #
+    p_az_run = az_sub.add_parser(
+        "run",
+        help="Run analysis workflow (step(s) defined by --step)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_az_run.add_argument(
+        "--step", metavar="STEP", nargs="+",
+        help="Step(s) to run — see parent 'analyzer --help' for the full table",
+    )
+    p_az_run.add_argument("--debug", action="store_true",
+                          help="Enable MintPy debug mode")
+
+    # --- cleanup ------------------------------------------------------- #
+    p_az_cleanup = az_sub.add_parser(
+        "cleanup",
+        help="Remove temporary files after analysis",
+    )
+    p_az_cleanup.add_argument("--debug", action="store_true",
+                              help="Debug mode — preserve temporary files (dry run)")
+
+    # ================================================================== #
+    #  utils                                                              #
+    # ================================================================== #
+    p_utils = sub.add_parser(
+        "utils",
+        help="Standalone utility tools",
+        description=(
+            "Standalone utility tools.\n"
+            "\nUtilities:\n"
+            "  clip           Clip HyP3 zip contents to an AOI\n"
+            "  h5-to-raster   Convert MintPy HDF5 output to GeoTIFF\n"
+            "  save-footprint Extract footprint polygon from a raster\n"
+            "  select-pairs   Select interferogram pairs from a search-results GeoJSON\n"
+            "  plot-network   Plot interferogram network from a saved pairs JSON\n"
+            "  slurm          Generate a SLURM batch script\n"
+            "  era5-download  Download ERA5 weather data for MintPy tropospheric correction\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    ut_sub = p_utils.add_subparsers(dest="ut_action", required=False, metavar="TOOL")
+
+    # --- clip ---------------------------------------------------------- #
+    p_clip = ut_sub.add_parser(
+        "clip",
+        help="Clip HyP3 zip contents to an AOI for MintPy",
+    )
+    p_clip.add_argument("-w", "--workdir", metavar="PATH", default=None,
+                        help="Directory containing HyP3 .zip files (default: cwd)")
+    p_clip.add_argument("--aoi", metavar="VALUE", nargs="+", required=True,
+                        help="AOI as 'minlon minlat maxlon maxlat' or path to GeoJSON/SHP file")
+
+    # --- h5-to-raster -------------------------------------------------- #
+    p_h5 = ut_sub.add_parser(
+        "h5-to-raster",
+        help="Convert MintPy HDF5 output to GeoTIFF",
+    )
+    p_h5.add_argument("-i", "--input", metavar="PATH", required=True,
+                      help="Input HDF5 file (e.g. velocity.h5)")
+    p_h5.add_argument("-o", "--output", metavar="PATH", default=None,
+                      help="Output GeoTIFF path (default: same name as input with .tif)")
+
+    # --- save-footprint ------------------------------------------------ #
+    p_fp = ut_sub.add_parser(
+        "save-footprint",
+        help="Extract footprint polygon from a raster",
+    )
+    p_fp.add_argument("-i", "--input", metavar="PATH", required=True,
+                      help="Input raster file")
+    p_fp.add_argument("-o", "--output", metavar="PATH", default=None,
+                      help="Output footprint file (default: auto-named beside input)")
+
+    # --- select-pairs -------------------------------------------------- #
+    p_sp = ut_sub.add_parser(
+        "select-pairs",
+        help="Select interferogram pairs from a search-results GeoJSON",
+        description=(
+            "Select interferogram pairs based on temporal and perpendicular baseline\n"
+            "constraints. Input must be a GeoJSON file saved from asf_search results\n"
+            "(e.g. via downloader --select-pairs or asf_search.ASFSearchResults.geojson()).\n"
+            "\nOutput JSON contains: pairs, baselines, and scene_bperp.\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_sp.add_argument("-i", "--input", metavar="PATH", required=True,
+                      help="GeoJSON file containing asf_search results")
+    p_sp.add_argument("-o", "--output", metavar="PATH", default="pairs.json",
+                      help="Output JSON file for pairs/baselines (default: pairs.json)")
+    p_sp.add_argument("--dt-targets", metavar="DAYS", nargs="+", type=int,
+                      default=[6, 12, 24, 36, 48, 72, 96],
+                      help="Preferred temporal spacings in days (default: 6 12 24 36 48 72 96)")
+    p_sp.add_argument("--dt-tol", metavar="DAYS", type=int, default=3,
+                      help="Tolerance in days around each dt-target (default: 3)")
+    p_sp.add_argument("--dt-max", metavar="DAYS", type=int, default=120,
+                      help="Maximum temporal baseline in days (default: 120)")
+    p_sp.add_argument("--pb-max", metavar="METERS", type=float, default=150.0,
+                      help="Maximum perpendicular baseline in meters (default: 150.0)")
+    p_sp.add_argument("--min-degree", metavar="N", type=int, default=3,
+                      help="Minimum connections per scene (default: 3)")
+    p_sp.add_argument("--max-degree", metavar="N", type=int, default=999,
+                      help="Maximum connections per scene (default: 999)")
+    p_sp.add_argument("--no-force-connect", dest="force_connect", action="store_false",
+                      help="Disable forced connectivity for isolated scenes")
+    p_sp.add_argument("--max-workers", metavar="N", type=int, default=8,
+                      help="Threads for API baseline fallback (default: 8)")
+    p_sp.add_argument("--plot", metavar="PATH", default=None,
+                      help="Also save a network plot to this path (e.g. network.png)")
+
+    # --- plot-network -------------------------------------------------- #
+    p_pn = ut_sub.add_parser(
+        "plot-network",
+        help="Plot interferogram network from a saved pairs JSON",
+        description=(
+            "Visualise the interferogram network produced by select-pairs.\n"
+            "Input must be a pairs JSON file written by 'insarhub utils select-pairs'.\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_pn.add_argument("-i", "--input", metavar="PATH", required=True,
+                      help="Pairs JSON file from select-pairs")
+    p_pn.add_argument("-o", "--output", metavar="PATH", default="network.png",
+                      help="Output figure path (default: network.png)")
+    p_pn.add_argument("--title", metavar="STR", default="Interferogram Network",
+                      help="Plot title (default: 'Interferogram Network')")
+    p_pn.add_argument("--figsize", metavar="N", nargs=2, type=int, default=[18, 7],
+                      help="Figure size width height in inches (default: 18 7)")
+
+    # --- slurm --------------------------------------------------------- #
+    p_slurm = ut_sub.add_parser(
+        "slurm",
+        help="Generate a SLURM batch job script",
+        description=(
+            "Generate a SLURM batch script from the given resource and environment\n"
+            "parameters. The --command argument is the shell command(s) to execute\n"
+            "inside the job (e.g. an insarhub analyzer run invocation).\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_slurm.add_argument("--job-name", metavar="STR", default="insarhub_job",
+                         help="SLURM job name (default: insarhub_job)")
+    p_slurm.add_argument("--time", metavar="HH:MM:SS", default="04:00:00",
+                         help="Wall-time limit (default: 04:00:00)")
+    p_slurm.add_argument("--partition", metavar="STR", default="all",
+                         help="SLURM partition (default: all)")
+    p_slurm.add_argument("--nodes", metavar="N", type=int, default=1,
+                         help="Number of nodes (default: 1)")
+    p_slurm.add_argument("--ntasks", metavar="N", type=int, default=1,
+                         help="Number of tasks (default: 1)")
+    p_slurm.add_argument("--cpus", metavar="N", type=int, default=8,
+                         help="CPUs per task (default: 8)")
+    p_slurm.add_argument("--mem", metavar="STR", default="32G",
+                         help="Memory per node (default: 32G)")
+    p_slurm.add_argument("--gpus", metavar="STR", default=None,
+                         help="GPU allocation e.g. '1' or '2' (optional)")
+    p_slurm.add_argument("--conda-env", metavar="STR", default=None,
+                         help="Conda environment to activate (optional)")
+    p_slurm.add_argument("--modules", metavar="MOD", nargs="+", default=[],
+                         help="Environment modules to load (optional)")
+    p_slurm.add_argument("--mail-user", metavar="EMAIL", default=None,
+                         help="Email address for job notifications (optional)")
+    p_slurm.add_argument("--mail-type", metavar="STR", default="ALL",
+                         help="When to send email: BEGIN, END, FAIL, ALL (default: ALL)")
+    p_slurm.add_argument("--account", metavar="STR", default=None,
+                         help="Account to charge resources to (optional)")
+    p_slurm.add_argument("--qos", metavar="STR", default=None,
+                         help="Quality of Service specification (optional)")
+    p_slurm.add_argument("--command", metavar="CMD", required=True,
+                         help="Command(s) to execute inside the job")
+    p_slurm.add_argument("-o", "--output", metavar="PATH", default="job.slurm",
+                         help="Output script path (default: job.slurm)")
+
+    # --- era5-download ------------------------------------------------- #
+    p_era5 = ut_sub.add_parser(
+        "era5-download",
+        help="Download ERA5 weather data for MintPy tropospheric correction",
+        description=(
+            "Scan a workdir of HyP3 zip files, determine required dates and spatial\n"
+            "extents, and download ERA5 pressure-level data in MintPy-compatible\n"
+            "filename format (ERA5_S*_N*_W*_E*_YYYYMMDD_HH.grb) via the CDS API.\n"
+            "\nRequires a ~/.cdsapirc file with your CDS API credentials.\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_era5.add_argument("-w", "--workdir", metavar="PATH", required=True,
+                        help="Directory containing HyP3 zip files (scanned recursively by subfolder)")
+    p_era5.add_argument("-o", "--output", metavar="PATH", required=True,
+                        help="Output directory for ERA5 .grb files")
+    p_era5.add_argument("--num-processes", metavar="N", type=int, default=3,
+                        help="Parallel download workers (default: 3)")
+    p_era5.add_argument("--max-retries", metavar="N", type=int, default=3,
+                        help="Retry attempts per file on download failure (default: 3)")
 
     return parser
 
@@ -334,6 +575,21 @@ def _iter_job_dirs(workdir: Path, job_file_override: str | None) -> list[Path]:
     subdirs = sorted(
         d for d in workdir.iterdir()
         if d.is_dir() and _parse_group_key(d.name) and any(d.glob("hyp3*.json"))
+    )
+    return subdirs if subdirs else [workdir]
+
+
+def _iter_analysis_dirs(workdir: Path) -> list[Path]:
+    """
+    Return the list of directories to run analysis on.
+
+    Resolution order:
+      1. p*_f* subdirs that contain any *.zip files  → each subdir
+      2. workdir itself  (flat / single-group case)
+    """
+    subdirs = sorted(
+        d for d in workdir.iterdir()
+        if d.is_dir() and _parse_group_key(d.name) and any(d.glob("*.zip"))
     )
     return subdirs if subdirs else [workdir]
 
@@ -400,6 +656,13 @@ def _field_argparse_kwargs(annotation, default) -> dict:
     return {"type": str, "default": default, "metavar": "VALUE"}
 
 
+_MINTPY_ALL_STEPS = [
+    'load_data', 'modify_network', 'reference_point', 'invert_network',
+    'correct_LOD', 'correct_SET', 'correct_ionosphere', 'correct_troposphere',
+    'deramp', 'correct_topography', 'residual_RMS', 'reference_date',
+    'velocity', 'geocode', 'google_earth', 'hdfeos5',
+]
+
 _SEARCH_SKIP_FIELDS = {"name"}  # handled via CLI flags or internal
 
 # Fields handled by static flags or internal state in cmd_processor
@@ -427,36 +690,47 @@ def _build_config_parser(config_cls, skip_fields: set | None = None) -> argparse
     except Exception:
         hints = {}
 
+    _UNSET = object.__new__(object)  # sentinel: field not provided by user
+
     for field in dataclasses.fields(config_cls):
         if field.name in skip_fields:
             continue
         annotation = hints.get(field.name, str)
-        if field.default is not dataclasses.MISSING:
-            default = field.default
-        elif field.default_factory is not dataclasses.MISSING:  # type: ignore[misc]
-            default = field.default_factory()
-        else:
-            default = None
 
         flag = "--" + field.name
-        kwargs = _field_argparse_kwargs(annotation, default)
+        kwargs = _field_argparse_kwargs(annotation, None)
+        kwargs["default"] = _UNSET  # distinguish "not provided" from any real value
         kwargs["help"] = argparse.SUPPRESS  # hidden; shown only via --list-options
         try:
             p.add_argument(flag, dest=field.name, **kwargs)
         except argparse.ArgumentError:
             pass  # skip duplicate flags (e.g. --workdir already added)
 
+    p._unset_sentinel = _UNSET  # type: ignore[attr-defined]
+
     return p
 
 
-def _print_config_options(config_cls, display_label: str | None = None,
-                          skip_fields: set | None = None):
-    """Pretty-print all config fields for --list-options."""
+def _print_config_options(config_cls_or_instance, display_label: str | None = None,
+                          skip_fields: set | None = None,
+                          value_overrides: dict | None = None):
+    """Pretty-print all config fields for --list-options.
+
+    Accepts either a dataclass *class* (shows defaults) or a dataclass *instance*.
+    value_overrides: field_name → str value read from mintpy.cfg, shown instead of defaults.
+    """
     import dataclasses
     import typing
 
     if skip_fields is None:
         skip_fields = _SEARCH_SKIP_FIELDS
+
+    instance = None
+    if dataclasses.is_dataclass(config_cls_or_instance) and not isinstance(config_cls_or_instance, type):
+        instance = config_cls_or_instance
+        config_cls = type(instance)
+    else:
+        config_cls = config_cls_or_instance
 
     try:
         hints = typing.get_type_hints(config_cls)
@@ -464,22 +738,96 @@ def _print_config_options(config_cls, display_label: str | None = None,
         hints = {}
 
     label = display_label or config_cls.__name__
+    if value_overrides is not None:
+        value_col = "CURRENT VALUE"
+    elif instance is not None:
+        value_col = "CURRENT VALUE"
+    else:
+        value_col = "DEFAULT"
     print(f"\nConfig fields for {label}:\n")
-    print(f"  {'FLAG':<35}  {'TYPE':<25}  DEFAULT")
+    print(f"  {'FLAG':<35}  {'TYPE':<25}  {value_col}")
     print(f"  {'-'*35}  {'-'*25}  {'-'*20}")
     for field in dataclasses.fields(config_cls):
         if field.name in skip_fields:
             continue
         flag = "--" + field.name
         ann = hints.get(field.name, "?")
-        if field.default is not dataclasses.MISSING:
-            default = repr(field.default)
+        if value_overrides is not None and field.name in value_overrides:
+            value = value_overrides[field.name]
+        elif instance is not None:
+            value = repr(getattr(instance, field.name))
+        elif field.default is not dataclasses.MISSING:
+            value = repr(field.default)
         elif field.default_factory is not dataclasses.MISSING:  # type: ignore[misc]
-            default = repr(field.default_factory())
+            value = repr(field.default_factory())
         else:
-            default = "(required)"
-        print(f"  {flag:<35}  {str(ann):<25}  {default}")
+            value = "(required)"
+        print(f"  {flag:<35}  {str(ann):<25}  {value}")
     print()
+
+
+def _read_mintpy_cfg(cfg_path: Path) -> dict[str, str]:
+    """Read a mintpy.cfg file and return {dataclass_field: value} by reverse-mapping keys.
+
+    mintpy.compute.maxMemory → compute_maxMemory
+    """
+    result = {}
+    for line in cfg_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        if '=' not in line:
+            continue
+        key, _, value = line.partition('=')
+        key = key.strip()
+        value = value.strip()
+        if key.startswith('mintpy.'):
+            field_name = key[len('mintpy.'):].replace('.', '_')
+            result[field_name] = value
+    return result
+
+
+def _field_to_mintpy_key(field_name: str) -> str:
+    """Convert dataclass field name to mintpy config key.
+    compute_maxMemory → mintpy.compute.maxMemory
+    """
+    parts = field_name.split('_')
+    if len(parts) > 1:
+        return f"mintpy.{parts[0]}.{'.'.join(parts[1:])}"
+    return f"mintpy.{parts[0]}"
+
+
+def _update_mintpy_cfg(cfg_path: Path, overrides: dict) -> None:
+    """Apply field_name → value overrides in-place to an existing mintpy.cfg."""
+    lines = cfg_path.read_text().splitlines()
+    updated = {_field_to_mintpy_key(k): str(v) for k, v in overrides.items()}
+    new_lines = []
+    for line in lines:
+        if '=' in line and not line.strip().startswith('#'):
+            key = line.partition('=')[0].strip()
+            if key in updated:
+                new_lines.append(f"{key:<40} = {updated.pop(key)}")
+                continue
+        new_lines.append(line)
+    cfg_path.write_text('\n'.join(new_lines) + '\n')
+
+
+def _read_config_json(cfg_path: Path) -> dict:
+    """Read a JSON config file and return {field: value}, empty dict if missing or unreadable."""
+    if not cfg_path.exists():
+        return {}
+    try:
+        return json.loads(cfg_path.read_text())
+    except Exception:
+        return {}
+
+
+def _write_config_json(cfg_path: Path, overrides: dict) -> None:
+    """Merge overrides into the existing JSON config file, then write back."""
+    existing = _read_config_json(cfg_path)
+    existing.update(overrides)
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    cfg_path.write_text(json.dumps(existing, indent=2, default=str))
 
 
 def _parse_group_key(key: str) -> tuple[int, int] | None:
@@ -589,13 +937,30 @@ def cmd_downloader(args, extra_args: list[str]):
         if config_cls is None:
             print(f"Downloader '{args.downloader_name}' has no config class.")
         else:
+            workdir = _resolve_workdir(args.workdir)
+            _cfg = args.config if (args.config and args.config != "__default__") else None
+            cfg_path = (Path(_cfg).expanduser().resolve()
+                        if _cfg else workdir / "downloader_config.json")
+            values = _read_config_json(cfg_path)
+            if not values:
+                print(f"[INFO] No saved config found at {cfg_path}. Showing defaults.")
             _print_config_options(config_cls,
                                   display_label=f"{args.downloader_name} downloader",
-                                  skip_fields=_SEARCH_SKIP_FIELDS)
+                                  skip_fields=_SEARCH_SKIP_FIELDS,
+                                  value_overrides=values if values else None)
         return
 
-    # Parse extra_args as downloader config overrides
-    overrides: dict = {}
+    # Resolve workdir early so saved config can serve as base defaults
+    workdir = _resolve_workdir(args.workdir)
+    _cfg = args.config if (args.config and args.config != "__default__") else None
+    cfg_path = (Path(_cfg).expanduser().resolve()
+                if _cfg else workdir / "downloader_config.json")
+    saved_cfg = _read_config_json(cfg_path)
+    if saved_cfg:
+        print(f"[INFO] Loaded saved config from {cfg_path}")
+
+    # Parse extra_args as downloader config overrides; explicit CLI args override saved config
+    overrides: dict = dict(saved_cfg)
     config_cls = getattr(downloader_cls, "default_config", None)
     if config_cls is not None and dataclasses.is_dataclass(config_cls):
         config_parser = _build_config_parser(config_cls)
@@ -605,7 +970,7 @@ def cmd_downloader(args, extra_args: list[str]):
             sys.exit(1)
         for f in dataclasses.fields(config_cls):
             val = getattr(config_ns, f.name, None)
-            if val is not None:
+            if val is not getattr(config_parser, '_unset_sentinel', None) and val is not None:
                 overrides[f.name] = val
     elif extra_args:
         print(f"[WARNING] Extra args ignored (no config dataclass): {extra_args}", file=sys.stderr)
@@ -620,7 +985,7 @@ def cmd_downloader(args, extra_args: list[str]):
                 pass  # not floats — treat as single-string WKT or path
         if isinstance(aoi_input, list) and len(aoi_input) == 1:
             aoi_input = aoi_input[0]
-        overrides.setdefault("intersectsWith", _to_wkt(aoi_input))
+        overrides["intersectsWith"] = _to_wkt(aoi_input)
 
     stacks_filter: list[tuple] | None = None
     if args.stacks:
@@ -639,11 +1004,25 @@ def cmd_downloader(args, extra_args: list[str]):
         overrides["relativeOrbit"] = [p for p, _ in parsed]
         overrides["frame"]         = [f for _, f in parsed]
         stacks_filter = parsed
+    elif not args.stacks:
+        # Reconstruct stacks_filter from saved config lists so the exact-pair filter
+        # is re-applied on reload (prevents ASF returning all cross-combinations)
+        _ro = overrides.get("relativeOrbit")
+        _fr = overrides.get("frame")
+        if (isinstance(_ro, list) and isinstance(_fr, list)
+                and len(_ro) == len(_fr) and len(_ro) > 0):
+            stacks_filter = list(zip([int(x) for x in _ro], [int(x) for x in _fr]))
 
-    workdir = _resolve_workdir(args.workdir)
     overrides["workdir"] = workdir
 
-    downloader = Downloader.create(args.downloader_name, **overrides)
+    downloader = Downloader.create(args.downloader_name,
+                                   **{k: v for k, v in overrides.items()
+                                      if k not in ("name", "config")})
+    # Write full resolved config (all fields) so --list-options reflects current state
+    _write_config_json(workdir / "downloader_config.json",
+                       {f.name: getattr(downloader.config, f.name)
+                        for f in dataclasses.fields(downloader.config)
+                        if f.name != "workdir"})
 
     result = SearchCommand(downloader).run()
     _fail(result, "search")
@@ -660,7 +1039,7 @@ def cmd_downloader(args, extra_args: list[str]):
     if args.select_pairs:
         from insarhub.utils import select_pairs as _select_pairs
         from insarhub.utils import plot_pair_network as _plot_pair_network
-        pairs, baselines = _select_pairs(  # type: ignore[misc]
+        _sp_result = _select_pairs(  # type: ignore[misc]
             result.data,
             dt_targets=tuple(args.dt_targets),
             dt_tol=args.dt_tol,
@@ -671,6 +1050,8 @@ def cmd_downloader(args, extra_args: list[str]):
             force_connect=args.force_connect,
             max_workers=args.sp_workers,
         )
+        pairs, baselines = _sp_result[0], _sp_result[1]
+        scene_bperp: dict = _sp_result[2] if len(_sp_result) > 2 else {}
         if isinstance(pairs, dict):
             # Multiple groups → one subdir per (path, frame)
             for (path, frame), group_pairs in pairs.items():
@@ -680,6 +1061,7 @@ def cmd_downloader(args, extra_args: list[str]):
                 pjson.write_text(json.dumps([list(p) for p in group_pairs], indent=2))
                 _plot_pair_network(
                     group_pairs, baselines[(path, frame)],
+                    scene_baselines=scene_bperp.get((path, frame)),  # type: ignore[union-attr]
                     title=f"Interferogram Network — P{path}/F{frame}",
                     save_path=subdir / f"network_p{path}_f{frame}.png",
                 )
@@ -691,7 +1073,8 @@ def cmd_downloader(args, extra_args: list[str]):
             )
             pairs_path.parent.mkdir(parents=True, exist_ok=True)
             pairs_path.write_text(json.dumps([list(p) for p in pairs], indent=2))
-            _plot_pair_network(pairs, baselines, save_path=workdir / "network.png")
+            _plot_pair_network(pairs, baselines, scene_baselines=scene_bperp,
+                               save_path=workdir / "network.png")
             print(f"[pairs] Saved {len(pairs)} pairs → {pairs_path}")
 
     if args.download:
@@ -748,12 +1131,30 @@ def _proc_submit(args, extra_args: list[str]):
         if config_cls is None:
             print(f"Processor '{processor_name}' has no config class.")
         else:
+            workdir = _resolve_workdir(getattr(args, "workdir", None))
+            _cfg = args.config if (args.config and args.config != "__default__") else None
+            cfg_path = (Path(_cfg).expanduser().resolve()
+                        if _cfg else workdir / "processor_config.json")
+            values = _read_config_json(cfg_path)
+            if not values:
+                print(f"[INFO] No saved config found at {cfg_path}. Showing defaults.")
             _print_config_options(config_cls,
                                   display_label=f"{processor_name} processor",
-                                  skip_fields=_SUBMIT_SKIP_FIELDS)
+                                  skip_fields=_SUBMIT_SKIP_FIELDS,
+                                  value_overrides=values if values else None)
         return
 
-    overrides: dict = {}
+    # Resolve workdir early so saved config can serve as base defaults
+    workdir = _resolve_workdir(args.workdir)
+    _cfg = args.config if (args.config and args.config != "__default__") else None
+    cfg_path = (Path(_cfg).expanduser().resolve()
+                if _cfg else workdir / "processor_config.json")
+    saved_cfg = _read_config_json(cfg_path)
+    if saved_cfg:
+        print(f"[INFO] Loaded saved config from {cfg_path}")
+
+    # Parse extra_args as processor config overrides; explicit CLI args override saved config
+    overrides: dict = dict(saved_cfg)
     config_cls = getattr(processor_cls, "default_config", None)
     if config_cls is not None and dataclasses.is_dataclass(config_cls):
         config_parser = _build_config_parser(config_cls, skip_fields=_SUBMIT_SKIP_FIELDS)
@@ -765,7 +1166,7 @@ def _proc_submit(args, extra_args: list[str]):
             if f.name in _SUBMIT_SKIP_FIELDS:
                 continue
             val = getattr(config_ns, f.name, None)
-            if val is not None:
+            if val is not getattr(config_parser, '_unset_sentinel', None) and val is not None:
                 overrides[f.name] = val
     elif extra_args:
         print(f"[WARNING] Extra args ignored (no config dataclass): {extra_args}", file=sys.stderr)
@@ -777,7 +1178,6 @@ def _proc_submit(args, extra_args: list[str]):
     if pool:
         overrides["earthdata_credentials_pool"] = pool
 
-    workdir = _resolve_workdir(args.workdir)
     pairs_data = _load_pairs(args, workdir)
 
     groups: dict[tuple[int, int] | None, list] = (
@@ -798,16 +1198,24 @@ def _proc_submit(args, extra_args: list[str]):
         group_prefix = (f"{args.name_prefix}_p{pf[0]}_f{pf[1]}"
                         if pf else args.name_prefix)
         tag = f"[{folder}] " if folder else ""
+        job_dir.mkdir(parents=True, exist_ok=True)
+        group_overrides = {k: v for k, v in overrides.items()
+                           if k not in ("name", "config")}
+        group_overrides.update({"workdir": job_dir, "pairs": group_pairs,
+                                 "name_prefix": group_prefix})
+        processor = Processor.create(processor_name, **group_overrides)
+        # Write full resolved config (all fields except runtime-only keys)
+        _skip_write = _SUBMIT_SKIP_FIELDS | {"earthdata_credentials_pool", "workdir", "pairs"}
+        _write_config_json(workdir / "processor_config.json",
+                           {f.name: getattr(processor.config, f.name)
+                            for f in dataclasses.fields(processor.config)
+                            if f.name not in _skip_write})
         if dry_run:
             print(f"\n{tag}Would submit {len(group_pairs)} pairs → {job_dir}")
             print(f"{tag}  name_prefix : {group_prefix}")
             for ref, sec in group_pairs:
                 print(f"{tag}  {ref}  ↔  {sec}")
             continue
-        job_dir.mkdir(parents=True, exist_ok=True)
-        group_overrides = {**overrides, "workdir": job_dir, "pairs": group_pairs,
-                           "name_prefix": group_prefix}
-        processor = Processor.create(processor_name, **group_overrides)
         print(f"{tag}Submitting {len(group_pairs)} pairs → {job_dir}")
         result = SubmitCommand(processor).run()
         _fail(result, f"submit {folder or ''}".strip())
@@ -950,9 +1358,7 @@ def _proc_credits(args):
 
 
 def cmd_analyzer(args, extra_args: list[str]):
-    import dataclasses
     from insarhub import Analyzer
-    from insarhub.commands import PrepDataCommand, AnalyzeCommand
 
     if args.list_analyzers:
         print("Available analyzers:")
@@ -960,26 +1366,39 @@ def cmd_analyzer(args, extra_args: list[str]):
             print(f"  {name}")
         return
 
+    if getattr(args, "list_options", False):
+        _az_run(args, extra_args)
+        return
+
+    action = getattr(args, "az_action", None)
+    if action == "run":
+        _az_run(args, extra_args)
+    elif action == "cleanup":
+        _az_cleanup(args)
+    elif extra_args or any(
+        hasattr(args, f) for f in vars(args)
+        if f not in ("command", "az_action", "analyzer_name", "workdir",
+                     "list_analyzers", "list_options", "debug")
+    ):
+        # Config overrides provided without a subcommand — apply to mintpy.cfg
+        _az_run(args, extra_args)
+
+
+def _az_run(args, extra_args: list[str]):
+    import dataclasses
+    from insarhub import Analyzer
+    from insarhub.commands import PrepDataCommand, AnalyzeCommand
+
     if args.analyzer_name not in Analyzer._registry:
         print(f"[ERROR] Unknown analyzer '{args.analyzer_name}'. Use --list-analyzers.",
               file=sys.stderr)
         sys.exit(1)
     analyzer_cls = Analyzer._registry[args.analyzer_name]
 
-    if args.list_options:
-        config_cls = getattr(analyzer_cls, "default_config", None)
-        if config_cls is None:
-            print(f"Analyzer '{args.analyzer_name}' has no config class.")
-        else:
-            _print_config_options(config_cls,
-                                  display_label=f"{args.analyzer_name} analyzer",
-                                  skip_fields=_ANALYZER_SKIP_FIELDS)
-        return
-
-    # Parse extra_args as analyzer config overrides
     overrides: dict = {}
     config_cls = getattr(analyzer_cls, "default_config", None)
     if config_cls is not None and dataclasses.is_dataclass(config_cls):
+        # Collect overrides from extra_args (flags passed after subcommand)
         config_parser = _build_config_parser(config_cls, skip_fields=_ANALYZER_SKIP_FIELDS)
         config_ns, unknown = config_parser.parse_known_args(extra_args)
         if unknown:
@@ -990,27 +1409,277 @@ def cmd_analyzer(args, extra_args: list[str]):
             if f.name in _ANALYZER_SKIP_FIELDS:
                 continue
             val = getattr(config_ns, f.name, None)
+            if val is not getattr(config_parser, '_unset_sentinel', None) and val is not None:
+                overrides[f.name] = val
+        # Also collect overrides from args (pre-registered flags on p_analyzer, no subcommand)
+        for f in dataclasses.fields(config_cls):
+            if f.name in _ANALYZER_SKIP_FIELDS or f.name in overrides:
+                continue
+            val = getattr(args, f.name, None)  # only present if user explicitly set it (SUPPRESS default)
             if val is not None:
                 overrides[f.name] = val
     elif extra_args:
         print(f"[WARNING] Extra args ignored (no config dataclass): {extra_args}",
               file=sys.stderr)
 
-    overrides["debug"] = args.debug
-    workdir = _resolve_workdir(args.workdir)
-    analyzer = Analyzer.create(args.analyzer_name, workdir=workdir, **overrides)
+    run_prep = False
+    mintpy_steps: list[str] | None = None
+    steps = getattr(args, 'step', None) or ['all']  # default: run everything including prep
+    expanded: list[str] = []
+    for s in steps:
+        if s == 'prep':
+            run_prep = True
+        elif s == 'all':
+            run_prep = True
+            expanded.extend(_MINTPY_ALL_STEPS)
+        else:
+            expanded.append(s)
+    mintpy_steps = expanded or None  # None → AnalyzeCommand uses full default
 
-    if args.prep_only:
-        result = PrepDataCommand(analyzer).run()
-        _fail(result, "prep")
+    # Config-only mode: overrides provided but no subcommand — update mintpy.cfg and exit
+    if getattr(args, "az_action", None) is None and not args.list_options:
+        if overrides:
+            workdir = _resolve_workdir(args.workdir)
+            for analysis_dir in _iter_analysis_dirs(workdir):
+                cfg_path = analysis_dir / "mintpy.cfg"
+                label = analysis_dir.name if analysis_dir != workdir else workdir.name
+                if not cfg_path.exists():
+                    print(f"[WARNING] No mintpy.cfg in [{label}]. "
+                          f"Run '--step prep' first.", file=sys.stderr)
+                    continue
+                _update_mintpy_cfg(cfg_path, overrides)
+                print(f"[{label}] Updated: {list(overrides.keys())}")
         return
 
-    if args.prep_first:
-        result = PrepDataCommand(analyzer).run()
-        _fail(result, "prep")
+    if args.list_options:
+        workdir = _resolve_workdir(args.workdir)
+        analysis_dirs = _iter_analysis_dirs(workdir)
+        config_cls = getattr(analyzer_cls, "default_config", None)
+        for analysis_dir in analysis_dirs:
+            label = analysis_dir.name if analysis_dir != workdir else workdir.name
+            cfg_path = analysis_dir / "mintpy.cfg"
+            if not cfg_path.exists():
+                print(f"\n[WARNING] No mintpy.cfg found in [{label}]. "
+                      f"Run 'insarhub analyzer -N {args.analyzer_name} -w {analysis_dir} run --step prep' first.\n",
+                      file=sys.stderr)
+                continue
+            if overrides:
+                _update_mintpy_cfg(cfg_path, overrides)
+            values = _read_mintpy_cfg(cfg_path)
+            _print_config_options(config_cls,
+                                  display_label=f"{args.analyzer_name} [{label}]",
+                                  skip_fields=_ANALYZER_SKIP_FIELDS,
+                                  value_overrides=values)
+        return
 
-    result = AnalyzeCommand(analyzer, steps=args.steps).run()
-    _fail(result, "analyze")
+    overrides["debug"] = getattr(args, "debug", False)
+    workdir = _resolve_workdir(args.workdir)
+
+    # Build ordered step list for display
+    display_steps = (["prep"] if run_prep else []) + (mintpy_steps or [])
+    total = len(display_steps)
+
+    for analysis_dir in _iter_analysis_dirs(workdir):
+        tag = f"[{analysis_dir.name}] " if analysis_dir != workdir else ""
+        if tag:
+            print(f"\n{tag}Starting analysis...")
+        analyzer = Analyzer.create(args.analyzer_name, workdir=analysis_dir, **overrides)
+
+        step_num = 1
+        if run_prep:
+            print(f"\nStep {step_num}/{total}: prep_data")
+            step_num += 1
+            result = PrepDataCommand(analyzer).run()
+            _fail(result, f"prep {tag}".strip())
+            if mintpy_steps is None:
+                continue  # only 'prep' was requested for this dir
+
+        for step in (mintpy_steps or []):
+            print(f"\nStep {step_num}/{total}: {step}")
+            step_num += 1
+            result = AnalyzeCommand(analyzer, steps=[step]).run()
+            _fail(result, f"{step} {tag}".strip())
+
+
+def _az_cleanup(args):
+    from insarhub import Analyzer
+
+    if args.analyzer_name not in Analyzer._registry:
+        print(f"[ERROR] Unknown analyzer '{args.analyzer_name}'. Use --list-analyzers.",
+              file=sys.stderr)
+        sys.exit(1)
+
+    workdir = _resolve_workdir(args.workdir)
+
+    for analysis_dir in _iter_analysis_dirs(workdir):
+        tag = f"[{analysis_dir.name}] " if analysis_dir != workdir else ""
+        analyzer = Analyzer.create(args.analyzer_name, workdir=analysis_dir, debug=args.debug)
+        if not hasattr(analyzer, "cleanup"):
+            print(f"[ERROR] '{args.analyzer_name}' does not support cleanup.", file=sys.stderr)
+            sys.exit(1)
+        if tag:
+            print(f"{tag}Cleaning up...")
+        analyzer.cleanup()
+
+
+def cmd_utils(args, extra_args: list[str]):
+    action = getattr(args, "ut_action", None)
+    if not action:
+        import subprocess
+        subprocess.run([sys.argv[0], "utils", "--help"])
+        return
+
+    if action == "clip":
+        from insarhub.utils.tool import clip_hyp3_insar
+        workdir = _resolve_workdir(args.workdir)
+        aoi_raw = args.aoi
+        if len(aoi_raw) == 1:
+            aoi = aoi_raw[0]  # file path
+        elif len(aoi_raw) == 4:
+            try:
+                aoi = [float(v) for v in aoi_raw]
+            except ValueError:
+                print("[ERROR] --aoi expects 4 floats or a single file path.", file=sys.stderr)
+                sys.exit(1)
+        else:
+            print("[ERROR] --aoi expects 4 floats (minlon minlat maxlon maxlat) or a file path.",
+                  file=sys.stderr)
+            sys.exit(1)
+        clip_hyp3_insar(workdir=workdir, aoi=aoi)
+
+    elif action == "h5-to-raster":
+        from insarhub.utils.postprocess import h5_to_raster
+        h5_to_raster(h5_file=args.input, out_raster=args.output)
+
+    elif action == "save-footprint":
+        from insarhub.utils.postprocess import save_footprint
+        save_footprint(raster_file=args.input, out_footprint=args.output)
+
+    elif action == "select-pairs":
+        import json
+        import asf_search
+        from insarhub.utils.tool import select_pairs
+
+        in_path = Path(args.input).expanduser().resolve()
+        with in_path.open() as f:
+            geojson_data = json.load(f)
+        products = [
+            asf_search.ASFProduct(feature)
+            for feature in geojson_data.get("features", [])
+        ]
+        _sp_result = select_pairs(
+            products,
+            dt_targets=tuple(args.dt_targets),
+            dt_tol=args.dt_tol,
+            dt_max=args.dt_max,
+            pb_max=args.pb_max,
+            min_degree=args.min_degree,
+            max_degree=args.max_degree,
+            force_connect=args.force_connect,
+            max_workers=args.max_workers,
+        )
+        pairs = _sp_result[0]
+        baselines = _sp_result[1]
+        scene_bperp: dict = _sp_result[2] if len(_sp_result) > 2 else {}
+
+        # Serialise — tuple keys become "a|||b" strings
+        def _pairs_to_list(p):
+            if isinstance(p, dict):
+                return {f"{k[0]}||{k[1]}": _pairs_to_list(v) for k, v in p.items()}
+            return [[a, b] for a, b in p]
+
+        def _baselines_to_dict(bl):
+            if isinstance(bl, dict) and bl and isinstance(next(iter(bl)), tuple) and isinstance(next(iter(bl.values())), dict):
+                # grouped: {(path,frame): BaselineTable}
+                return {f"{k[0]}||{k[1]}": _baselines_to_dict(v) for k, v in bl.items()}
+            # flat BaselineTable: {(a, b): (dt, bperp)}
+            return {f"{k[0]}|||{k[1]}": list(v) for k, v in bl.items()}
+
+        out = {
+            "pairs": _pairs_to_list(pairs),
+            "baselines": _baselines_to_dict(baselines),
+            "scene_bperp": {str(k): float(v) for k, v in scene_bperp.items()},
+        }
+        out_path = Path(args.output).expanduser().resolve()
+        with out_path.open("w") as f:
+            json.dump(out, f, indent=2)
+        pair_count = sum(len(v) for v in pairs.values()) if isinstance(pairs, dict) else len(pairs)
+        print(f"Saved {pair_count} pairs → {out_path}")
+
+        if args.plot:
+            from insarhub.utils.tool import plot_pair_network
+            fig = plot_pair_network(pairs, baselines, scene_baselines=scene_bperp,
+                                    save_path=args.plot)
+            print(f"Network plot saved → {args.plot}")
+
+    elif action == "plot-network":
+        import json
+        from insarhub.utils.tool import plot_pair_network
+
+        in_path = Path(args.input).expanduser().resolve()
+        with in_path.open() as f:
+            data = json.load(f)
+
+        # Re-hydrate pairs
+        raw_pairs = data["pairs"]
+        if isinstance(raw_pairs, dict):
+            pairs = {tuple(int(x) for x in k.split("||")): [tuple(p) for p in v]
+                     for k, v in raw_pairs.items()}
+        else:
+            pairs = [tuple(p) for p in raw_pairs]
+
+        # Re-hydrate baselines
+        raw_bl = data["baselines"]
+        first_val = next(iter(raw_bl.values())) if raw_bl else None
+        if isinstance(first_val, dict):
+            # grouped
+            baselines = {tuple(int(x) for x in k.split("||")): {
+                tuple(ik.split("|||")): tuple(iv) for ik, iv in v.items()
+            } for k, v in raw_bl.items()}
+        else:
+            baselines = {tuple(k.split("|||")): tuple(v) for k, v in raw_bl.items()}
+
+        scene_bperp: dict = data.get("scene_bperp", {})
+
+        fig = plot_pair_network(
+            pairs, baselines,
+            scene_baselines=scene_bperp,
+            title=args.title,
+            figsize=tuple(args.figsize),
+            save_path=args.output,
+        )
+        print(f"Network plot saved → {args.output}")
+
+    elif action == "slurm":
+        from insarhub.utils.tool import Slurmjob_Config
+        cfg = Slurmjob_Config(
+            job_name=args.job_name,
+            time=args.time,
+            partition=args.partition,
+            nodes=args.nodes,
+            ntasks=args.ntasks,
+            cpus_per_task=args.cpus,
+            mem=args.mem,
+            gpus=args.gpus,
+            conda_env=args.conda_env,
+            modules=args.modules,
+            mail_user=args.mail_user,
+            mail_type=args.mail_type,
+            account=args.account,
+            qos=args.qos,
+            command=args.command,
+        )
+        out_path = cfg.to_script(args.output)
+        print(f"SLURM script written → {out_path}")
+
+    elif action == "era5-download":
+        from insarhub.utils.batch import ERA5Downloader
+        downloader = ERA5Downloader(
+            output_dir=args.output,
+            num_processes=args.num_processes,
+            max_retries=args.max_retries,
+        )
+        downloader.download_batch(args.workdir)
 
 
 # ---------------------------------------------------------------------------
@@ -1021,6 +1690,7 @@ _HANDLERS = {
     "downloader": cmd_downloader,
     "processor":  cmd_processor,
     "analyzer":   cmd_analyzer,
+    "utils":      cmd_utils,
 }
 
 
@@ -1046,7 +1716,8 @@ def main():
                 and not args.AOI
                 and not args.download
                 and not args.select_pairs
-                and args.footprint is None):
+                and args.footprint is None
+                and args.config is None):
             parser.parse_args(["downloader", "--help"])  # prints and exits
         handler(args, extra_args)
     elif args.command == "processor":
@@ -1054,8 +1725,23 @@ def main():
                 and not getattr(args, "proc_action", None)):
             parser.parse_args(["processor", "--help"])  # prints and exits
         handler(args, extra_args)
+    elif args.command == "analyzer":
+        _az_has_overrides = bool(extra_args) or any(
+            hasattr(args, f) for f in vars(args)
+            if f not in ("command", "az_action", "analyzer_name", "workdir",
+                         "list_analyzers", "list_options", "debug")
+        )
+        if (not getattr(args, "list_analyzers", False)
+                and not getattr(args, "list_options", False)
+                and not getattr(args, "az_action", None)
+                and not _az_has_overrides):
+            parser.parse_args(["analyzer", "--help"])  # prints and exits
+        handler(args, extra_args)
+    elif args.command == "utils":
+        if not getattr(args, "ut_action", None):
+            parser.parse_args(["utils", "--help"])  # prints and exits
+        handler(args, extra_args)
     else:
-        # analyzer (and any future extra-args commands)
         handler(args, extra_args)
 
 

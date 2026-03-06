@@ -77,11 +77,11 @@ def dis_scan(
         
         result_slc = slc.search()
 
-    pairs = select_pairs(
+    pairs, _, _ = select_pairs(
             result_slc,
             dt_targets=(12,24,36,48,72),
             dt_tol=3,
-            dt_max=120, 
+            dt_max=120,
             pb_max=200,
             min_degree=3,
             max_degree=5,

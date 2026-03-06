@@ -14,7 +14,7 @@
         <link rel="prev" href="../api_setup/">
       
       
-        <link rel="next" href="../downloader/">
+        <link rel="next" href="../cli/">
       
       
         
@@ -25,7 +25,7 @@
     
     
       
-        <title>Running - InSARHub</title>
+        <title>API - InSARHub</title>
       
     
     
@@ -167,7 +167,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Running
+              API
             
           </span>
         </div>
@@ -302,6 +302,26 @@
   
   
   QuickStart
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../advanced/downloader/" class="md-tabs__link">
+          
+  
+  
+  Advanced
 
         </a>
       </li>
@@ -527,6 +547,63 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2_3" id="__nav_2_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Running
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
     <li class="md-nav__item md-nav__item--active">
       
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
@@ -540,7 +617,7 @@
   <span class="md-ellipsis">
     
   
-    Running
+    API
   
 
     
@@ -558,7 +635,7 @@
   <span class="md-ellipsis">
     
   
-    Running
+    API
   
 
     
@@ -764,7 +841,104 @@
   
   
     <li class="md-nav__item">
-      <a href="../downloader/" class="md-nav__link">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced/downloader/" class="md-nav__link">
         
   
   
@@ -792,7 +966,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../processor/" class="md-nav__link">
+      <a href="../../advanced/processor/" class="md-nav__link">
         
   
   
@@ -820,7 +994,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../analyzer/" class="md-nav__link">
+      <a href="../../advanced/analyzer/" class="md-nav__link">
         
   
   
@@ -848,7 +1022,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../utilities/" class="md-nav__link">
+      <a href="../../advanced/utilities/" class="md-nav__link">
         
   
   
@@ -1114,13 +1288,13 @@
   
 
 
-  <h1>Running</h1>
+  <h1>API</h1>
 
-<p>This section provides an overview of the complete InSAR time-series processing workflow, guiding you through each stage of the analysis pipeline.</p>
+<p>This section provides an overview of the complete InSAR time-series processing workflow using Python API, guiding you through each stage of the analysis pipeline.</p>
 <p><a href="https://colab.research.google.com/github/jldz9/InSARHub/blob/tutorial/InSARHub_Tutorial_V110.ipynb"><img alt="Try Live Demo" src="https://colab.research.google.com/assets/colab-badge.svg" /></a></p>
 <h2 id="modules">Modules</h2>
 <p>The InSAR script is designed with three config-based main modules to cover the entire InSAR processing workflow:</p>
-<p><a class="md-button md-button--lg" href="../downloader/">Downloader</a> <a class="md-button md-button--lg" href="../processor/">Processor</a> <a class="md-button md-button--lg" href="../analyzer/">Analyzer</a></p>
+<p><a class="md-button md-button--lg" href="../../advanced/downloader/">Downloader</a> <a class="md-button md-button--lg" href="../../advanced/processor/">Processor</a> <a class="md-button md-button--lg" href="../../advanced/analyzer/">Analyzer</a></p>
 <p>You can click on each module to view detailed information later. For now, let's begin by running the program using the basic example.</p>
 <h2 id="workflow">Workflow</h2>
 <p>The basic workflow of InSARHub can be brifely described as: </p>

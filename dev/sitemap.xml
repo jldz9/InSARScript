@@ -9,7 +9,19 @@
          <lastmod>2026-03-06</lastmod>
     </url>
     <url>
-         <loc>https://jldz9.github.io/InSARHub/dev/quickstart/analyzer/</loc>
+         <loc>https://jldz9.github.io/InSARHub/dev/advanced/analyzer/</loc>
+         <lastmod>2026-03-06</lastmod>
+    </url>
+    <url>
+         <loc>https://jldz9.github.io/InSARHub/dev/advanced/downloader/</loc>
+         <lastmod>2026-03-06</lastmod>
+    </url>
+    <url>
+         <loc>https://jldz9.github.io/InSARHub/dev/advanced/processor/</loc>
+         <lastmod>2026-03-06</lastmod>
+    </url>
+    <url>
+         <loc>https://jldz9.github.io/InSARHub/dev/advanced/utilities/</loc>
          <lastmod>2026-03-06</lastmod>
     </url>
     <url>
@@ -17,7 +29,7 @@
          <lastmod>2026-03-06</lastmod>
     </url>
     <url>
-         <loc>https://jldz9.github.io/InSARHub/dev/quickstart/downloader/</loc>
+         <loc>https://jldz9.github.io/InSARHub/dev/quickstart/cli/</loc>
          <lastmod>2026-03-06</lastmod>
     </url>
     <url>
@@ -25,15 +37,7 @@
          <lastmod>2026-03-06</lastmod>
     </url>
     <url>
-         <loc>https://jldz9.github.io/InSARHub/dev/quickstart/processor/</loc>
-         <lastmod>2026-03-06</lastmod>
-    </url>
-    <url>
          <loc>https://jldz9.github.io/InSARHub/dev/quickstart/running/</loc>
-         <lastmod>2026-03-06</lastmod>
-    </url>
-    <url>
-         <loc>https://jldz9.github.io/InSARHub/dev/quickstart/utilities/</loc>
          <lastmod>2026-03-06</lastmod>
     </url>
 </urlset>

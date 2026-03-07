@@ -1690,7 +1690,7 @@
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>insarhub<span class="w"> </span>downloader<span class="w"> </span>-N<span class="w"> </span>S1_SLC<span class="w"> </span>-w<span class="w"> </span>/data/bryce
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Use a different config file</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>insarhub<span class="w"> </span>downloader<span class="w"> </span>--config<span class="w"> </span>/other/path/my_config.json
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>insarhub<span class="w"> </span>downloader<span class="w"> </span>-w<span class="w"> </span>/data/bryce<span class="w"> </span>--config<span class="w"> </span>/other/path/my_config.json
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
 </span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1"># Load default config path without specifying a value</span>
 </span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>insarhub<span class="w"> </span>downloader<span class="w"> </span>-N<span class="w"> </span>S1_SLC<span class="w"> </span>--config
@@ -1725,7 +1725,8 @@
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>insarhub<span class="w"> </span>downloader<span class="w"> </span>--stacks<span class="w"> </span><span class="m">100</span>:466<span class="w"> </span><span class="m">20</span>:118
 </span></code></pre></div>
 <h3 id="pair-selection">Pair selection</h3>
-<p>Add <code>--select-pairs</code> to run interferogram pair selection after search. Results are saved as <code>pairs_p&lt;path&gt;_f&lt;frame&gt;.json</code> inside a <code>p&lt;path&gt;_f&lt;frame&gt;/</code> subfolder under <code>workdir</code> — one file per track/frame group. <code>insarhub processor submit</code> automatically finds these files in the same <code>workdir</code>, so no extra flags are needed to hand off pairs between the two steps.</p>
+<p>Add <code>--select-pairs</code> to run interferogram pair selection after search. Results are saved as <code>pairs_p&lt;path&gt;_f&lt;frame&gt;.json</code> inside a <code>p&lt;path&gt;_f&lt;frame&gt;/</code> subfolder under <code>workdir</code>. 
+One file per track/frame group. </p>
 <table>
 <thead>
 <tr>
@@ -1886,7 +1887,7 @@
 </tr>
 <tr>
 <td><code>--credential-pool</code></td>
-<td>—</td>
+<td><code>~/.credit_pool</code></td>
 <td>JSON file mapping <code>{username: password}</code> for multi-account <abbr title="Hybrid Pluggable Processing Pipeline">HyP3</abbr> submission</td>
 </tr>
 <tr>
@@ -1916,37 +1917,100 @@
 </tr>
 </tbody>
 </table>
-<p>After a successful submission, <code>processor_config.json</code> is written to <code>workdir</code>. On subsequent runs it is loaded automatically, so you only need to specify overrides:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># First run</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>submit<span class="w"> </span>-N<span class="w"> </span>Hyp3_InSAR<span class="w"> </span>-w<span class="w"> </span>/data/bryce
+<p>After a successful submission or dry run, <code>processor_config.json</code> is written to <code>workdir</code>. On subsequent runs it is loaded automatically, so you only need to specify overrides:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Run with overrides options</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>submit<span class="w"> </span>-N<span class="w"> </span>Hyp3_InSAR<span class="w"> </span>-w<span class="w"> </span>/data/bryce<span class="w"> </span>--phase_filter_parameter<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>--dry-run
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Re-submit with saved config (no extra flags needed)</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>submit<span class="w"> </span>-w<span class="w"> </span>/data/bryce
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Submit with saved config (default to &lt;workdir&gt;/processor_config.json)</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>submit<span class="w"> </span>-w<span class="w"> </span>/data/bryce<span class="w"> </span>--config
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
 </span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Use a custom config file</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>submit<span class="w"> </span>--config<span class="w"> </span>/other/config.json
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>submit<span class="w"> </span>-w<span class="w"> </span>/data/bryce<span class="w"> </span>--config<span class="w"> </span>/other/config.json
 </span></code></pre></div>
-<p>When no <code>--pairs-file</code> is given, <code>submit</code> automatically looks for <code>pairs_p&lt;path&gt;_f&lt;frame&gt;.json</code> files inside <code>p&lt;path&gt;_f&lt;frame&gt;/</code> subfolders under <code>workdir</code> — the files written by <code>downloader --select-pairs</code>. A separate <abbr title="Hybrid Pluggable Processing Pipeline">HyP3</abbr> job batch is submitted for each group found.</p>
+<p>When no <code>--pairs-file</code> is given, <code>submit</code> automatically looks for <code>pairs_p&lt;path&gt;_f&lt;frame&gt;.json</code> files inside <code>p&lt;path&gt;_f&lt;frame&gt;/</code> subfolders under <code>workdir</code> (the layout produced by <code>downloader --select-pairs</code>). A separate <abbr title="Hybrid Pluggable Processing Pipeline">HyP3</abbr> job batch is submitted for each group found, with outputs saved alongside the pairs file.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Submit from auto-detected pairs.json in workdir</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>submit<span class="w"> </span>-w<span class="w"> </span>/data/bryce
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>submit<span class="w"> </span>-w<span class="w"> </span>/data/bryce<span class="w"> </span>--dry-run
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Submit with a specific pairs file, dry run first</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>submit<span class="w"> </span>-w<span class="w"> </span>/data/bryce<span class="w"> </span>--pairs-file<span class="w"> </span>/data/pairs.json<span class="w"> </span>--dry-run
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>submit<span class="w"> </span>-w<span class="w"> </span>/data/bryce<span class="w"> </span>--pairs-file<span class="w"> </span>/data/pairs.json<span class="w"> </span>
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
 </span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># Inline pairs</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>submit<span class="w"> </span>--pairs<span class="w"> </span><span class="s2">&quot;S1A_20200101,S1A_20200113&quot;</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>submit<span class="w"> </span>-w<span class="w"> </span>/data/bryce<span class="w"> </span>--pairs<span class="w"> </span><span class="s2">&quot;S1A_20200101,S1A_20200113&quot;</span>
 </span></code></pre></div>
 <h3 id="refresh">refresh</h3>
 <p>Pull the latest job statuses from <abbr title="Hybrid Pluggable Processing Pipeline">HyP3</abbr>.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-w</code>, <code>--workdir</code></td>
+<td>cwd</td>
+<td>Working directory</td>
+</tr>
+<tr>
+<td><code>--job-file</code></td>
+<td><code>&lt;workdir&gt;/hyp3_jobs.json</code></td>
+<td>Path to saved job IDs JSON</td>
+</tr>
+</tbody>
+</table>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>refresh<span class="w"> </span>-w<span class="w"> </span>/data/bryce
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>refresh<span class="w"> </span>-w<span class="w"> </span>/data/bryce<span class="w"> </span>--job-file<span class="w"> </span>/data/bryce/hyp3_jobs.json
 </span></code></pre></div>
 <h3 id="download_1">download</h3>
 <p>Download all completed <abbr title="Hybrid Pluggable Processing Pipeline">HyP3</abbr> job outputs.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-w</code>, <code>--workdir</code></td>
+<td>cwd</td>
+<td>Working directory</td>
+</tr>
+<tr>
+<td><code>--job-file</code></td>
+<td><code>&lt;workdir&gt;/hyp3_jobs.json</code></td>
+<td>Path to saved job IDs JSON</td>
+</tr>
+</tbody>
+</table>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>download<span class="w"> </span>-w<span class="w"> </span>/data/bryce
 </span></code></pre></div>
 <h3 id="retry">retry</h3>
 <p>Resubmit all failed jobs.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-w</code>, <code>--workdir</code></td>
+<td>cwd</td>
+<td>Working directory</td>
+</tr>
+<tr>
+<td><code>--job-file</code></td>
+<td><code>&lt;workdir&gt;/hyp3_jobs.json</code></td>
+<td>Path to saved job IDs JSON</td>
+</tr>
+</tbody>
+</table>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>retry<span class="w"> </span>-w<span class="w"> </span>/data/bryce
 </span></code></pre></div>
 <h3 id="watch">watch</h3>
@@ -1970,8 +2034,25 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>watch<span class="w"> </span>-w<span class="w"> </span>/data/bryce<span class="w"> </span>--interval<span class="w"> </span><span class="m">600</span>
 </span></code></pre></div>
 <h3 id="credits">credits</h3>
-<p>Show remaining <abbr title="Hybrid Pluggable Processing Pipeline">HyP3</abbr> processing credits.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>credits<span class="w"> </span>-w<span class="w"> </span>/data/bryce
+<p>Show remaining <abbr title="Hybrid Pluggable Processing Pipeline">HyP3</abbr> processing credits for all accounts.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--credential-pool</code></td>
+<td><code>~/.credit_pool</code></td>
+<td>JSON file mapping <code>{username: password}</code> to check multiple accounts</td>
+</tr>
+</tbody>
+</table>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>credits
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>insarhub<span class="w"> </span>processor<span class="w"> </span>credits<span class="w"> </span>--credential-pool<span class="w"> </span>~/.credit_pool
 </span></code></pre></div>
 <hr />
 <h2 id="analyzer">analyzer</h2>

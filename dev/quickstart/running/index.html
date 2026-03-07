@@ -1297,12 +1297,12 @@
 <p><a class="md-button md-button--lg" href="../../advanced/downloader/">Downloader</a> <a class="md-button md-button--lg" href="../../advanced/processor/">Processor</a> <a class="md-button md-button--lg" href="../../advanced/analyzer/">Analyzer</a></p>
 <p>You can click on each module to view detailed information later. For now, let's begin by running the program using the basic example.</p>
 <h2 id="workflow">Workflow</h2>
-<p>The basic workflow of InSARHub can be brifely described as: </p>
+<p>The basic workflow of InSARHub can be briefly described as:</p>
 <div style="text-align: center;">
 <pre class="mermaid"><code>graph
     A[Set AOI] --&gt; B[Searching];
     B --&gt; C[Result Filtering];
-    C --&gt; D[Intergerogram];
+    C --&gt; D[Interferogram];
     D --&gt; F[Time-series Analysis];
     F --&gt; H[Post-Processing];
     click A "#set-aoi" "Go to Set AOI section"
@@ -1342,7 +1342,7 @@
 <div class="language-py highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">Searching</span> <span class="k">for</span> <span class="n">SLCs</span><span class="o">....</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="o">--</span> <span class="n">A</span> <span class="n">total</span> <span class="n">of</span> <span class="mi">991</span> <span class="n">results</span> <span class="n">found</span><span class="o">.</span> 
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">The</span> <span class="n">AOI</span> <span class="n">crosses</span> <span class="mi">18</span> <span class="n">stacks</span><span class="p">,</span> <span class="n">you</span> <span class="n">can</span> <span class="n">use</span> <span class="o">.</span><span class="n">summary</span><span class="p">()</span> <span class="ow">or</span> <span class="o">.</span><span class="n">footprint</span><span class="p">()</span> <span class="n">to</span> <span class="n">check</span> <span class="n">footprints</span> <span class="ow">and</span> <span class="o">.</span><span class="n">pick</span><span class="p">((</span><span class="n">path_frame</span><span class="p">))</span> <span class="n">to</span> <span class="n">specific</span> <span class="n">the</span> <span class="n">stack</span> <span class="n">of</span> <span class="n">scence</span> 
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">The</span> <span class="n">AOI</span> <span class="n">crosses</span> <span class="mi">18</span> <span class="n">stacks</span><span class="p">,</span> <span class="n">you</span> <span class="n">can</span> <span class="n">use</span> <span class="o">.</span><span class="n">summary</span><span class="p">()</span> <span class="ow">or</span> <span class="o">.</span><span class="n">footprint</span><span class="p">()</span> <span class="n">to</span> <span class="n">check</span> <span class="n">footprints</span> <span class="ow">and</span> <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">path_frame</span><span class="o">=</span><span class="p">(</span><span class="o">...</span><span class="p">))</span> <span class="n">to</span> <span class="n">select</span> <span class="n">the</span> <span class="n">stack</span> <span class="n">of</span> <span class="n">scenes</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">you</span> <span class="n">would</span> <span class="n">like</span> <span class="n">to</span> <span class="n">download</span><span class="o">.</span> <span class="n">If</span> <span class="n">use</span> <span class="o">.</span><span class="n">download</span><span class="p">()</span> <span class="n">directly</span> <span class="n">will</span> <span class="n">create</span> <span class="n">subfolders</span> <span class="n">under</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">jldz9</span><span class="o">/</span><span class="n">dev</span><span class="o">/</span><span class="n">InSARHub</span> <span class="k">for</span> <span class="n">each</span> <span class="n">stack</span>
 </span></code></pre></div>
 </details>
@@ -1350,12 +1350,12 @@
 <p>Your <abbr title="Area of interest">AOI</abbr> probably spans multiple scenes. To view the search result footprints, you can use:
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">s1</span><span class="o">.</span><span class="n">footprint</span><span class="p">()</span>
 </span></code></pre></div>
-This will display a footprint map of the available Sentinel-1 scenes that covers the <abbr title="Area of interest">AOI</abbr>. The stack indicates numbers of SAR sences in that footprint, becuase we have multiple stacks the graph will be a bit messy:</p>
+This will display a footprint map of the available Sentinel-1 scenes that covers the <abbr title="Area of interest">AOI</abbr>. The stack indicates the number of SAR scenes in that footprint. Because we have multiple stacks the graph will be a bit messy:</p>
 <p><img alt="footprint" src="../fig/footprint.png" style="width:500px; display: block; margin: auto;" /></p>
-<p>Let's check details of our SAR sence stacks and figure out which stack(s) we want to keep:
+<p>Let's check details of our SAR scene stacks and figure out which stack(s) we want to keep:
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">s1</span><span class="o">.</span><span class="n">summary</span><span class="p">()</span>
 </span></code></pre></div>
-This will output the summary of availiable Sentinel-1 scenes that covers the <abbr title="Area of interest">AOI</abbr>. </p>
+This will output the summary of available Sentinel-1 scenes that cover the <abbr title="Area of interest">AOI</abbr>.</p>
 <details class="output">
 <summary>Output</summary>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="o">===</span><span class="w"> </span>ASCENDING<span class="w"> </span>ORBITS<span class="w"> </span><span class="o">(</span><span class="m">14</span><span class="w"> </span>Stacks<span class="o">)</span><span class="w"> </span><span class="o">===</span>
@@ -1406,7 +1406,7 @@ would return: </p>
  provided by <abbr title="Alaska Satellite Facility">ASF</abbr> to run the interferometric processing in the cloud and download the resulting interferograms.</li>
 </ul>
 <h4 id="hyp3">Hyp3</h4>
-<p>HyP3 is an online processing platform provided by <abbr title="Alaska Satellite Facility">ASF</abbr>. InSARSciprt has wrapped <a href="https://github.com/ASFHyP3/hyp3-sdk">hyp3_sdk</a> as a <code>Processor</code>:</p>
+<p>HyP3 is an online processing platform provided by <abbr title="Alaska Satellite Facility">ASF</abbr>. InSARHub has wrapped <a href="https://github.com/ASFHyP3/hyp3-sdk">hyp3_sdk</a> as a <code>Processor</code>:</p>
 <p>Hyp3 InSAR Processor takes a pair of <code>reference_granule_id</code> and a <code>secondary_granule_id</code> to generate an interferogram. To automate the pair selection process: </p>
 <p><div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">insarhub.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">select_pairs</span><span class="p">,</span> <span class="n">plot_pair_network</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">pair_stacks</span><span class="p">,</span> <span class="n">B</span> <span class="o">=</span> <span class="n">select_pairs</span><span class="p">(</span><span class="n">filter_results</span><span class="p">,</span> <span class="n">max_degree</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span> <span class="c1"># We set the maximum connections to 5 to limit interferograms</span>
@@ -1528,7 +1528,7 @@ Once all downloads are complete, we are ready to move to time-series analysis!</
 <li><a href="https://github.com/insarlab/MintPy"><strong>Mintpy</strong></a>: an open-source Python package for InSAR time-series analysis.</li>
 </ul>
 <h4 id="mintpy">Mintpy</h4>
-<p>InSARSciprt has wrapped Mintpy's <code>SmallbaselineApp</code> as an analyzer, to connect Mintpy with Hyp3 product: </p>
+<p>InSARHub has wrapped MintPy's <code>SmallbaselineApp</code> as an analyzer, to connect MintPy with HyP3 products:</p>
 <p><div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">insarhub</span><span class="w"> </span><span class="kn">import</span> <span class="n">Analyzer</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">workdir</span> <span class="o">=</span> <span class="s1">&#39;your/directory/p*_f*&#39;</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">hyp3_sbas</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="s1">&#39;Hyp3_SBAS&#39;</span><span class="p">,</span> <span class="n">workdir</span><span class="o">=</span><span class="n">workdir</span><span class="p">)</span>

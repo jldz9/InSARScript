@@ -1,6 +1,7 @@
 # InSARHub
 
-InSAR Script is an open-source package designed to support the full InSAR processing pipeline.
+InSARHub is a modular Python framework for automated InSAR and time-series processing.
+
 The primary goal of this package is to provide a streamlined and user-friendly InSAR processing experience across multiple satellite products.
 
 ## Table of Contents

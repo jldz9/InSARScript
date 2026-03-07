@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 HPC-compatible CLI for InSARHub.
 

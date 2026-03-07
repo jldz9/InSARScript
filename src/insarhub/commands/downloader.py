@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from insarhub.core.base import BaseDownloader
 from .base import BaseCommand, CommandResult
 

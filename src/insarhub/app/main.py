@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Self-hosted Panel frontend for InSARHub.
 

@@ -1,5 +1,5 @@
 """
-HPC-compatible CLI for InSARScript.
+HPC-compatible CLI for InSARHub.
 
 Every command handler builds an instance from CLI args, then delegates all
 logic to the shared command layer (insarhub.commands). The same command
@@ -34,6 +34,7 @@ insarhub processor credits          --workdir /data/bryce
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -52,7 +53,8 @@ def _add_job_file(p: argparse.ArgumentParser):
 
 def _add_credential_pool(p: argparse.ArgumentParser):
     p.add_argument("--credential-pool", metavar="PATH",
-                   help='JSON file mapping {username: password} for multi-account HyP3 submission')
+                   help='JSON file mapping {username: password} for multi-account HyP3 submission '
+                        '(default: ~/.credit_pool)')
 
 
 # ---------------------------------------------------------------------------
@@ -501,7 +503,7 @@ def create_parser() -> argparse.ArgumentParser:
                          help="Account to charge resources to (optional)")
     p_slurm.add_argument("--qos", metavar="STR", default=None,
                          help="Quality of Service specification (optional)")
-    p_slurm.add_argument("--command", metavar="CMD", required=True,
+    p_slurm.add_argument("--command", metavar="CMD", required=True, dest="job_command",
                          help="Command(s) to execute inside the job")
     p_slurm.add_argument("-o", "--output", metavar="PATH", default="job.slurm",
                          help="Output script path (default: job.slurm)")
@@ -547,9 +549,13 @@ def _find_job_files(job_dir: Path, override: str | None = None) -> list[Path]:
 
 def _load_credential_pool(path: str | None) -> dict | None:
     from insarhub.utils import earth_credit_pool
-    if not path:
+    resolved = Path(path).expanduser().resolve() if path else Path("~/.credit_pool").expanduser()
+    if not resolved.exists():
+        if path:
+            print(f"[ERROR] Credential pool file not found: {resolved}", file=sys.stderr)
+            sys.exit(1)
         return None
-    return earth_credit_pool(Path(path).expanduser().resolve())
+    return earth_credit_pool(resolved)
 
 
 
@@ -633,6 +639,15 @@ def _unwrap_optional(annotation):
     return annotation
 
 
+def _str_to_bool(v: str) -> bool:
+    """Convert a string like 'true'/'false'/'1'/'0' to bool."""
+    if v.lower() in ("true", "1", "yes"):
+        return True
+    if v.lower() in ("false", "0", "no"):
+        return False
+    raise argparse.ArgumentTypeError(f"Expected true/false, got '{v}'")
+
+
 def _field_argparse_kwargs(annotation, default) -> dict:
     """Return kwargs for ArgumentParser.add_argument() inferred from a type annotation."""
     import typing
@@ -642,7 +657,7 @@ def _field_argparse_kwargs(annotation, default) -> dict:
     origin = typing.get_origin(base)
 
     if base is bool:
-        return {"action": argparse.BooleanOptionalAction, "default": default}
+        return {"type": _str_to_bool, "default": default, "metavar": "BOOL"}
 
     if origin is list:
         inner_args = typing.get_args(base)
@@ -830,10 +845,12 @@ def _write_config_json(cfg_path: Path, overrides: dict) -> None:
     cfg_path.write_text(json.dumps(existing, indent=2, default=str))
 
 
+_GROUP_KEY_RE = re.compile(r"p(\d+)_f(\d+)")
+
+
 def _parse_group_key(key: str) -> tuple[int, int] | None:
     """Parse 'p100_f466' → (100, 466); return None if key doesn't match pattern."""
-    import re
-    m = re.fullmatch(r"p(\d+)_f(\d+)", key)
+    m = _GROUP_KEY_RE.fullmatch(key)
     return (int(m.group(1)), int(m.group(2))) if m else None
 
 
@@ -878,7 +895,7 @@ def _load_pairs(args, workdir: Path) -> dict | list:
     if auto.is_file():
         print(f"[pairs] Auto-loading {auto}")
         return json.loads(auto.read_text())
-    print("[ERROR] No pairs provided. Use --pairs-file, --pairs, or run "
+    print(f"[ERROR] No pairs file found under current workdir {workdir}. Use --pairs-file, --pairs, or run "
           "'insarhub downloader --select-pairs' first.", file=sys.stderr)
     sys.exit(1)
 
@@ -1004,7 +1021,7 @@ def cmd_downloader(args, extra_args: list[str]):
         overrides["relativeOrbit"] = [p for p, _ in parsed]
         overrides["frame"]         = [f for _, f in parsed]
         stacks_filter = parsed
-    elif not args.stacks:
+    else:
         # Reconstruct stacks_filter from saved config lists so the exact-pair filter
         # is re-applied on reload (prevents ASF returning all cross-combinations)
         _ro = overrides.get("relativeOrbit")
@@ -1524,10 +1541,6 @@ def _az_cleanup(args):
 
 def cmd_utils(args, extra_args: list[str]):
     action = getattr(args, "ut_action", None)
-    if not action:
-        import subprocess
-        subprocess.run([sys.argv[0], "utils", "--help"])
-        return
 
     if action == "clip":
         from insarhub.utils.tool import clip_hyp3_insar
@@ -1556,7 +1569,6 @@ def cmd_utils(args, extra_args: list[str]):
         save_footprint(raster_file=args.input, out_footprint=args.output)
 
     elif action == "select-pairs":
-        import json
         import asf_search
         from insarhub.utils.tool import select_pairs
 
@@ -1613,7 +1625,6 @@ def cmd_utils(args, extra_args: list[str]):
             print(f"Network plot saved → {args.plot}")
 
     elif action == "plot-network":
-        import json
         from insarhub.utils.tool import plot_pair_network
 
         in_path = Path(args.input).expanduser().resolve()
@@ -1667,7 +1678,7 @@ def cmd_utils(args, extra_args: list[str]):
             mail_type=args.mail_type,
             account=args.account,
             qos=args.qos,
-            command=args.command,
+            command=args.job_command,
         )
         out_path = cfg.to_script(args.output)
         print(f"SLURM script written → {out_path}")

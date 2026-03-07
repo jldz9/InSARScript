@@ -101,8 +101,13 @@ class Hyp3Base(Hyp3Processor):
         if pool and len(pool) > 0:
             self._username_pool = list(pool.keys())
             self._password_pool = list(pool.values())
-            self._username_pool.insert(0, self._username)
-            self._password_pool.insert(0, self._password)
+            if self._username in self._username_pool:
+                idx = self._username_pool.index(self._username)
+                self._username_pool.insert(0, self._username_pool.pop(idx))
+                self._password_pool.insert(0, self._password_pool.pop(idx))
+            else:
+                self._username_pool.insert(0, self._username)
+                self._password_pool.insert(0, self._password)
             self._auth_pool = True
             self._user_index = 0
         else:

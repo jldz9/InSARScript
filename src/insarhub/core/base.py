@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Union, Optional, Any, Type, Iterator
+from typing import List, Union, Optional, Any, Type
 
 class BaseDownloader(ABC):
     """Abstract base class for all content downloaders.

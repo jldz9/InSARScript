@@ -69,7 +69,7 @@ insarhub downloader -N S1_SLC --AOI -113.05 37.74 -112.68 38.00 \
 insarhub downloader -N S1_SLC -w /data/bryce
 
 # Use a different config file
-insarhub downloader --config /other/path/my_config.json
+insarhub downloader -w /data/bryce --config /other/path/my_config.json
 
 # Load default config path without specifying a value
 insarhub downloader -N S1_SLC --config
@@ -99,7 +99,8 @@ insarhub downloader --stacks 100:466 20:118
 
 ### Pair selection
 
-Add `--select-pairs` to run interferogram pair selection after search. Results are saved as `pairs_p<path>_f<frame>.json` inside a `p<path>_f<frame>/` subfolder under `workdir` — one file per track/frame group. `insarhub processor submit` automatically finds these files in the same `workdir`, so no extra flags are needed to hand off pairs between the two steps.
+Add `--select-pairs` to run interferogram pair selection after search. Results are saved as `pairs_p<path>_f<frame>.json` inside a `p<path>_f<frame>/` subfolder under `workdir`. 
+One file per track/frame group. 
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -168,42 +169,47 @@ insarhub processor submit [options]
 | `--list-options` | — | Print all config fields for the selected processor |
 | `-w`, `--workdir` | cwd | Working directory |
 | `--config` | `<workdir>/processor_config.json` | Path to a saved processor config JSON; omit the value to use the default path |
-| `--credential-pool` | — | JSON file mapping `{username: password}` for multi-account HyP3 submission |
+| `--credential-pool` | `~/.credit_pool` | JSON file mapping `{username: password}` for multi-account HyP3 submission |
 | `--name-prefix` | `ifg` | Job name prefix |
 | `--max-workers` | `4` | Parallel submission workers |
 | `--dry-run` | — | Print what would be submitted without sending jobs |
 | `--pairs-file` | auto | JSON file from `downloader --select-pairs` |
 | `--pairs` | — | Inline pairs as `"reference,secondary"` strings |
 
-After a successful submission, `processor_config.json` is written to `workdir`. On subsequent runs it is loaded automatically, so you only need to specify overrides:
+After a successful submission or dry run, `processor_config.json` is written to `workdir`. On subsequent runs it is loaded automatically, so you only need to specify overrides:
 
 ```bash
-# First run
-insarhub processor submit -N Hyp3_InSAR -w /data/bryce
+# Run with overrides options
+insarhub processor submit -N Hyp3_InSAR -w /data/bryce --phase_filter_parameter 0.5 --dry-run
 
-# Re-submit with saved config (no extra flags needed)
-insarhub processor submit -w /data/bryce
+# Submit with saved config (default to <workdir>/processor_config.json)
+insarhub processor submit -w /data/bryce --config
 
 # Use a custom config file
-insarhub processor submit --config /other/config.json
+insarhub processor submit -w /data/bryce --config /other/config.json
 ```
 
-When no `--pairs-file` is given, `submit` automatically looks for `pairs_p<path>_f<frame>.json` files inside `p<path>_f<frame>/` subfolders under `workdir` — the files written by `downloader --select-pairs`. A separate HyP3 job batch is submitted for each group found.
+When no `--pairs-file` is given, `submit` automatically looks for `pairs_p<path>_f<frame>.json` files inside `p<path>_f<frame>/` subfolders under `workdir` (the layout produced by `downloader --select-pairs`). A separate HyP3 job batch is submitted for each group found, with outputs saved alongside the pairs file.
 
 ```bash
 # Submit from auto-detected pairs.json in workdir
-insarhub processor submit -w /data/bryce
+insarhub processor submit -w /data/bryce --dry-run
 
 # Submit with a specific pairs file, dry run first
-insarhub processor submit -w /data/bryce --pairs-file /data/pairs.json --dry-run
+insarhub processor submit -w /data/bryce --pairs-file /data/pairs.json 
 
 # Inline pairs
-insarhub processor submit --pairs "S1A_20200101,S1A_20200113"
+insarhub processor submit -w /data/bryce --pairs "S1A_20200101,S1A_20200113"
 ```
 
 ### refresh
 
 Pull the latest job statuses from HyP3.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-w`, `--workdir` | cwd | Working directory |
+| `--job-file` | `<workdir>/hyp3_jobs.json` | Path to saved job IDs JSON |
 
 ```bash
 insarhub processor refresh -w /data/bryce
@@ -214,6 +220,11 @@ insarhub processor refresh -w /data/bryce --job-file /data/bryce/hyp3_jobs.json
 
 Download all completed HyP3 job outputs.
 
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-w`, `--workdir` | cwd | Working directory |
+| `--job-file` | `<workdir>/hyp3_jobs.json` | Path to saved job IDs JSON |
+
 ```bash
 insarhub processor download -w /data/bryce
 ```
@@ -221,6 +232,11 @@ insarhub processor download -w /data/bryce
 ### retry
 
 Resubmit all failed jobs.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-w`, `--workdir` | cwd | Working directory |
+| `--job-file` | `<workdir>/hyp3_jobs.json` | Path to saved job IDs JSON |
 
 ```bash
 insarhub processor retry -w /data/bryce
@@ -240,10 +256,15 @@ insarhub processor watch -w /data/bryce --interval 600
 
 ### credits
 
-Show remaining HyP3 processing credits.
+Show remaining HyP3 processing credits for all accounts.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--credential-pool` | `~/.credit_pool` | JSON file mapping `{username: password}` to check multiple accounts |
 
 ```bash
-insarhub processor credits -w /data/bryce
+insarhub processor credits
+insarhub processor credits --credential-pool ~/.credit_pool
 ```
 
 ---

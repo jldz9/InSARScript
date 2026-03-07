@@ -1,5 +1,5 @@
 """
-Self-hosted Panel frontend for InSARScript.
+Self-hosted Panel frontend for InSARHub.
 
 All buttons call the same command classes used by the HPC CLI, so there
 is no duplicated business logic.
@@ -569,7 +569,7 @@ class AnalyzerPage(pn.viewable.Viewer):
 
 def create_app():
     header = pn.pane.Markdown(
-        "# InSARScript\nEnd-to-end InSAR processing — download · process · analyze",
+        "# InSARHub\nEnd-to-end InSAR processing — download · process · analyze",
         sizing_mode="stretch_width",
     )
     tabs = pn.Tabs(
@@ -588,20 +588,20 @@ def create_app():
 def serve():
     """Entry point for the `insarhub-app` CLI command."""
     parser = argparse.ArgumentParser(prog="insarhub-app",
-                                     description="Launch the InSARScript Panel web UI")
+                                     description="Launch the InSARHub Panel web UI")
     parser.add_argument("--port",  type=int, default=5006, help="Server port (default: 5006)")
     parser.add_argument("--host",  type=str, default="localhost", help="Bind address (default: localhost)")
     parser.add_argument("--open",  action="store_true", default=True,
                         help="Open browser automatically (default: True)")
     args = parser.parse_args()
 
-    print(f"Starting InSARScript UI at http://{args.host}:{args.port}")
+    print(f"Starting InSARHub UI at http://{args.host}:{args.port}")
     pn.serve(
         create_app,
         port=args.port,
         address=args.host,
         show=args.open,
-        title="InSARScript",
+        title="InSARHub",
     )
 
 

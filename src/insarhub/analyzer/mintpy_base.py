@@ -34,7 +34,7 @@ class Mintpy_SBAS_Base_Analyzer(BaseAnalyzer):
         self.config.write_mintpy_config(self.cfg_path)
 
     def _cds_authorize(self):
-        if self._check_cdsapirc:
+        if self._check_cdsapirc():
            return True
         else: 
             while True:

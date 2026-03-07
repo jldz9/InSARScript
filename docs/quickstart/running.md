@@ -11,13 +11,13 @@ The InSAR script is designed with three config-based main modules to cover the e
 You can click on each module to view detailed information later. For now, let's begin by running the program using the basic example.
 ## Workflow
 
-The basic workflow of InSARHub can be brifely described as: 
+The basic workflow of InSARHub can be briefly described as:
 <div style="text-align: center;">
 ```mermaid
 graph
     A[Set AOI] --> B[Searching];
     B --> C[Result Filtering];
-    C --> D[Intergerogram];
+    C --> D[Interferogram];
     D --> F[Time-series Analysis];
     F --> H[Post-Processing];
     click A "#set-aoi" "Go to Set AOI section"
@@ -65,7 +65,7 @@ results = s1.search()
     Searching for SLCs....
     -- A total of 991 results found. 
 
-    The AOI crosses 18 stacks, you can use .summary() or .footprint() to check footprints and .pick((path_frame)) to specific the stack of scence 
+    The AOI crosses 18 stacks, you can use .summary() or .footprint() to check footprints and .filter(path_frame=(...)) to select the stack of scenes
     you would like to download. If use .download() directly will create subfolders under /home/jldz9/dev/InSARHub for each stack
     ```
 
@@ -74,15 +74,15 @@ Your AOI probably spans multiple scenes. To view the search result footprints, y
 ```python 
 s1.footprint()
 ```
-This will display a footprint map of the available Sentinel-1 scenes that covers the AOI. The stack indicates numbers of SAR sences in that footprint, becuase we have multiple stacks the graph will be a bit messy:
+This will display a footprint map of the available Sentinel-1 scenes that covers the AOI. The stack indicates the number of SAR scenes in that footprint. Because we have multiple stacks the graph will be a bit messy:
 
 ![footprint](fig/footprint.png){: style="width:500px; display: block; margin: auto;" }
 
-Let's check details of our SAR sence stacks and figure out which stack(s) we want to keep:
+Let's check details of our SAR scene stacks and figure out which stack(s) we want to keep:
 ```python
 s1.summary()
 ```
-This will output the summary of availiable Sentinel-1 scenes that covers the AOI. 
+This will output the summary of available Sentinel-1 scenes that cover the AOI.
 ??? output
     ```bash
     === ASCENDING ORBITS (14 Stacks) ===
@@ -146,7 +146,7 @@ After locating SAR scene stack(s), the next step is to generate unwrapped interf
 
 #### Hyp3
 
-HyP3 is an online processing platform provided by ASF. InSARSciprt has wrapped [hyp3_sdk](https://github.com/ASFHyP3/hyp3-sdk) as a `Processor`:
+HyP3 is an online processing platform provided by ASF. InSARHub has wrapped [hyp3_sdk](https://github.com/ASFHyP3/hyp3-sdk) as a `Processor`:
 
 Hyp3 InSAR Processor takes a pair of `reference_granule_id` and a `secondary_granule_id` to generate an interferogram. To automate the pair selection process: 
 
@@ -282,7 +282,7 @@ After generated all unwrapped interferograms, time-series analysis is recommende
 - [**Mintpy**](https://github.com/insarlab/MintPy): an open-source Python package for InSAR time-series analysis.
 
 #### Mintpy
-InSARSciprt has wrapped Mintpy's `SmallbaselineApp` as an analyzer, to connect Mintpy with Hyp3 product: 
+InSARHub has wrapped MintPy's `SmallbaselineApp` as an analyzer, to connect MintPy with HyP3 products:
 
 ```python
 from insarhub import Analyzer

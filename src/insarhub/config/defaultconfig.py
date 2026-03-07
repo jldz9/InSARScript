@@ -377,7 +377,7 @@ class Mintpy_SBAS_Base_Config:
         exclude_fields = ['name', 'workdir', 'debug']
 
         with open(outpath, 'w') as f:
-            f.write("## MintPy Config File Generated via InSARScript\n")
+            f.write("## MintPy Config File Generated via InSARHub\n")
 
             for key, value in asdict(self).items():
                 if key in exclude_fields:

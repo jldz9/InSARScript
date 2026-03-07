@@ -1,5 +1,5 @@
 
-# This is the config file for InSARScript
+# This is the config file for InSARHub
 [IO]            
 WORKDIR =  "/"  ## Your Path to the working directory
 

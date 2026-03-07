@@ -1,4 +1,4 @@
-name: insarscript
+name: insarhub
 channels:
     - defaults
     - conda-forge

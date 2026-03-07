@@ -1,6 +1,6 @@
 
 import getpass
-import signal
+import threading
 import time
 from dataclasses import asdict
 from dateutil.parser import isoparse
@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 import rasterio as rio
 from asf_search.exceptions import ASFAuthenticationError
 from colorama import Fore
-from eof.download import download_eofs
 from pyproj import Transformer
 from shapely import wkt, plotting
 from shapely.ops import transform
@@ -617,7 +616,6 @@ Check documentation for how to setup .netrc file.\n""")
             ValueError: If no search results are available.
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        from threading import Event
         output_dir = Path(save_path).expanduser().resolve() if save_path else self.config.workdir
 
         self.download_dir = output_dir.joinpath('data')
@@ -626,7 +624,7 @@ Check documentation for how to setup .netrc file.\n""")
         if not hasattr(self, 'results'):
             raise ValueError(f"{Fore.RED}No search results found. Please run search() first.")
         
-        stop_event = Event()
+        stop_event = threading.Event()
         
         jobs = []
         for key, results in self.active_results.items():
@@ -641,7 +639,7 @@ Check documentation for how to setup .netrc file.\n""")
         failed_files  = []
 
         active_files: dict[int, Path] = {}
-        active_files_lock = __import__('threading').Lock()
+        active_files_lock = threading.Lock()
 
         print(f"Downloading {total_jobs} scenes across "
           f"{len(self.active_results)} stacks "

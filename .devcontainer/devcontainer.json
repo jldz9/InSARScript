@@ -1,5 +1,5 @@
 {
-    "name": "insarscript",
+    "name": "insarhub",
     "dockerFile": "Dockerfile",
     "runArgs": [
       "--gpus", "all",  // Include this if using GPU, remove if unnecessary

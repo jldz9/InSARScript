@@ -89,7 +89,7 @@ def dis_scan(
             )
     for key, pair in tqdm(pairs.items(), desc=f'Working on batch', position=0, leave=True):
         if len(pair) <= 10:
-            print(f"{Fore.YELLOW}Not enough pairs found for a decent displacement analysis for Path{key[0]} Frame{key[1]}, skip the sence.")
+            print(f"{Fore.YELLOW}Not enough pairs found for a decent displacement analysis for Path{key[0]} Frame{key[1]}, skip the scene.")
             continue
         slc_path = output_dir.joinpath(f"quicklook_p{key[0]}f{key[1]}")
         slc_path.mkdir(parents=True, exist_ok=True)
@@ -294,7 +294,7 @@ class ERA5Downloader:
 
 
 if __name__== "__main__":
-    batch_era5_download('~/InSAR/Iran/quick_look', '~/InSAR/ERA5/ERA5')
+    ERA5Downloader('~/InSAR/ERA5/ERA5').download_batch('~/InSAR/Iran/quick_look')
         
         
 

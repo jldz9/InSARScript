@@ -32,14 +32,12 @@ First public release of **InSARHub** — a modular Python framework for automate
 - Optional pyAPS tropospheric correction with CDS API credential management
 - `cleanup()` to remove temporary files after processing
 
-#### Pair Selection (`select_pairs`)
-- Temporal and perpendicular baseline filtering with configurable targets and tolerances
+#### Utilities
+- `select_pairs`: Temporal and perpendicular baseline filtering with configurable targets and tolerances
 - Local baseline computation (zero network calls for Sentinel-1 and ALOS)
 - API fallback with threaded fetching for products without local baseline data
 - Connectivity enforcement: minimum/maximum degree per scene with force-connect option
-- Network visualization (`plot_pair_network`) with per-scene connection histogram
-
-#### Utilities
+- `plot_pair_network`: Network visualization with per-scene connection histogram
 - `ERA5Downloader`: Batch ERA5 reanalysis download for MintPy tropospheric correction, MintPy-compatible filenames
 - `clip_hyp3_insar`: Clip HyP3 zip outputs to a custom AOI before analysis
 - `Slurmjob_Config`: Generate SLURM batch scripts for HPC job submission

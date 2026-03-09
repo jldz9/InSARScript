@@ -9,7 +9,7 @@ authors = [{name="jldz9", email="Jiaweiliwork@outlook.com"}]
 description = "A modular Python framework for automated InSAR and time-series processing."
 readme = 'README.md'
 dependencies = [
-"numpy<2.0",
+"numpy",
 "asf_search",
 "cdsapi",
 "colorama",

@@ -39,7 +39,7 @@ requirements:
     - param
     - rasterio >=1.4
     - sentineleof
-    - numpy <2.0
+    - numpy 
     - tqdm
 
 test:

@@ -16,7 +16,6 @@ dependencies = [
 "contextily",
 "dem_stitcher",
 "hyp3_sdk",
-"matplotlib",
 "mintpy",
 "panel>=1.4",
 "param",

@@ -5,15 +5,15 @@ channels:
 dependencies:
     - python >=3.11,<3.13
     - gdal >=3.8
-    - sqlite >=3.44
     - mintpy
-    - proj >=9.4
     - pip
     - pip:
         - rasterio
         - asf_search
         - colorama
-        - hyp3-sdk
-        - dem-stitcher
+        - hyp3_sdk
+        - dem_stitcher
         - contextily
         - sentineleof
+        - panel
+        - cdsapi

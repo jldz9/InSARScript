@@ -31,7 +31,7 @@ class S1_SLC(ASF_Base_Downloader):
         Raises:
             ValueError: If CDSE authentication fails and the user cannot provide valid credentials.
         """
-        super().download(save_path=save_path)
+        super().download(save_path=save_path, max_workers=max_workers)
         if download_orbit:
             print(f"""
 Orbit files can be downloaded from both ASF and Copernicus Data Space Ecosystem (CDSE) servers. Generally CDSE release orbit files a few hours to days earlier.

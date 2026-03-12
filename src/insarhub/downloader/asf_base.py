@@ -25,11 +25,12 @@ from insarhub.core.base import BaseDownloader
 from insarhub.config import ASF_Base_Config
 from insarhub.utils.tool import _to_wkt
 
-class ASF_Base_Downloader(BaseDownloader): 
+class ASF_Base_Downloader(BaseDownloader):
     """
     Simplify searching and downloading satellite data using ASF Search API.
     """
     name = "ASF_Base_Downloader"
+    description = "Generic ASF Search API downloader. Supports Sentinel-1, ALOS, NISAR, and more."
     default_config = ASF_Base_Config
     _DATASET_GROUP_KEYS = {
         'SENTINEL-1': ('pathNumber', 'frameNumber'),
@@ -603,33 +604,118 @@ Check documentation for how to setup .netrc file.\n""")
                     ds.update_tags(AREA_OR_POINT='Point')
         return X, p
     
+    def select_pairs(
+        self,
+        dt_targets: tuple = (6, 12, 24, 36, 48, 72, 96),
+        dt_tol: int = 3,
+        dt_max: int = 120,
+        pb_max: float = 150.0,
+        min_degree: int = 3,
+        max_degree: int = 999,
+        force_connect: bool = True,
+        max_workers: int = 4,
+        plot: bool = True,
+        pairs_output: str | None = None,
+    ) -> tuple:
+        """Select interferogram pairs and save them into workdir subdirectories.
+
+        For multi-stack results each (path, frame) group gets its own
+        ``p{path}_f{frame}/`` subfolder with ``pairs_p*_f*.json``,
+        ``network_p*_f*.png``, and ``insarhub_workflow.json``.
+        For a single stack the flat ``pairs.json`` is written directly to
+        ``workdir`` (or *pairs_output* if given).
+
+        Returns:
+            tuple: (pairs, baselines, scene_bperp) — same as the utility function.
+        """
+        import json
+        from insarhub.utils.tool import select_pairs as _select_pairs, write_workflow_marker
+        from insarhub.utils import plot_pair_network as _plot_pair_network
+
+        if not hasattr(self, 'results'):
+            raise ValueError("No search results found. Please run search() first.")
+
+        _sp_result = _select_pairs(
+            self.active_results,
+            dt_targets=dt_targets,
+            dt_tol=dt_tol,
+            dt_max=dt_max,
+            pb_max=pb_max,
+            min_degree=min_degree,
+            max_degree=max_degree,
+            force_connect=force_connect,
+            max_workers=max_workers,
+        )
+        pairs, baselines = _sp_result[0], _sp_result[1]
+        scene_bperp: dict = _sp_result[2] if len(_sp_result) > 2 else {}
+
+        workdir = self.config.workdir
+        if isinstance(pairs, dict):
+            for (path, frame), group_pairs in pairs.items():
+                subdir = workdir / f"p{path}_f{frame}"
+                subdir.mkdir(parents=True, exist_ok=True)
+                write_workflow_marker(subdir, downloader=type(self).name)
+                cfg = {k: v for k, v in asdict(self.config).items() if k != 'workdir'}
+                cfg['relativeOrbit'] = path
+                cfg['frame'] = frame
+                (subdir / "downloader_config.json").write_text(json.dumps(cfg, indent=2, default=str))
+                pjson = subdir / f"pairs_p{path}_f{frame}.json"
+                pjson.write_text(json.dumps([list(p) for p in group_pairs], indent=2))
+                if plot:
+                    _plot_pair_network(
+                        group_pairs, baselines[(path, frame)],
+                        scene_baselines=scene_bperp.get((path, frame)),
+                        title=f"Interferogram Network — P{path}/F{frame}",
+                        save_path=subdir / f"network_p{path}_f{frame}.png",
+                    )
+                print(f"[pairs] p{path}_f{frame}: {len(group_pairs)} pairs → {pjson}")
+        else:
+            pairs_path = Path(pairs_output).expanduser().resolve() if pairs_output else workdir / "pairs.json"
+            pairs_path.parent.mkdir(parents=True, exist_ok=True)
+            write_workflow_marker(pairs_path.parent, downloader=type(self).name)
+            cfg = {k: v for k, v in asdict(self.config).items() if k != 'workdir'}
+            (pairs_path.parent / "downloader_config.json").write_text(json.dumps(cfg, indent=2, default=str))
+            pairs_path.write_text(json.dumps([list(p) for p in pairs], indent=2))
+            if plot:
+                _plot_pair_network(pairs, baselines, scene_baselines=scene_bperp,
+                                   save_path=workdir / "network.png")
+            print(f"[pairs] Saved {len(pairs)} pairs → {pairs_path}")
+
+        return pairs, baselines, scene_bperp
+
     def download(self, save_path: str | None = None, max_workers: int = 3):
         """Download the search results to the specified output directory.
-        
+
         Args:
-            save_path (str, optional): Download path. If None, uses config.workdir. 
+            save_path (str, optional): Download path. If None, uses config.workdir.
                 Defaults to None.
-            max_workers (int, optional): Number of concurrent downloads. 3-5 recommended 
+            max_workers (int, optional): Number of concurrent downloads. 3-5 recommended
                 for ASF. Set to 1 to disable multithreading. Defaults to 3.
-                
+
         Raises:
             ValueError: If no search results are available.
         """
+        import json as _json
         from concurrent.futures import ThreadPoolExecutor, as_completed
+        from insarhub.utils.tool import write_workflow_marker
         output_dir = Path(save_path).expanduser().resolve() if save_path else self.config.workdir
+        output_dir.mkdir(exist_ok=True, parents=True)
 
-        self.download_dir = output_dir.joinpath('data')
-        self.download_dir.mkdir(exist_ok=True, parents=True)
-        
+        self.download_dir = output_dir
+
         if not hasattr(self, 'results'):
             raise ValueError(f"{Fore.RED}No search results found. Please run search() first.")
-        
+
         stop_event = threading.Event()
-        
+        _cfg_base = {k: v for k, v in asdict(self.config).items() if k != 'workdir'}
+
         jobs = []
         for key, results in self.active_results.items():
-            download_path = self.download_dir.joinpath(f'p{key[0]}_f{key[1]}')
+            download_path = self.download_dir / f'p{key[0]}_f{key[1]}'
             download_path.mkdir(parents=True, exist_ok=True)
+            write_workflow_marker(download_path, downloader=type(self).name)
+            _cfg = {**_cfg_base, 'relativeOrbit': key[0], 'frame': key[1]}
+            (download_path / "downloader_config.json").write_text(_json.dumps(_cfg, indent=2, default=str))
             for result in results:
                 jobs.append((key, result, download_path))
         

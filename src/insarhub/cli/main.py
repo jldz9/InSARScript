@@ -10,7 +10,13 @@ Pipeline subcommands
 --------------------
 insarhub downloader -N S1_SLC --AOI -113.05 37.74 -112.68 38.00 --start 2021-01-01 --end 2022-01-01
 insarhub downloader ... --select-pairs --download --orbit-files
-insarhub processor  -N Hyp3_InSAR --workdir /data/bryce
+insarhub processor -N Hyp3_InSAR -w /data/bryce submit
+insarhub processor -N Hyp3_InSAR -w /data/bryce refresh
+insarhub processor -N Hyp3_InSAR -w /data/bryce download
+insarhub processor -N Hyp3_InSAR -w /data/bryce retry
+insarhub processor -N Hyp3_InSAR -w /data/bryce watch --interval 300
+insarhub processor -N Hyp3_InSAR -w /data/bryce credits
+insarhub processor -N ISCE2      -w /data/bryce run    (local — not yet implemented)
 insarhub analyzer   -N Hyp3_SBAS -w /data/bryce run
 insarhub analyzer   -N Hyp3_SBAS -w /data/bryce cleanup
 
@@ -23,14 +29,6 @@ insarhub utils select-pairs   --input results.geojson --dt-max 120 --pb-max 150 
 insarhub utils plot-network   --input pairs.json -o network.png
 insarhub utils slurm          --job-name insar_run --cpus 8 --mem 32G --command "insarhub analyzer -N Hyp3_SBAS -w /data/bryce run"
 insarhub utils era5-download  -w /data/bryce -o /data/era5
-
-Job management (under processor)
----------------------------------
-insarhub processor refresh          --workdir /data/bryce
-insarhub processor download --workdir /data/bryce
-insarhub processor retry            --workdir /data/bryce
-insarhub processor watch            --workdir /data/bryce --interval 300
-insarhub processor credits          --workdir /data/bryce
 """
 
 import argparse
@@ -100,6 +98,10 @@ def create_parser() -> argparse.ArgumentParser:
         help="Downloader name (default: S1_SLC; see --list-downloaders)",
     )
     g_dl.add_argument(
+        "--pipeline", action="store_true",
+        help="Show the full compatible processor → analyzer tree for the selected downloader and exit",
+    )
+    g_dl.add_argument(
         "--list-options", action="store_true",
         help="Print all additional config fields for the selected downloader",
     )
@@ -152,68 +154,70 @@ def create_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------ #
     # processor — submit + manage InSAR processing jobs
     #
-    # Actions: submit | refresh | download | retry | watch | credits
-    # Config fields for the chosen processor are passed as extra --KEY VALUE
-    # flags (submit only) and resolved dynamically at runtime.
+    # Usage: insarhub processor -N <ProcessorName> <action> [options]
+    #
+    # HyP3 processors (online): submit | refresh | download | retry | watch | credits
+    # Local processors (ISCE2/ISCE3/GMTSAR): run  [not yet implemented]
     # ------------------------------------------------------------------ #
     p_proc = sub.add_parser(
         "processor",
         help="Submit and manage InSAR processing jobs",
         description=(
-            "Submit interferogram pairs and manage HyP3 job lifecycle.\n"
-            "\nActions:\n"
-            "  submit           Submit pairs to a registered processor\n"
-            "  refresh          Pull latest job statuses from HyP3\n"
-            "  download Download completed job outputs\n"
+            "Select a processor with -N and run an action.\n"
+            "\nHyP3 (online) processor actions:\n"
+            "  submit           Submit pairs to HyP3\n"
+            "  refresh          Pull latest job statuses\n"
+            "  download         Download completed outputs\n"
             "  retry            Resubmit failed jobs\n"
             "  watch            Poll until all jobs complete\n"
-            "  credits          Show remaining HyP3 processing credits\n"
-            "\nRun 'insarhub processor <action> --help' for action details."
+            "  credits          Show remaining HyP3 credits\n"
+            "\nLocal processor actions (ISCE2/ISCE3/GMTSAR):\n"
+            "  run              Run local processor [not yet implemented]\n"
+            "\nRun 'insarhub processor -N <name> <action> --help' for action details."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_proc.add_argument(
+        "-N", "--name", metavar="STR", default="Hyp3_InSAR", dest="processor_name",
+        help="Processor name (default: Hyp3_InSAR; see --list-processors)",
     )
     p_proc.add_argument(
         "--list-processors", action="store_true",
         help="Print all registered processors and exit",
     )
+    p_proc.add_argument("-w", "--workdir", metavar="PATH", default=None,
+                        help="Working directory (default: current directory)")
+    p_proc.add_argument(
+        "--list-options", action="store_true",
+        help="Print all config fields for the selected processor and exit",
+    )
+    p_proc.add_argument("--config", metavar="PATH", nargs="?", const="__default__", default=None,
+                        help="Path to a saved processor config JSON; "
+                             "omit the value to use <workdir>/processor_config.json")
     proc_sub = p_proc.add_subparsers(dest="proc_action", required=False, metavar="ACTION")
 
-    # --- submit -------------------------------------------------------- #
+    # --- submit  (HyP3) ----------------------------------------------- #
     p_proc_submit = proc_sub.add_parser(
         "submit",
-        help="Submit interferogram pairs to a registered processor",
+        help="Submit interferogram pairs to a HyP3 processor",
         description=(
-            "Submit pairs to any registered processor (default: Hyp3_InSAR).\n"
+            "Submit pairs to the selected HyP3 processor.\n"
             "Processor config fields are passed as extra --KEY VALUE flags.\n"
-            "Run with --list-options to see all available fields.\n"
+            "Run 'insarhub processor -N <name> --list-options' to see all fields.\n"
             "When pairs.json has multiple groups (from 'downloader --select-pairs'),\n"
             "a separate job folder is created under workdir for each group."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    g_sub = p_proc_submit.add_argument_group("processor")
-    g_sub.add_argument(
-        "-N", "--name", metavar="STR", default="Hyp3_InSAR", dest="processor_name",
-        help="Processor name (default: Hyp3_InSAR; see --list-processors)",
-    )
-    g_sub.add_argument(
-        "--list-options", action="store_true",
-        help="Print all config fields for the selected processor and exit",
-    )
-    g_sub.add_argument("-w", "--workdir", metavar="PATH", default=None,
-                       help="Working directory (default: current directory)")
-    g_sub.add_argument("--config", metavar="PATH", nargs="?", const="__default__", default=None,
-                       help="Path to a saved processor config JSON; "
-                            "omit the value to use <workdir>/processor_config.json")
+    g_sub = p_proc_submit.add_argument_group("submit options")
     g_sub.add_argument("--credential-pool", metavar="PATH",
                        help="JSON {username: password} for multi-account HyP3 submission")
-    g_sub_common = p_proc_submit.add_argument_group("common processing options")
-    g_sub_common.add_argument("--name-prefix", metavar="STR", default="ifg",
-                              help="Job name prefix (default: ifg)")
-    g_sub_common.add_argument("--max-workers", metavar="INT", type=int, default=4,
-                              help="Parallel submission workers (default: 4)")
-    g_sub_common.add_argument("--dry-run", action="store_true",
-                              help="Print what would be submitted without sending any jobs to HyP3")
+    g_sub.add_argument("--name-prefix", metavar="STR", default="ifg",
+                       help="Job name prefix (default: ifg)")
+    g_sub.add_argument("--max-workers", metavar="INT", type=int, default=4,
+                       help="Parallel submission workers (default: 4)")
+    g_sub.add_argument("--dry-run", action="store_true",
+                       help="Print what would be submitted without sending any jobs to HyP3")
     g_sub_pairs = p_proc_submit.add_argument_group(
         "pairs input",
         "Provide pairs explicitly, or omit to auto-load pairs.json from workdir",
@@ -227,40 +231,35 @@ def create_parser() -> argparse.ArgumentParser:
         help='Inline pairs as "reference,secondary" strings (single group)',
     )
 
-    # --- refresh ------------------------------------------------------- #
+    # --- refresh  (HyP3) ---------------------------------------------- #
     p_proc_refresh = proc_sub.add_parser("refresh", help="Refresh HyP3 job statuses")
-    p_proc_refresh.add_argument("-w", "--workdir", metavar="PATH", default=None,
-                                help="Working directory (default: current directory)")
     _add_job_file(p_proc_refresh)
 
-    # --- download ---------------------------------------------- #
-    p_proc_dl = proc_sub.add_parser("download",
-                                    help="Download completed HyP3 job outputs")
-    p_proc_dl.add_argument("-w", "--workdir", metavar="PATH", default=None,
-                           help="Working directory (default: current directory)")
+    # --- download  (HyP3) --------------------------------------------- #
+    p_proc_dl = proc_sub.add_parser("download", help="Download completed HyP3 job outputs")
     _add_job_file(p_proc_dl)
 
-    # --- retry --------------------------------------------------------- #
+    # --- retry  (HyP3) ------------------------------------------------- #
     p_proc_retry = proc_sub.add_parser("retry", help="Resubmit failed HyP3 jobs")
-    p_proc_retry.add_argument("-w", "--workdir", metavar="PATH", default=None,
-                              help="Working directory (default: current directory)")
     _add_job_file(p_proc_retry)
 
-    # --- watch --------------------------------------------------------- #
+    # --- watch  (HyP3) ------------------------------------------------- #
     p_proc_watch = proc_sub.add_parser(
         "watch", help="Poll HyP3 until all jobs complete, downloading results as they succeed")
-    p_proc_watch.add_argument("-w", "--workdir", metavar="PATH", default=None,
-                              help="Working directory (default: current directory)")
     _add_job_file(p_proc_watch)
     p_proc_watch.add_argument("--interval", metavar="SEC", type=int, default=300,
                               help="Seconds between refreshes (default: 300)")
 
-    # --- credits ------------------------------------------------------- #
-    p_proc_credits = proc_sub.add_parser("credits",
-                                         help="Show remaining HyP3 processing credits")
-    p_proc_credits.add_argument("-w", "--workdir", metavar="PATH", default=None,
-                                help="Working directory (default: current directory)")
+    # --- credits  (HyP3) ----------------------------------------------- #
+    p_proc_credits = proc_sub.add_parser("credits", help="Show remaining HyP3 processing credits")
     _add_credential_pool(p_proc_credits)
+
+    # --- run  (local: ISCE2 / ISCE3 / GMTSAR) -------------------------- #
+    proc_sub.add_parser(
+        "run",
+        help="Run local processor (ISCE2/ISCE3/GMTSAR) [not yet implemented]",
+        description="Run a local InSAR processor (ISCE2, ISCE3, GMTSAR).\nNot yet implemented.",
+    )
 
     # ------------------------------------------------------------------ #
     # analyzer — prepare + run MintPy SBAS time-series analysis
@@ -602,8 +601,9 @@ def _iter_analysis_dirs(workdir: Path) -> list[Path]:
 
 
 def _load_hyp3_processor(workdir: Path, job_file: Path | None = None,
-                          credential_pool_path: str | None = None):
-    """Build a Hyp3_InSAR processor, loading saved jobs from job_file when provided."""
+                          credential_pool_path: str | None = None,
+                          processor_name: str = "Hyp3_InSAR"):
+    """Build a HyP3 processor, loading saved jobs from job_file when provided."""
     from insarhub import Processor
 
     overrides: dict = {"workdir": workdir}
@@ -614,7 +614,7 @@ def _load_hyp3_processor(workdir: Path, job_file: Path | None = None,
     if pool:
         overrides["earthdata_credentials_pool"] = pool
 
-    return Processor.create("Hyp3_InSAR", **overrides)
+    return Processor.create(processor_name, **overrides)
 
 
 # ---------------------------------------------------------------------------
@@ -846,6 +846,18 @@ def _write_config_json(cfg_path: Path, overrides: dict) -> None:
     cfg_path.write_text(json.dumps(existing, indent=2, default=str))
 
 
+def _find_subfolder_config(workdir: Path, filename: str) -> Path | None:
+    """Return the config file path from the first p*_f* subfolder that has it."""
+    if not workdir.is_dir():
+        return None
+    for subdir in sorted(workdir.iterdir()):
+        if subdir.is_dir() and _parse_group_key(subdir.name):
+            cfg = subdir / filename
+            if cfg.exists():
+                return cfg
+    return None
+
+
 _GROUP_KEY_RE = re.compile(r"p(\d+)_f(\d+)")
 
 
@@ -949,6 +961,32 @@ def cmd_downloader(args, extra_args: list[str]):
         sys.exit(1)
     downloader_cls = Downloader._registry[args.downloader_name]
 
+    # --pipeline  (no instantiation needed — reads registry directly)
+    if args.pipeline:
+        from insarhub.core.registry import Processor, Analyzer
+        dl_name = args.downloader_name
+        procs = [
+            (n, c) for n, c in Processor._registry.items()
+            if getattr(c, 'compatible_downloader', None) in (None, 'all', dl_name)
+        ]
+        lines = [dl_name]
+        for pi, (pname, _) in enumerate(procs):
+            last_proc = pi == len(procs) - 1
+            proc_prefix = '└─' if last_proc else '├─'
+            proc_indent = '   ' if last_proc else '│  '
+            lines.append(f"{proc_prefix} {pname}")
+            anals = [
+                n for n, c in Analyzer._registry.items()
+                if getattr(c, 'compatible_processor', None) in (None, 'all', pname)
+            ]
+            for ai, aname in enumerate(anals):
+                anal_prefix = '└─' if ai == len(anals) - 1 else '├─'
+                lines.append(f"{proc_indent}{anal_prefix} {aname}")
+        if len(lines) == 1:
+            lines.append('└─ (no compatible processors registered)')
+        print('\n'.join(lines))
+        return
+
     # --list-options
     if args.list_options:
         config_cls = getattr(downloader_cls, "default_config", None)
@@ -958,10 +996,10 @@ def cmd_downloader(args, extra_args: list[str]):
             workdir = _resolve_workdir(args.workdir)
             _cfg = args.config if (args.config and args.config != "__default__") else None
             cfg_path = (Path(_cfg).expanduser().resolve()
-                        if _cfg else workdir / "downloader_config.json")
-            values = _read_config_json(cfg_path)
+                        if _cfg else _find_subfolder_config(workdir, "downloader_config.json"))
+            values = _read_config_json(cfg_path) if cfg_path else {}
             if not values:
-                print(f"[INFO] No saved config found at {cfg_path}. Showing defaults.")
+                print(f"[INFO] No saved config found. Showing defaults.")
             _print_config_options(config_cls,
                                   display_label=f"{args.downloader_name} downloader",
                                   skip_fields=_SEARCH_SKIP_FIELDS,
@@ -972,8 +1010,8 @@ def cmd_downloader(args, extra_args: list[str]):
     workdir = _resolve_workdir(args.workdir)
     _cfg = args.config if (args.config and args.config != "__default__") else None
     cfg_path = (Path(_cfg).expanduser().resolve()
-                if _cfg else workdir / "downloader_config.json")
-    saved_cfg = _read_config_json(cfg_path)
+                if _cfg else _find_subfolder_config(workdir, "downloader_config.json"))
+    saved_cfg = _read_config_json(cfg_path) if cfg_path else {}
     if saved_cfg:
         print(f"[INFO] Loaded saved config from {cfg_path}")
 
@@ -1036,11 +1074,6 @@ def cmd_downloader(args, extra_args: list[str]):
     downloader = Downloader.create(args.downloader_name,
                                    **{k: v for k, v in overrides.items()
                                       if k not in ("name", "config")})
-    # Write full resolved config (all fields) so --list-options reflects current state
-    _write_config_json(workdir / "downloader_config.json",
-                       {f.name: getattr(downloader.config, f.name)
-                        for f in dataclasses.fields(downloader.config)
-                        if f.name != "workdir"})
 
     result = SearchCommand(downloader).run()
     _fail(result, "search")
@@ -1055,10 +1088,7 @@ def cmd_downloader(args, extra_args: list[str]):
         FootprintCommand(downloader, save_path=args.footprint).run()
 
     if args.select_pairs:
-        from insarhub.utils import select_pairs as _select_pairs
-        from insarhub.utils import plot_pair_network as _plot_pair_network
-        _sp_result = _select_pairs(  # type: ignore[misc]
-            result.data,
+        downloader.select_pairs(
             dt_targets=tuple(args.dt_targets),
             dt_tol=args.dt_tol,
             dt_max=args.dt_max,
@@ -1067,33 +1097,8 @@ def cmd_downloader(args, extra_args: list[str]):
             max_degree=args.max_degree,
             force_connect=args.force_connect,
             max_workers=args.sp_workers,
+            pairs_output=args.pairs_output if hasattr(args, "pairs_output") else None,
         )
-        pairs, baselines = _sp_result[0], _sp_result[1]
-        scene_bperp: dict = _sp_result[2] if len(_sp_result) > 2 else {}
-        if isinstance(pairs, dict):
-            # Multiple groups → one subdir per (path, frame)
-            for (path, frame), group_pairs in pairs.items():
-                subdir = workdir / f"p{path}_f{frame}"
-                subdir.mkdir(parents=True, exist_ok=True)
-                pjson = subdir / f"pairs_p{path}_f{frame}.json"
-                pjson.write_text(json.dumps([list(p) for p in group_pairs], indent=2))
-                _plot_pair_network(
-                    group_pairs, baselines[(path, frame)],
-                    scene_baselines=scene_bperp.get((path, frame)),  # type: ignore[union-attr]
-                    title=f"Interferogram Network — P{path}/F{frame}",
-                    save_path=subdir / f"network_p{path}_f{frame}.png",
-                )
-                print(f"[pairs] p{path}_f{frame}: {len(group_pairs)} pairs → {pjson}")
-        else:
-            # Single group → flat pairs.json in workdir
-            pairs_path = (
-                Path(args.pairs_output) if args.pairs_output else workdir / "pairs.json"
-            )
-            pairs_path.parent.mkdir(parents=True, exist_ok=True)
-            pairs_path.write_text(json.dumps([list(p) for p in pairs], indent=2))
-            _plot_pair_network(pairs, baselines, scene_baselines=scene_bperp,
-                               save_path=workdir / "network.png")
-            print(f"[pairs] Saved {len(pairs)} pairs → {pairs_path}")
 
     if args.download:
         dl_kwargs: dict = {"max_workers": args.workers}
@@ -1104,37 +1109,15 @@ def cmd_downloader(args, extra_args: list[str]):
 
 
 def cmd_processor(args, extra_args: list[str]):
+    from insarhub import Processor
+    from insarhub.core.base import Hyp3Processor, ISCEProcessor
+
     # --list-processors (works without a sub-action)
     if getattr(args, "list_processors", False):
-        from insarhub import Processor
         print("Available processors:")
         for name in Processor.available():
             print(f"  {name}")
         return
-
-    action = getattr(args, "proc_action", None)
-
-    if action == "submit":
-        _proc_submit(args, extra_args)
-    elif action == "refresh":
-        _proc_refresh(args)
-    elif action == "download":
-        _proc_download_results(args)
-    elif action == "retry":
-        _proc_retry(args)
-    elif action == "watch":
-        _proc_watch(args)
-    elif action == "credits":
-        _proc_credits(args)
-    else:
-        # No action → help is shown by main() before reaching here
-        pass
-
-
-def _proc_submit(args, extra_args: list[str]):
-    import dataclasses
-    from insarhub import Processor
-    from insarhub.commands import SubmitCommand, SaveJobsCommand
 
     processor_name = getattr(args, "processor_name", "Hyp3_InSAR")
 
@@ -1143,7 +1126,10 @@ def _proc_submit(args, extra_args: list[str]):
               file=sys.stderr)
         sys.exit(1)
     processor_cls = Processor._registry[processor_name]
+    is_hyp3  = issubclass(processor_cls, Hyp3Processor)
+    is_local = issubclass(processor_cls, ISCEProcessor)
 
+    # --list-options (no action required)
     if getattr(args, "list_options", False):
         config_cls = getattr(processor_cls, "default_config", None)
         if config_cls is None:
@@ -1152,22 +1138,73 @@ def _proc_submit(args, extra_args: list[str]):
             workdir = _resolve_workdir(getattr(args, "workdir", None))
             _cfg = args.config if (args.config and args.config != "__default__") else None
             cfg_path = (Path(_cfg).expanduser().resolve()
-                        if _cfg else workdir / "processor_config.json")
-            values = _read_config_json(cfg_path)
+                        if _cfg else _find_subfolder_config(workdir, "processor_config.json"))
+            values = _read_config_json(cfg_path) if cfg_path else {}
             if not values:
-                print(f"[INFO] No saved config found at {cfg_path}. Showing defaults.")
+                print(f"[INFO] No saved config found. Showing defaults.")
             _print_config_options(config_cls,
                                   display_label=f"{processor_name} processor",
                                   skip_fields=_SUBMIT_SKIP_FIELDS,
                                   value_overrides=values if values else None)
         return
 
+    action = getattr(args, "proc_action", None)
+
+    if is_hyp3:
+        _HYPO_ACTIONS = {"submit", "refresh", "download", "retry", "watch", "credits"}
+        if action == "run":
+            print(f"[ERROR] 'run' is a local-processor action. "
+                  f"'{processor_name}' is a HyP3 processor. "
+                  f"Available actions: {', '.join(sorted(_HYPO_ACTIONS))}",
+                  file=sys.stderr)
+            sys.exit(1)
+        if action == "submit":
+            _proc_submit(args, extra_args)
+        elif action == "refresh":
+            _proc_refresh(args)
+        elif action == "download":
+            _proc_download_results(args)
+        elif action == "retry":
+            _proc_retry(args)
+        elif action == "watch":
+            _proc_watch(args)
+        elif action == "credits":
+            _proc_credits(args)
+        # else: no action → help shown by main()
+
+    elif is_local:
+        _LOCAL_ACTIONS = {"run"}
+        if action in ("submit", "refresh", "download", "retry", "watch", "credits"):
+            print(f"[ERROR] '{action}' is a HyP3 action. "
+                  f"'{processor_name}' is a local processor. "
+                  f"Available actions: {', '.join(sorted(_LOCAL_ACTIONS))}",
+                  file=sys.stderr)
+            sys.exit(1)
+        if action == "run":
+            _proc_local_run(args, extra_args)
+        # else: no action → help shown by main()
+
+    else:
+        print(f"[ERROR] Processor '{processor_name}' has unknown type "
+              f"(not HyP3 or local). Cannot determine available actions.",
+              file=sys.stderr)
+        sys.exit(1)
+
+
+def _proc_submit(args, extra_args: list[str]):
+    import dataclasses
+    from insarhub import Processor
+    from insarhub.commands import SubmitCommand, SaveJobsCommand
+
+    processor_name = getattr(args, "processor_name", "Hyp3_InSAR")
+    processor_cls = Processor._registry[processor_name]
+
     # Resolve workdir early so saved config can serve as base defaults
     workdir = _resolve_workdir(args.workdir)
     _cfg = args.config if (args.config and args.config != "__default__") else None
     cfg_path = (Path(_cfg).expanduser().resolve()
-                if _cfg else workdir / "processor_config.json")
-    saved_cfg = _read_config_json(cfg_path)
+                if _cfg else _find_subfolder_config(workdir, "processor_config.json"))
+    saved_cfg = _read_config_json(cfg_path) if cfg_path else {}
     if saved_cfg:
         print(f"[INFO] Loaded saved config from {cfg_path}")
 
@@ -1224,7 +1261,7 @@ def _proc_submit(args, extra_args: list[str]):
         processor = Processor.create(processor_name, **group_overrides)
         # Write full resolved config (all fields except runtime-only keys)
         _skip_write = _SUBMIT_SKIP_FIELDS | {"earthdata_credentials_pool", "workdir", "pairs"}
-        _write_config_json(workdir / "processor_config.json",
+        _write_config_json(job_dir / "processor_config.json",
                            {f.name: getattr(processor.config, f.name)
                             for f in dataclasses.fields(processor.config)
                             if f.name not in _skip_write})
@@ -1242,35 +1279,38 @@ def _proc_submit(args, extra_args: list[str]):
 
 def _proc_refresh(args):
     from insarhub.commands import RefreshCommand
+    processor_name = getattr(args, "processor_name", "Hyp3_InSAR")
     workdir = _resolve_workdir(args.workdir)
     for job_dir in _iter_job_dirs(workdir, args.job_file):
         for jf in _find_job_files(job_dir, args.job_file):
             tag = f"[{job_dir.name}/{jf.name}] " if job_dir != workdir else f"[{jf.name}] "
             print(f"{tag}Refreshing…")
-            processor = _load_hyp3_processor(job_dir, job_file=jf)
+            processor = _load_hyp3_processor(job_dir, job_file=jf, processor_name=processor_name)
             _fail(RefreshCommand(processor).run(), f"refresh {tag}".strip())
 
 
 def _proc_download_results(args):
     from insarhub.commands import RefreshCommand, DownloadResultsCommand
+    processor_name = getattr(args, "processor_name", "Hyp3_InSAR")
     workdir = _resolve_workdir(args.workdir)
     for job_dir in _iter_job_dirs(workdir, args.job_file):
         for jf in _find_job_files(job_dir, args.job_file):
             tag = f"[{job_dir.name}/{jf.name}] " if job_dir != workdir else f"[{jf.name}] "
             print(f"{tag}Downloading results…")
-            processor = _load_hyp3_processor(job_dir, job_file=jf)
+            processor = _load_hyp3_processor(job_dir, job_file=jf, processor_name=processor_name)
             RefreshCommand(processor).run()
             _fail(DownloadResultsCommand(processor).run(), f"download {tag}".strip())
 
 
 def _proc_retry(args):
     from insarhub.commands import RetryCommand
+    processor_name = getattr(args, "processor_name", "Hyp3_InSAR")
     workdir = _resolve_workdir(args.workdir)
     for job_dir in _iter_job_dirs(workdir, args.job_file):
         for jf in _find_job_files(job_dir, args.job_file):
             tag = f"[{job_dir.name}/{jf.name}] " if job_dir != workdir else f"[{jf.name}] "
             print(f"{tag}Retrying failed jobs…")
-            processor = _load_hyp3_processor(job_dir, job_file=jf)
+            processor = _load_hyp3_processor(job_dir, job_file=jf, processor_name=processor_name)
             _fail(RetryCommand(processor).run(), f"retry {tag}".strip())
 
 
@@ -1285,9 +1325,11 @@ def _proc_watch(args):
     # Build (job_dir, job_file, processor) for every job file across all dirs
     from insarhub.processor.hyp3_base import Hyp3Base
     entries: list[tuple[Path, Path, Hyp3Base]] = []
+    processor_name = getattr(args, "processor_name", "Hyp3_InSAR")
     for job_dir in _iter_job_dirs(workdir, args.job_file):
         for jf in _find_job_files(job_dir, args.job_file):
-            entries.append((job_dir, jf, _load_hyp3_processor(job_dir, job_file=jf)))
+            entries.append((job_dir, jf, _load_hyp3_processor(job_dir, job_file=jf,
+                                                               processor_name=processor_name)))
 
     downloaded: dict[Path, set] = {jf: set() for _, jf, _ in entries}
 
@@ -1369,26 +1411,45 @@ def _proc_watch(args):
 
 def _proc_credits(args):
     from insarhub.commands import CheckCreditsCommand
+    processor_name = getattr(args, "processor_name", "Hyp3_InSAR")
     workdir = _resolve_workdir(args.workdir)
     # credits is per-credential-pool, not per job_dir — run once
-    processor = _load_hyp3_processor(workdir, credential_pool_path=args.credential_pool)
+    processor = _load_hyp3_processor(workdir, credential_pool_path=args.credential_pool,
+                                      processor_name=processor_name)
     CheckCreditsCommand(processor).run()
+
+
+def _proc_local_run(args, extra_args: list[str]):
+    processor_name = getattr(args, "processor_name", "")
+    print(f"[ERROR] Local processor 'run' action is not yet implemented "
+          f"(processor: {processor_name}).",
+          file=sys.stderr)
+    sys.exit(1)
 
 
 def cmd_analyzer(args, extra_args: list[str]):
     from insarhub import Analyzer
 
+    # --list-analyzers (works without a sub-action)
     if args.list_analyzers:
         print("Available analyzers:")
         for name in Analyzer.available():
             print(f"  {name}")
         return
 
+    analyzer_name = getattr(args, "analyzer_name", "Hyp3_SBAS")
+
+    if analyzer_name not in Analyzer._registry:
+        print(f"[ERROR] Unknown analyzer '{analyzer_name}'. Use --list-analyzers.",
+              file=sys.stderr)
+        sys.exit(1)
+
+    action = getattr(args, "az_action", None)
+
     if getattr(args, "list_options", False):
         _az_run(args, extra_args)
         return
 
-    action = getattr(args, "az_action", None)
     if action == "run":
         _az_run(args, extra_args)
     elif action == "cleanup":
@@ -1398,7 +1459,7 @@ def cmd_analyzer(args, extra_args: list[str]):
         if f not in ("command", "az_action", "analyzer_name", "workdir",
                      "list_analyzers", "list_options", "debug")
     ):
-        # Config overrides provided without a subcommand — apply to mintpy.cfg
+        # Config overrides without a subcommand — update mintpy.cfg and exit
         _az_run(args, extra_args)
 
 
@@ -1407,10 +1468,6 @@ def _az_run(args, extra_args: list[str]):
     from insarhub import Analyzer
     from insarhub.commands import PrepDataCommand, AnalyzeCommand
 
-    if args.analyzer_name not in Analyzer._registry:
-        print(f"[ERROR] Unknown analyzer '{args.analyzer_name}'. Use --list-analyzers.",
-              file=sys.stderr)
-        sys.exit(1)
     analyzer_cls = Analyzer._registry[args.analyzer_name]
 
     overrides: dict = {}
@@ -1521,11 +1578,6 @@ def _az_run(args, extra_args: list[str]):
 
 def _az_cleanup(args):
     from insarhub import Analyzer
-
-    if args.analyzer_name not in Analyzer._registry:
-        print(f"[ERROR] Unknown analyzer '{args.analyzer_name}'. Use --list-analyzers.",
-              file=sys.stderr)
-        sys.exit(1)
 
     workdir = _resolve_workdir(args.workdir)
 
@@ -1725,6 +1777,7 @@ def main():
         if (not extra_args
                 and not args.list_downloaders
                 and not args.list_options
+                and not args.pipeline
                 and not args.AOI
                 and not args.download
                 and not args.select_pairs
@@ -1734,6 +1787,7 @@ def main():
         handler(args, extra_args)
     elif args.command == "processor":
         if (not getattr(args, "list_processors", False)
+                and not getattr(args, "list_options", False)
                 and not getattr(args, "proc_action", None)):
             parser.parse_args(["processor", "--help"])  # prints and exits
         handler(args, extra_args)

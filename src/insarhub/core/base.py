@@ -77,6 +77,47 @@ class BaseDownloader(ABC):
     def reset(self, *args, **kwargs) -> Any:
         pass
 
+    def pipeline(self) -> None:
+        """Print the full compatible processor → analyzer tree for this downloader.
+
+        Example::
+
+            a = Downloader.create('S1_SLC')
+            a.pipeline()
+            # S1_SLC
+            # └─ Hyp3_InSAR
+            #    ├─ Hyp3_SBAS
+            #    └─ Mintpy_SBAS_Base_Analyzer
+        """
+        from .registry import Processor, Analyzer
+
+        dl_name = type(self).name
+        procs = [
+            (n, c) for n, c in Processor._registry.items()
+            if getattr(c, 'compatible_downloader', None) in (None, 'all', dl_name)
+        ]
+
+        lines = [dl_name]
+        for pi, (pname, _) in enumerate(procs):
+            last_proc = pi == len(procs) - 1
+            proc_prefix = '└─' if last_proc else '├─'
+            proc_indent = '   ' if last_proc else '│  '
+            lines.append(f"{proc_prefix} {pname}")
+
+            anals = [
+                n for n, c in Analyzer._registry.items()
+                if getattr(c, 'compatible_processor', None) in (None, 'all', pname)
+            ]
+            for ai, aname in enumerate(anals):
+                last_anal = ai == len(anals) - 1
+                anal_prefix = '└─' if last_anal else '├─'
+                lines.append(f"{proc_indent}{anal_prefix} {aname}")
+
+        if len(lines) == 1:
+            lines.append('└─ (no compatible processors registered)')
+
+        print('\n'.join(lines))
+
 
 class ISCEProcessor(ABC):
     name: str

@@ -11,11 +11,14 @@ from mintpy.smallbaselineApp import TimeSeriesAnalysis
 
 from insarhub.config.defaultconfig import Mintpy_SBAS_Base_Config
 from insarhub.core.base import BaseAnalyzer
+from insarhub.utils.tool import write_workflow_marker
 
 
 class Mintpy_SBAS_Base_Analyzer(BaseAnalyzer):
 
     name = 'Mintpy_SBAS_Base_Analyzer'
+    description = "Generic MintPy SBAS analyzer, fully customizable configs."
+    compatible_processor = 'all'
     default_config = Mintpy_SBAS_Base_Config
     '''
     Base class for Mintpy SBAS analysis. This class provides a template for implementing 
@@ -28,6 +31,7 @@ class Mintpy_SBAS_Base_Analyzer(BaseAnalyzer):
         self.tmp_dir = self.workdir.joinpath('tmp')
         self.clip_dir = self.workdir.joinpath('clip')
         self.cfg_path = self.workdir.joinpath('mintpy.cfg')
+        write_workflow_marker(self.workdir, analyzer=type(self).name)
 
     def prep_data(self):
         """Write the MintPy config file to workdir."""

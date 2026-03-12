@@ -17,11 +17,10 @@ dependencies = [
 "dem_stitcher",
 "hyp3_sdk",
 "mintpy",
-"panel>=1.4",
-"param",
 "rasterio>=1.4",
 "sentineleof",
-"tqdm",
+"fastapi",
+"uvicorn",
 ]
 requires-python = ">=3.11"
 classifiers = [

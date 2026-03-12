@@ -23,6 +23,7 @@ from tqdm import tqdm
 
 from insarhub.core import Hyp3Processor
 from insarhub.config import Hyp3_Base_Config
+from insarhub.utils.tool import write_workflow_marker
 
 
 class Hyp3Base(Hyp3Processor):
@@ -73,6 +74,11 @@ class Hyp3Base(Hyp3Processor):
         self.batchs = defaultdict(list)
         self.failed_jobs = []
         self.cost = 1 # Default cost, override in subclass
+        _roles: dict = {"processor": type(self).name}
+        _dl = getattr(type(self), "compatible_downloader", None)
+        if _dl and _dl != "all":
+            _roles["downloader"] = _dl
+        write_workflow_marker(self.output_dir, **_roles)
 
     def _hyp3_authorize(self, pool: dict[str, str] | None = None):
         """Authorize the HyP3 client."""

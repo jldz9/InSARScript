@@ -15,6 +15,8 @@ from insarhub.config.defaultconfig import Hyp3_SBAS_Config
 
 class Hyp3_SBAS(Mintpy_SBAS_Base_Analyzer):
     name = 'Hyp3_SBAS'
+    description = "SBAS time-series analysis of HyP3 InSAR outputs using MintPy."
+    compatible_processor = "Hyp3_InSAR"
     default_config = Hyp3_SBAS_Config
     required = ['unw_phase.tif', 'corr.tif',  'dem.tif'] # also need meta files to get the date and other info
     optional = ['lv_theta.tif', 'lv_phi.tif', 'water_mask.tif']

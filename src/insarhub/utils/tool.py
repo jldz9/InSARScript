@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import json
 import re
 import time
 import logging
@@ -37,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Sentinel value used when a baseline cannot be determined.
 # Large enough to fail every filter condition.
 _MISSING: float = 10_000.0
-
+_WKT_MAX_LEN = 2000
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  TYPE ALIASES
@@ -49,6 +50,35 @@ Pair      = tuple[SceneID, SceneID]
 BaselineEntry = tuple[float, float]   # (dt_days, bperp_m)
 BaselineTable = dict[Pair, BaselineEntry]
 PairGroup = dict[tuple[int, int], list[Pair]]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  WORKFLOW MARKER
+# ═══════════════════════════════════════════════════════════════════════════
+
+_WORKFLOW_FILE = "insarhub_workflow.json"
+
+def write_workflow_marker(workdir: Path, **roles: str) -> None:
+    """Write or update ``insarhub_workflow.json`` in *workdir*.
+
+    Each keyword argument is a role→class-name pair, e.g.::
+
+        write_workflow_marker(self.output_dir, processor="Hyp3_InSAR")
+        write_workflow_marker(self.workdir,    analyzer="Hyp3_SBAS")
+
+    Existing entries are preserved so the file accumulates as the pipeline runs.
+    """
+    path = Path(workdir) / _WORKFLOW_FILE
+    try:
+        existing: dict = json.loads(path.read_text()) if path.exists() else {}
+    except Exception:
+        existing = {}
+    existing.update(roles)
+    existing["updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    try:
+        path.write_text(json.dumps(existing, indent=2))
+    except Exception as exc:
+        logger.warning("Could not write %s: %s", path, exc)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -429,6 +459,19 @@ def _enforce_connectivity(
 
     return pairs
 
+def _simplify_to_fit(geom, max_len: int = _WKT_MAX_LEN):
+    """Progressively simplify a Shapely geometry until its WKT fits within max_len chars."""
+    wkt_str = wkt.dumps(geom, rounding_precision=5)
+    if len(wkt_str) <= max_len:
+        return wkt_str
+    for tol in (0.001, 0.005, 0.01, 0.05, 0.1):
+        simplified = geom.simplify(tol, preserve_topology=True)
+        wkt_str = wkt.dumps(simplified, rounding_precision=5)
+        if len(wkt_str) <= max_len:
+            return wkt_str
+    # Last resort: convex hull is always compact
+    return wkt.dumps(geom.convex_hull, rounding_precision=5)
+
 def _to_wkt(geom_input) -> str | None:
     """
     Converts various input types to a WKT string.
@@ -444,24 +487,30 @@ def _to_wkt(geom_input) -> str | None:
         if not all(isinstance(n, (int, float)) for n in geom_input):
             raise TypeError("All elements in BBox list must be int or float.")
         
-        return box(*geom_input).wkt
+        return wkt.dumps(box(*geom_input), rounding_precision=5)
     
     if isinstance(geom_input, str):
         geom_input = geom_input.strip()
-
-        if Path(geom_input).exists():
+        is_file_path = False
+        if len(geom_input) < 255: 
             try:
-                # Use geopandas to read any spatial format (SHP, GeoJSON, KML)
+                is_file_path = Path(geom_input).exists()
+            except OSError:
+                pass
+        
+        if is_file_path:
+            try:
                 gdf = gpd.read_file(geom_input)
-                # Combine all geometries in the file into one (unary_union)
-                return gdf.geometry.union_all().wkt
+                # Combine all geometries in the file into one
+                geom = gdf.geometry.union_all()
+                return _simplify_to_fit(geom)
             except Exception as e:
                 raise ValueError(f"Could not read spatial file at {geom_input}: {e}")
-            
+              
         try:
             # Try to load it to see if it's valid WKT
             decoded = wkt.loads(geom_input)
-            return decoded.wkt
+            return _simplify_to_fit(decoded)
         except Exception:
             raise ValueError(
                 "Input string is neither a valid file path nor a valid WKT string."

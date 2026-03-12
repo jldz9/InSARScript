@@ -40,7 +40,6 @@ class Registry:
     def available(self):
         return list(self._registry.keys())
 
-
 Downloader = Registry()
 Processor = Registry()
 Analyzer = Registry()

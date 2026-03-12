@@ -7,6 +7,8 @@ from insarhub.processor.hyp3_base import Hyp3Base
 
 class Hyp3_InSAR(Hyp3Base):
     name = "Hyp3_InSAR"
+    description = "HyP3 InSAR GAMMA processing. Produces geocoded interferograms from Sentinel-1 SLC pairs."
+    compatible_downloader = "S1_SLC"
     default_config = Hyp3_InSAR_Config
     def __init__(self, config: Hyp3_InSAR_Config | None = None):
         super().__init__(config)

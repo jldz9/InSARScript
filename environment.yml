@@ -15,5 +15,4 @@ dependencies:
         - dem_stitcher
         - contextily
         - sentineleof
-        - panel
         - cdsapi

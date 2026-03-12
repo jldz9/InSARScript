@@ -10,6 +10,7 @@ from .asf_base import ASF_Base_Downloader
 
 class S1_SLC(ASF_Base_Downloader):
     name = "S1_SLC"
+    description = "Sentinel-1 SLC scene search and download via ASF."
     default_config = S1_SLC_Config
 
     """

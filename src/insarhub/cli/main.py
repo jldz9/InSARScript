@@ -210,6 +210,9 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     g_sub = p_proc_submit.add_argument_group("submit options")
+    g_sub.add_argument("--config", metavar="PATH", nargs="?", const="__default__", default=None,
+                       help="Path to a saved processor config JSON; "
+                            "omit the value to use <workdir>/processor_config.json")
     g_sub.add_argument("--credential-pool", metavar="PATH",
                        help="JSON {username: password} for multi-account HyP3 submission")
     g_sub.add_argument("--name-prefix", metavar="STR", default="ifg",
@@ -893,17 +896,30 @@ def _load_pairs(args, workdir: Path) -> dict | list:
         return result
     # Auto-detect per-group subdirs created by `downloader --select-pairs`
     subdir_pairs: dict[str, list] = {}
-    for subdir in sorted(workdir.iterdir()) if workdir.is_dir() else []:
-        pf = _parse_group_key(subdir.name)
-        if pf is None or not subdir.is_dir():
-            continue
-        pjson = subdir / f"pairs_{subdir.name}.json"
-        if pjson.is_file():
-            subdir_pairs[subdir.name] = json.loads(pjson.read_text())
+    if workdir.is_dir():
+        for subdir in sorted(workdir.iterdir()) if workdir.is_dir() else []:
+            if not subdir.is_dir():
+                continue
+            pf = _parse_group_key(subdir.name)
+            if pf is not None:
+              
+                pjson = subdir / f"pairs_{subdir.name}.json"
+                if pjson.is_file():
+                    subdir_pairs[subdir.name] = json.loads(pjson.read_text())
+    
+    
+        for f in sorted(workdir.glob("pairs_*.json")):
+            if f.name == "pairs.json":
+                continue
+
+            potential_key = f.stem[6:] 
+            if _parse_group_key(potential_key) and potential_key not in subdir_pairs:
+                subdir_pairs[potential_key] = json.loads(f.read_text())
     if subdir_pairs:
         print(f"[pairs] Auto-loading {len(subdir_pairs)} group(s) from subdirs")
         return subdir_pairs
     # Fall back to flat pairs.json
+    
     auto = workdir / "pairs.json"
     if auto.is_file():
         print(f"[pairs] Auto-loading {auto}")
@@ -1209,7 +1225,8 @@ def _proc_submit(args, extra_args: list[str]):
         print(f"[INFO] Loaded saved config from {cfg_path}")
 
     # Parse extra_args as processor config overrides; explicit CLI args override saved config
-    overrides: dict = dict(saved_cfg)
+    # Strip metadata keys that are not dataclass fields
+    overrides: dict = {k: v for k, v in saved_cfg.items() if k not in ("processor_type", "name")}
     config_cls = getattr(processor_cls, "default_config", None)
     if config_cls is not None and dataclasses.is_dataclass(config_cls):
         config_parser = _build_config_parser(config_cls, skip_fields=_SUBMIT_SKIP_FIELDS)
@@ -1233,6 +1250,51 @@ def _proc_submit(args, extra_args: list[str]):
     if pool:
         overrides["earthdata_credentials_pool"] = pool
 
+    dry_run = getattr(args, "dry_run", False)
+
+    # On dry-run: find every process directory (has both insarhub_workflow.json and
+    # downloader_config.json) at workdir level and one level of subdirectories,
+    # write processor_config.json and update insarhub_workflow.json in each.
+    if dry_run:
+        from insarhub.utils.tool import write_workflow_marker
+        _skip_write = _SUBMIT_SKIP_FIELDS | {"earthdata_credentials_pool", "workdir", "pairs"}
+        _preview_overrides = {k: v for k, v in overrides.items()
+                              if k not in _SUBMIT_SKIP_FIELDS | {"name", "config"}}
+
+        def _is_process_dir(d: Path) -> bool:
+            return (d / "insarhub_workflow.json").exists() and (d / "downloader_config.json").exists()
+
+        def _stamp_process_dir(d: Path) -> None:
+            try:
+                _preview_proc = Processor.create(processor_name, workdir=d,
+                                                 pairs=[], **_preview_overrides)
+                _write_config_json(d / "processor_config.json",
+                                   {"name": processor_name,
+                                    **{f.name: getattr(_preview_proc.config, f.name)
+                                       for f in dataclasses.fields(_preview_proc.config)
+                                       if f.name not in _skip_write}})
+                write_workflow_marker(d, processor=processor_name)
+                print(f"[dry-run] {d}")
+                print(f"[dry-run]   wrote  processor_config.json")
+                print(f"[dry-run]   marked insarhub_workflow.json  processor={processor_name}")
+            except Exception as e:
+                print(f"[dry-run] Could not update {d}: {e}", file=sys.stderr)
+
+        targets = []
+        if _is_process_dir(workdir):
+            targets.append(workdir)
+        if workdir.is_dir():
+            for sub in sorted(workdir.iterdir()):
+                if sub.is_dir() and _is_process_dir(sub):
+                    targets.append(sub)
+
+        if targets:
+            for t in targets:
+                _stamp_process_dir(t)
+        else:
+            print(f"[dry-run] No process directories found under {workdir} "
+                  f"(need insarhub_workflow.json + downloader_config.json)", file=sys.stderr)
+
     pairs_data = _load_pairs(args, workdir)
 
     groups: dict[tuple[int, int] | None, list] = (
@@ -1240,8 +1302,6 @@ def _proc_submit(args, extra_args: list[str]):
         if isinstance(pairs_data, dict)
         else {None: [tuple(p) for p in pairs_data]}
     )
-
-    dry_run = getattr(args, "dry_run", False)
     if dry_run:
         print(f"[dry-run] Processor : {processor_name}")
         print(f"[dry-run] Workdir   : {workdir}")
@@ -1249,7 +1309,11 @@ def _proc_submit(args, extra_args: list[str]):
 
     for pf, group_pairs in groups.items():
         folder = f"p{pf[0]}_f{pf[1]}" if pf else None
-        job_dir = workdir / folder if folder else workdir
+        # Avoid nesting if workdir is already the target group folder
+        if folder and workdir.name == folder:
+            job_dir = workdir
+        else:
+            job_dir = workdir / folder if folder else workdir
         group_prefix = (f"{args.name_prefix}_p{pf[0]}_f{pf[1]}"
                         if pf else args.name_prefix)
         tag = f"[{folder}] " if folder else ""
@@ -1262,9 +1326,10 @@ def _proc_submit(args, extra_args: list[str]):
         # Write full resolved config (all fields except runtime-only keys)
         _skip_write = _SUBMIT_SKIP_FIELDS | {"earthdata_credentials_pool", "workdir", "pairs"}
         _write_config_json(job_dir / "processor_config.json",
-                           {f.name: getattr(processor.config, f.name)
-                            for f in dataclasses.fields(processor.config)
-                            if f.name not in _skip_write})
+                           {"name": processor_name,
+                            **{f.name: getattr(processor.config, f.name)
+                               for f in dataclasses.fields(processor.config)
+                               if f.name not in _skip_write}})
         if dry_run:
             print(f"\n{tag}Would submit {len(group_pairs)} pairs → {job_dir}")
             print(f"{tag}  name_prefix : {group_prefix}")

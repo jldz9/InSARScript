@@ -94,7 +94,8 @@ from .config.defaultconfig import (
 
 from .downloader import (
     ASF_Base_Downloader,
-    S1_SLC
+    S1_SLC,
+    S1_Burst
 )
 
 from .processor import (

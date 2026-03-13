@@ -9,7 +9,6 @@ authors = [{name="jldz9", email="Jiaweiliwork@outlook.com"}]
 description = "A modular Python framework for automated InSAR and time-series processing."
 readme = 'README.md'
 dependencies = [
-"numpy",
 "asf_search",
 "cdsapi",
 "colorama",
@@ -21,6 +20,7 @@ dependencies = [
 "sentineleof",
 "fastapi",
 "uvicorn",
+"numpy<2.0",
 ]
 requires-python = ">=3.11"
 classifiers = [

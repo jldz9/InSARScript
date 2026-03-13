@@ -27,7 +27,7 @@ export default function App() {
   const [_sessionId,  setSessionId]   = useState<string | null>(null)
 
   // AOI state
-  const [aoi,        setAoi]        = useState<Bbox>([-113.05, 37.74, -112.68, 38.00])
+  const [aoi,        setAoi]        = useState<Bbox>([-180, -90, 180, 90])
   const [aoiWkt,     setAoiWkt]     = useState<string | null>(null)
   const [aoiGeoJson, setAoiGeoJson] = useState<GeoJSON.Feature | null>(null)
 
@@ -137,7 +137,7 @@ export default function App() {
     setDrawMode(null)
   }
 
-  function handleAoiWktChange(wkt: string) {
+  function handleAoiWktChange(wkt: string | null) {
     setAoiWkt(wkt)
     setAoiGeoJson(null)
   }
@@ -276,6 +276,8 @@ export default function App() {
             stackCount={stackScenes.length}
             stackUrls={stackScenes.map(f => f.properties?.url).filter(Boolean)}
             workdir={workdir}
+            aoiWkt={aoiWkt}
+            downloaderType={downloaderType}
             stackOpen={stackOpen}
             onClose={() => { setSelectedFeature(null); setStackOpen(false); setDetailScene(null) }}
             onStackClick={() => { setStackOpen(o => !o); setDetailScene(null) }}
@@ -298,6 +300,11 @@ export default function App() {
           theme={theme}
           downloaderType={downloaderType}
           onDownloaderTypeChange={setDownloaderType}
+          startDate={filters.startDate}
+          endDate={filters.endDate}
+          aoiWkt={aoiWkt}
+          onDatesChange={(s, e) => setFilters(f => ({ ...f, startDate: s, endDate: e }))}
+          onAoiWktChange={handleAoiWktChange}
           onClose={() => {
             setSettingsOpen(false)
             fetch(`${API}/api/settings`).then(r => r.json()).then(d => { setWorkdir(d.workdir); setDownloaderType(d.downloader) }).catch(() => {})

@@ -4,6 +4,9 @@ from pathlib import Path
 from asf_search import constants
 from insarhub import _env
 
+# ---------------------------------------------------------------------------
+# Downloader configurations
+# ---------------------------------------------------------------------------
 @dataclass
 class ASF_Base_Config:
     '''
@@ -176,6 +179,20 @@ class S1_SLC_Config(ASF_Base_Config):
     processingLevel: str | None = constants.PRODUCT_TYPE.SLC
 
 @dataclass
+class S1_Burst_Config(ASF_Base_Config):
+    name:str = "S1_Burst_Config"
+    dataset: str | list[str] | None =  constants.DATASET.SENTINEL1
+    instrument: str | None = constants.INSTRUMENT.C_SAR
+    beamMode:str | None = constants.BEAMMODE.IW
+    polarization: str|list[str] | None = field(default_factory=lambda: [constants.POLARIZATION.VV, constants.POLARIZATION.VV_VH])
+    processingLevel: str | None = constants.PRODUCT_TYPE.BURST
+
+
+# ---------------------------------------------------------------------------
+# Processor configurations
+# ---------------------------------------------------------------------------
+
+@dataclass
 class Hyp3_Base_Config:
     """
     Base configuration for HyP3 job interaction.
@@ -322,6 +339,11 @@ class Hyp3_InSAR_Config(Hyp3_Base_Config):
     include_displacement_maps:bool=True
     phase_filter_parameter :float=0.6
 
+
+# ---------------------------------------------------------------------------
+# Analyzer configurations
+# ---------------------------------------------------------------------------
+
 @dataclass
 class Mintpy_SBAS_Base_Config:
     '''
@@ -389,9 +411,12 @@ class Mintpy_SBAS_Base_Config:
                     "timeFunc_bootstrapCount"]},
         {"label": "Geocode",
          "fields": ["geocode", "geocode_SNWE", "geocode_laloStep", "geocode_interpMethod", "geocode_fillValue"]},
-        {"label": "Output",
-         "fields": ["save_kmz", "save_hdfEos5", "save_hdfEos5_update", "save_hdfEos5_subset",
-                    "plot", "plot_dpi", "plot_maxMemory"]},
+        {"label": "Google earth",
+         "fields": ["save_kmz"]},
+        {"label": "Hdfeos5",
+         "fields": ["save_hdfEos5", "save_hdfEos5_update", "save_hdfEos5_subset"]},
+        {"label": "Plot",
+         "fields": ["plot", "plot_dpi", "plot_maxMemory"]},
     ]
     _ui_fields: ClassVar[dict] = {
         # Compute Resources
@@ -604,15 +629,17 @@ class Mintpy_SBAS_Base_Config:
                                  "hint": "Interpolation method for geocoding"},
         "geocode_fillValue":    {"type": "text",
                                  "hint": "Fill value for pixels outside coverage, e.g. nan or 0"},
-        # Output
+        # Google Earth
         "save_kmz":            {"type": "select", "options": ["auto", "yes", "no"],
                                 "hint": "Save geocoded velocity to Google Earth KMZ file"},
+        # HDF-EOS5
         "save_hdfEos5":        {"type": "select", "options": ["auto", "yes", "no"],
                                 "hint": "Save time-series to HDF-EOS5 format"},
         "save_hdfEos5_update": {"type": "select", "options": ["auto", "yes", "no"],
                                 "hint": "Update HDF-EOS5 file if already exists"},
         "save_hdfEos5_subset": {"type": "select", "options": ["auto", "yes", "no"],
                                 "hint": "Save subset of HDF-EOS5 file"},
+        # Plot
         "plot":                {"type": "select", "options": ["auto", "yes", "no"],
                                 "hint": "Plot results during processing"},
         "plot_dpi":            {"type": "auto_number", "hint": "Figure DPI for saved plots"},

@@ -63,13 +63,19 @@ interface Props {
   onClose:                 () => void
   downloaderType:          string
   onDownloaderTypeChange:  (type: string) => void
+  startDate:               string
+  endDate:                 string
+  aoiWkt:                  string | null
+  onDatesChange:           (start: string, end: string) => void
+  onAoiWktChange:          (wkt: string | null) => void
 }
 
 type Tab = 'general' | 'auth' | 'downloader' | 'processor' | 'analyzer'
 
 
 
-export default function SettingsPanel({ theme: t, onClose, downloaderType, onDownloaderTypeChange }: Props) {
+export default function SettingsPanel({ theme: t, onClose, downloaderType, onDownloaderTypeChange,
+  startDate, endDate, aoiWkt, onDatesChange, onAoiWktChange }: Props) {
   const [tab,         setTab]         = useState<Tab>('general')
   const [loading,     setLoading]     = useState(true)
   const [authLoading, setAuthLoading] = useState(false)
@@ -212,7 +218,7 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
           workdir,
           max_download_workers: maxWorkers,
           downloader: downloaderType,
-          downloader_config: downloaderConfig,
+          downloader_config: effectiveDownloaderConfig,
           processor: processorType,
           processor_config: processorConfig,
           analyzer: analyzerType,
@@ -334,7 +340,20 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
     )
   }
 
-  const setDownloaderField = (k: string, v: any) => setDownloaderConfig(c => ({ ...c, [k]: v }))
+  // Merge TopBar values over server config so all three share App.tsx state
+  const effectiveDownloaderConfig = {
+    ...downloaderConfig,
+    start: startDate || downloaderConfig.start,
+    end:   endDate   || downloaderConfig.end,
+    intersectsWith: aoiWkt ?? downloaderConfig.intersectsWith,
+  }
+
+  const setDownloaderField = (k: string, v: any) => {
+    if (k === 'start')          { onDatesChange(v, endDate);   return }
+    if (k === 'end')            { onDatesChange(startDate, v); return }
+    if (k === 'intersectsWith') { onAoiWktChange(v || null);   return }
+    setDownloaderConfig(c => ({ ...c, [k]: v }))
+  }
   const setProcessorField  = (k: string, v: any) => setProcessorConfig(c => ({ ...c, [k]: v }))
   const setAnalyzerField   = (k: string, v: any) => setAnalyzerConfig(c => ({ ...c, [k]: v }))
 
@@ -618,7 +637,7 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
               : <div style={{ color: t.textMuted, fontSize: 12 }}>Loading…</div>}
             {meta?.downloaders[downloaderType] && (
               <div style={{ borderTop: `1px solid ${t.border}`, paddingTop: 14, marginTop: 4 }}>
-                {renderGroupedFields(meta.downloaders[downloaderType], downloaderConfig, setDownloaderField)}
+                {renderGroupedFields(meta.downloaders[downloaderType], effectiveDownloaderConfig, setDownloaderField)}
               </div>
             )}
             <div style={{ ...fieldStyle, marginTop: 16, borderTop: `1px solid ${t.border}`, paddingTop: 14 }}>

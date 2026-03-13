@@ -13,8 +13,8 @@ export interface Filters {
 }
 
 export const DEFAULT_FILTERS: Filters = {
-  startDate:       '2021-01-01',
-  endDate:         '2022-01-01',
+  startDate:       '',
+  endDate:         '',
   flightDirection: '',
   pathStart:       '',
   pathEnd:         '',

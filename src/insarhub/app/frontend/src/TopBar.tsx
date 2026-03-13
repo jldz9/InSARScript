@@ -69,7 +69,7 @@ export default function TopBar({
         value={downloaderType}
         onChange={e => onDownloaderTypeChange(e.target.value)}
         style={{ ...inputStyle, fontFamily: 'monospace', fontSize: 11, cursor: 'pointer',
-                 colorScheme: t.isDark ? 'dark' : 'light' }}
+                 colorScheme: t.isDark ? 'dark' : 'light', width: 90 }}
       >
         {downloaderOptions.map(d => <option key={d} value={d}>{d}</option>)}
       </select>
@@ -155,12 +155,6 @@ export default function TopBar({
         Jobs
       </button>
 
-      {/* Result count / status */}
-      {resultCount && (
-        <span style={{ color: t.textMuted, fontSize: 12, whiteSpace: 'nowrap' }}>
-          {resultCount}
-        </span>
-      )}
 
       {/* Settings — right-aligned */}
       <button

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Theme } from './theme'
 
 export function parseStack(s: string): { path: number; frame: number } | null {
@@ -16,8 +16,10 @@ interface Props {
   stackEnd?:   string
   stackCount:   number | null
   stackUrls:    string[]
-  workdir:      string
-  stackOpen:    boolean
+  workdir:       string
+  aoiWkt?:       string | null
+  downloaderType: string
+  stackOpen:     boolean
   onClose:      () => void
   onStackClick: () => void
 }
@@ -35,7 +37,7 @@ const row = (t: Theme, label: string, value: React.ReactNode) => (
 
 export default function ScenePanel({
   feature, theme: t, stackStart, stackEnd,
-  stackCount, stackUrls, workdir, stackOpen, onClose, onStackClick,
+  stackCount, stackUrls, workdir, aoiWkt, downloaderType, stackOpen, onClose, onStackClick,
 }: Props) {
   const p     = feature.properties ?? {}
   const stack = parseStack(p._stack ?? '')
@@ -43,6 +45,41 @@ export default function ScenePanel({
   const [dlStatus,  setDlStatus]  = useState<'idle'|'downloading'|'done'|'error'>('idle')
   const [dlMessage, setDlMessage] = useState('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const [ajStatus,  setAjStatus]  = useState<'idle'|'running'|'done'|'error'>('idle')
+  const [ajMessage, setAjMessage] = useState('')
+
+  // Reset Add Job status when feature changes
+  useEffect(() => { setAjStatus('idle'); setAjMessage('') }, [feature])
+
+  const handleAddJob = useCallback(async () => {
+    if (!stack || !stackStart || !stackEnd) return
+    setAjStatus('running')
+    try {
+      const res = await fetch(`${API}/api/add-job`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workdir,
+          relativeOrbit: stack.path,
+          frame: stack.frame,
+          start: stackStart,
+          end: stackEnd,
+          wkt: aoiWkt ?? null,
+          flightDirection: (feature.properties?.flightDirection as string) ?? null,
+          platform: (feature.properties?.platform as string) ?? null,
+          downloaderType,
+        }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setAjStatus('error'); setAjMessage(d.detail ?? 'Error'); return }
+      setAjStatus('done')
+      setAjMessage(d.path ?? d.name ?? '')
+    } catch (e) {
+      setAjStatus('error')
+      setAjMessage(String(e))
+    }
+  }, [stack, stackStart, stackEnd, workdir, aoiWkt, feature.properties])
 
   async function handleDownloadStack() {
     if (!stackUrls.length) return
@@ -168,6 +205,41 @@ export default function ScenePanel({
             <div style={{ color: dlStatusColor, fontSize: 11, marginTop: 5 }}>{dlMessage}</div>
           )}
         </div>
+
+        {/* Add Job — run select_pairs for this stack */}
+        {stack && stackStart && stackEnd && (
+          <div style={{ marginTop: 8 }}>
+            <button
+              onClick={handleAddJob}
+              disabled={ajStatus === 'running'}
+              style={{
+                display: 'block', width: '100%', padding: '8px 0', textAlign: 'center',
+                background: ajStatus === 'done'    ? '#1b3a2a'
+                          : ajStatus === 'error'   ? '#b71c1c'
+                          : ajStatus === 'running' ? t.bg2
+                          : '#0d3b6e',
+                color: ajStatus === 'done'    ? '#a5d6a7'
+                     : ajStatus === 'error'   ? '#ef9a9a'
+                     : ajStatus === 'running' ? t.textMuted
+                     : '#90caf9',
+                border: `1px solid ${ajStatus === 'done' ? '#2e7d32' : ajStatus === 'error' ? '#c62828' : '#1565c0'}`,
+                borderRadius: 6, fontSize: 12, fontWeight: 600,
+                cursor: ajStatus === 'running' ? 'wait' : 'pointer',
+              }}
+            >
+              {ajStatus === 'running' ? '⟳ Selecting Pairs…'
+              : ajStatus === 'done'   ? '✓ Job Added'
+              : ajStatus === 'error'  ? '✕ Retry'
+              : '+ Add Job'}
+            </button>
+            {ajMessage && (
+              <div style={{
+                color: ajStatus === 'done' ? '#4caf50' : ajStatus === 'error' ? '#e53935' : t.textMuted,
+                fontSize: 11, marginTop: 5,
+              }}>{ajMessage}</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -16,3 +16,7 @@ dependencies:
         - contextily
         - sentineleof
         - cdsapi
+        - fastapi
+        - uvicorn
+        - numpy <2.0
+        

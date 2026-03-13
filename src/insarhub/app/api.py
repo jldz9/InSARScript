@@ -31,6 +31,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from insarhub.commands.downloader import DownloadScenesCommand, SearchCommand
+from insarhub.commands.processor import SaveJobsCommand, SubmitCommand
 from insarhub.config import S1_SLC_Config
 from insarhub.core.registry import Downloader, Processor, Analyzer
 # Import processor/analyzer modules to trigger auto-registration in the registries
@@ -108,6 +109,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 _jobs: dict[str, dict[str, Any]] = {}
+_stop_events: dict[str, Any] = {}    # job_id → threading.Event for cancellable jobs
 _sessions: dict[str, Any] = {}       # session_id → downloader instance
 _auth_cache: dict[str, Any] | None = None   # populated at startup, refreshed on demand
 
@@ -126,11 +128,17 @@ _DEFAULT_DOWNLOADER = next(iter(_DOWNLOADERS_META), "")
 _DEFAULT_PROCESSOR  = next(iter(_PROCESSORS_META), "")
 _DEFAULT_ANALYZER   = next(iter(_ANALYZERS_META),  "")
 
+_TOPBAR_FIELDS = {"intersectsWith", "start", "end"}
+
+def _safe_config_values(name: str, meta: dict[str, Any]) -> dict[str, Any]:
+    """Like _default_config_values but excludes fields owned by the TopBar (AOI, dates)."""
+    return {k: v for k, v in _default_config_values(name, meta).items() if k not in _TOPBAR_FIELDS}
+
 _settings: dict[str, Any] = {
     "workdir":              str(Path.cwd()),
     "max_download_workers": 3,
     "downloader":           _DEFAULT_DOWNLOADER,
-    "downloader_config":    _default_config_values(_DEFAULT_DOWNLOADER, _DOWNLOADERS_META),
+    "downloader_config":    _safe_config_values(_DEFAULT_DOWNLOADER, _DOWNLOADERS_META),
     "processor":            _DEFAULT_PROCESSOR,
     "processor_config":     _default_config_values(_DEFAULT_PROCESSOR, _PROCESSORS_META),
     "analyzer":             _DEFAULT_ANALYZER,
@@ -360,9 +368,11 @@ async def update_settings(req: SettingsUpdate):
         _settings["max_download_workers"] = max(1, min(99, req.max_download_workers))
     if req.downloader is not None:
         _settings["downloader"] = req.downloader
-        _settings["downloader_config"] = _default_config_values(req.downloader, _DOWNLOADERS_META)
+        _settings["downloader_config"] = _safe_config_values(req.downloader, _DOWNLOADERS_META)
     if req.downloader_config is not None:
-        _settings["downloader_config"].update(req.downloader_config)
+        # Never persist TopBar fields (AOI, dates) — they live in the TopBar state
+        cfg = {k: v for k, v in req.downloader_config.items() if k not in _TOPBAR_FIELDS}
+        _settings["downloader_config"].update(cfg)
     if req.processor is not None:
         _settings["processor"] = req.processor
         _settings["processor_config"] = _default_config_values(req.processor, _PROCESSORS_META)
@@ -496,17 +506,12 @@ async def _run_search(job_id: str, session_id: str, req: SearchRequest):
                 end=req.end,
                 workdir=req.workdir,
                 maxResults=req.maxResults,
+                beamMode=req.beamMode or None,
+                polarization=req.polarization or None,
+                flightDirection=req.flightDirection or None,
+                relativeOrbit=rel_orbit or None,
+                asfFrame=asf_frame or None,
             )
-            if req.beamMode:
-                config.beamMode = req.beamMode
-            if req.polarization:
-                config.polarization = req.polarization
-            if req.flightDirection:
-                config.flightDirection = req.flightDirection
-            if rel_orbit:
-                config.relativeOrbit = rel_orbit
-            if asf_frame:
-                config.asfFrame = asf_frame
             downloader = Downloader.create("S1_SLC", config)
             cmd = SearchCommand(downloader, progress_callback=_make_progress(job_id))
             result = cmd.run()
@@ -571,6 +576,17 @@ async def get_job(job_id: str):
     if job_id not in _jobs:
         raise HTTPException(status_code=404, detail="Job not found")
     return _jobs[job_id]
+
+
+@app.post("/api/jobs/{job_id}/stop")
+async def stop_job(job_id: str):
+    """Signal a cancellable job (e.g. download) to stop."""
+    event = _stop_events.get(job_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail="Job not found or not cancellable")
+    event.set()
+    _jobs[job_id]["message"] = "Stopping…"
+    return {"ok": True}
 
 
 @app.post("/api/download-scene", response_model=JobResponse)
@@ -656,6 +672,45 @@ async def _run_download_stack(job_id: str, req: DownloadStackRequest):
     await asyncio.to_thread(run)
 
 
+class AddJobRequest(BaseModel):
+    workdir: str
+    relativeOrbit: int
+    frame: int
+    start: str
+    end: str
+    wkt: str | None = None
+    flightDirection: str | None = None
+    platform: str | None = None
+    downloaderType: str = "S1_SLC"
+
+
+@app.post("/api/add-job")
+async def add_job(req: AddJobRequest):
+    """Create a job subfolder with downloader_config.json and workflow marker."""
+    from insarhub.utils.tool import write_workflow_marker
+    workdir = Path(req.workdir).expanduser().resolve()
+    subdir = workdir / f"p{req.relativeOrbit}_f{req.frame}"
+    subdir.mkdir(parents=True, exist_ok=True)
+
+    dl_cls  = Downloader._registry.get(req.downloaderType)
+    cfg_cls = getattr(dl_cls, "default_config", S1_SLC_Config) if dl_cls else S1_SLC_Config
+    cfg_instance = cfg_cls(workdir=subdir)
+    valid_fields = {f.name for f in dataclasses.fields(cfg_instance)}
+    for key, val in {
+        "start": req.start, "end": req.end,
+        "relativeOrbit": req.relativeOrbit, "frame": req.frame,
+        "intersectsWith": req.wkt,
+        "flightDirection": req.flightDirection, "platform": req.platform,
+    }.items():
+        if key in valid_fields and val is not None:
+            setattr(cfg_instance, key, val)
+    cfg = {k: v for k, v in dataclasses.asdict(cfg_instance).items() if k != "workdir"}
+
+    (subdir / "downloader_config.json").write_text(json.dumps(cfg, indent=2, default=str))
+    write_workflow_marker(subdir, downloader=req.downloaderType)
+    return {"path": str(subdir), "name": subdir.name}
+
+
 class FolderDownloadRequest(BaseModel):
     folder_path: str
 
@@ -680,6 +735,20 @@ async def get_folder_details(path: str):
     network_files = sorted(folder.glob("network_p*_f*.png"))
     result["network_image"] = str(network_files[0]) if network_files else None
     return result
+
+
+@app.get("/api/folder-pairs")
+async def get_folder_pairs(path: str):
+    """Return pairs list from the first pairs_p*_f*.json found in the folder."""
+    folder = Path(path)
+    pairs_files = sorted(folder.glob("pairs_p*_f*.json"))
+    if not pairs_files:
+        raise HTTPException(status_code=404, detail="No pairs file found")
+    try:
+        pairs = json.loads(pairs_files[0].read_text())
+        return {"pairs": pairs, "count": len(pairs), "file": pairs_files[0].name}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/folder-image")
@@ -732,6 +801,411 @@ async def _run_folder_download(job_id: str, folder_path: str):
                 "message":  dl_result.message,
                 "data":     None,
             }
+        except Exception as e:
+            _jobs[job_id] = {"status": "error", "progress": 0, "message": str(e), "data": None}
+
+    await asyncio.to_thread(run)
+
+
+class SelectPairsRequest(BaseModel):
+    folder_path:   str
+    dt_targets:    list[int] = Field(default=[6, 12, 24, 36, 48, 72, 96])
+    dt_tol:        int   = 3
+    dt_max:        int   = 120
+    pb_max:        float = 150.0
+    min_degree:    int   = 3
+    max_degree:    int   = 999
+    force_connect: bool  = True
+    max_workers:   int   = 4
+
+
+@app.post("/api/folder-select-pairs", response_model=JobResponse)
+async def folder_select_pairs(req: SelectPairsRequest, background_tasks: BackgroundTasks):
+    """Re-search using downloader_config.json and run select_pairs with given parameters."""
+    folder = Path(req.folder_path)
+    if not (folder / "downloader_config.json").exists():
+        raise HTTPException(status_code=404, detail="downloader_config.json not found in folder")
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "running", "progress": 0, "message": "Starting search…", "data": None}
+    background_tasks.add_task(_run_folder_select_pairs, job_id, req)
+    return {"job_id": job_id}
+
+
+async def _run_folder_select_pairs(job_id: str, req: SelectPairsRequest):
+    def run():
+        try:
+            folder  = Path(req.folder_path)
+            raw: dict[str, Any] = json.loads((folder / "downloader_config.json").read_text())
+
+            # Read downloader type from workflow marker
+            dl_type = "S1_SLC"
+            wf_file = folder / "insarhub_workflow.json"
+            if wf_file.exists():
+                try:
+                    dl_type = json.loads(wf_file.read_text()).get("downloader", dl_type)
+                except Exception:
+                    pass
+
+            dl_cls  = Downloader._registry.get(dl_type)
+            cfg_cls = getattr(dl_cls, "default_config", S1_SLC_Config) if dl_cls else S1_SLC_Config
+
+            # workdir = parent so select_pairs writes into the correct p{path}_f{frame} subfolder
+            cfg = cfg_cls(workdir=folder.parent)
+            valid_fields = {f.name for f in dataclasses.fields(cfg)}
+            for key, val in raw.items():
+                if key in valid_fields and key != "workdir" and val is not None:
+                    try:
+                        setattr(cfg, key, val)
+                    except Exception:
+                        pass
+
+            downloader = Downloader.create(dl_type, cfg)
+            _jobs[job_id]["message"] = "Searching scenes…"
+            search_result = SearchCommand(downloader, progress_callback=_make_progress(job_id)).run()
+            if not search_result.success:
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": search_result.message, "data": None}
+                return
+
+            _jobs[job_id]["message"] = "Selecting pairs…"
+            downloader.select_pairs(
+                dt_targets=tuple(req.dt_targets),
+                dt_tol=req.dt_tol,
+                dt_max=req.dt_max,
+                pb_max=req.pb_max,
+                min_degree=req.min_degree,
+                max_degree=req.max_degree,
+                force_connect=req.force_connect,
+                max_workers=req.max_workers,
+                plot=True,
+            )
+            _jobs[job_id] = {"status": "done", "progress": 100, "message": "Pairs selected", "data": None}
+        except Exception as e:
+            _jobs[job_id] = {"status": "error", "progress": 0, "message": str(e), "data": None}
+
+    await asyncio.to_thread(run)
+
+
+class ProcessRequest(BaseModel):
+    folder_path:      str
+    processor_type:   str = "Hyp3_InSAR"
+    processor_config: dict[str, Any] = {}
+    dry_run:          bool = False
+
+
+@app.post("/api/folder-process", response_model=JobResponse)
+async def folder_process(req: ProcessRequest, background_tasks: BackgroundTasks):
+    """Read pairs from folder, submit to processor, save job IDs."""
+    folder = Path(req.folder_path)
+    pairs_files = sorted(folder.glob("pairs_p*_f*.json"))
+    if not pairs_files:
+        raise HTTPException(status_code=404, detail="No pairs file found in folder")
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "running", "progress": 0, "message": "Starting…", "data": None}
+    background_tasks.add_task(_run_folder_process, job_id, req)
+    return {"job_id": job_id}
+
+
+async def _run_folder_process(job_id: str, req: ProcessRequest):
+    def run():
+        try:
+            from insarhub.utils.tool import write_workflow_marker
+
+            folder = Path(req.folder_path)
+            pairs_files = sorted(folder.glob("pairs_p*_f*.json"))
+            if not pairs_files:
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": "No pairs file found", "data": None}
+                return
+
+            raw = json.loads(pairs_files[0].read_text())
+            pairs: list[tuple[str, str]] = [tuple(p) for p in raw]
+
+            proc_cls  = Processor._registry.get(req.processor_type)
+            if proc_cls is None:
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": f"Unknown processor: {req.processor_type}", "data": None}
+                return
+            cfg_cls = getattr(proc_cls, "default_config", None)
+            if cfg_cls is None or not dataclasses.is_dataclass(cfg_cls):
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": "Processor has no config", "data": None}
+                return
+
+            cfg = cfg_cls(workdir=folder)
+            valid_fields = {f.name for f in dataclasses.fields(cfg)}
+            for key, val in req.processor_config.items():
+                if key in valid_fields and key not in ("workdir", "pairs") and val is not None:
+                    try:
+                        setattr(cfg, key, val)
+                    except Exception:
+                        pass
+            cfg.pairs = pairs
+
+            if req.dry_run:
+                n = len(pairs)
+                _jobs[job_id] = {
+                    "status": "done", "progress": 100,
+                    "message": f"[Dry run] Would submit {n} pair{'s' if n != 1 else ''} "
+                               f"via {req.processor_type} from {folder.name}",
+                    "data": None,
+                }
+                return
+
+            _jobs[job_id]["message"] = "Submitting jobs…"
+            processor = Processor.create(req.processor_type, cfg)
+            submit_result = SubmitCommand(processor, progress_callback=_make_progress(job_id)).run()
+            if not submit_result.success:
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": submit_result.message, "data": None}
+                return
+
+            _jobs[job_id]["message"] = "Saving job IDs…"
+            SaveJobsCommand(processor, progress_callback=_make_progress(job_id)).run()
+
+            write_workflow_marker(folder, processor=req.processor_type)
+            proc_cfg_path = folder / "processor_config.json"
+            proc_cfg_path.write_text(json.dumps({
+                "name": req.processor_type,
+                "processor_config": req.processor_config,
+            }, indent=2))
+            _jobs[job_id] = {"status": "done", "progress": 100, "message": submit_result.message, "data": None}
+        except Exception as e:
+            _jobs[job_id] = {"status": "error", "progress": 0, "message": str(e), "data": None}
+
+    await asyncio.to_thread(run)
+
+
+@app.get("/api/folder-hyp3-jobs")
+async def get_folder_hyp3_jobs(path: str):
+    """List hyp3*.json job files in a folder with stored job counts."""
+    folder = Path(path)
+    if not folder.exists():
+        raise HTTPException(status_code=404, detail="Folder not found")
+    files = []
+    for f in sorted(folder.glob("hyp3*.json")):
+        try:
+            data = json.loads(f.read_text())
+            job_ids = data.get("job_ids", {})
+            total = sum(len(v) for v in job_ids.values())
+            users = list(job_ids.keys())
+        except Exception:
+            total = 0
+            users = []
+        files.append({"name": f.name, "total": total, "users": users})
+    proc_type = None
+    proc_cfg_path = folder / "processor_config.json"
+    if proc_cfg_path.exists():
+        try:
+            pc = json.loads(proc_cfg_path.read_text())
+            proc_type = pc.get("name") or pc.get("processor_type")
+        except Exception:
+            pass
+    return {"files": files, "processor_type": proc_type}
+
+
+class InitAnalyzerRequest(BaseModel):
+    folder_path:   str
+    analyzer_type: str
+
+
+@app.post("/api/folder-init-analyzer")
+async def folder_init_analyzer(req: InitAnalyzerRequest):
+    """Mark a folder with an analyzer role in insarhub_workflow.json."""
+    from insarhub.utils.tool import write_workflow_marker
+    folder = Path(req.folder_path)
+    if not folder.exists():
+        raise HTTPException(status_code=404, detail="Folder not found")
+    if req.analyzer_type not in Analyzer._registry:
+        raise HTTPException(status_code=400, detail=f"Unknown analyzer: {req.analyzer_type}")
+    write_workflow_marker(folder, analyzer=req.analyzer_type)
+    return {"ok": True, "analyzer": req.analyzer_type}
+
+
+_MINTPY_STEPS = [
+    'load_data', 'modify_network', 'reference_point', 'invert_network',
+    'correct_LOD', 'correct_SET', 'correct_ionosphere', 'correct_troposphere',
+    'deramp', 'correct_topography', 'residual_RMS', 'reference_date',
+    'velocity', 'geocode', 'google_earth', 'hdfeos5', 'plot',
+]
+
+
+@app.get("/api/analyzer-steps")
+async def get_analyzer_steps(analyzer_type: str):
+    """Return the list of steps for a MintPy-based analyzer."""
+    cls = Analyzer._registry.get(analyzer_type)
+    if cls is None:
+        raise HTTPException(status_code=400, detail=f"Unknown analyzer: {analyzer_type}")
+    # Check if it's a MintPy-based analyzer by inspecting the run method signature
+    import inspect
+    src = inspect.getsource(cls.run) if hasattr(cls, 'run') else ''
+    if 'TimeSeriesAnalysis' in src or 'mintpy' in src.lower():
+        steps = (['prep_data'] if hasattr(cls, 'prep_data') else []) + _MINTPY_STEPS
+    else:
+        steps = []
+    return {"steps": steps}
+
+
+class RunAnalyzerRequest(BaseModel):
+    folder_path:   str
+    analyzer_type: str
+    steps:         list[str]
+
+
+@app.post("/api/folder-run-analyzer", response_model=JobResponse)
+async def folder_run_analyzer(req: RunAnalyzerRequest, background_tasks: BackgroundTasks):
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "running", "progress": 0, "message": "Starting analyzer…", "data": None}
+    background_tasks.add_task(_run_analyzer, job_id, req)
+    return {"job_id": job_id}
+
+
+async def _run_analyzer(job_id: str, req: RunAnalyzerRequest):
+    import threading as _threading
+    stop_ev = _threading.Event()
+    _stop_events[job_id] = stop_ev
+
+    def run():
+        log: list[str] = []
+
+        def update(msg: str, pct: int):
+            log.append(msg)
+            _jobs[job_id]["progress"] = pct
+            _jobs[job_id]["message"]  = "\n".join(log)
+
+        try:
+            folder = Path(req.folder_path)
+            cls = Analyzer._registry.get(req.analyzer_type)
+            if cls is None:
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": f"Unknown analyzer: {req.analyzer_type}", "data": None}
+                return
+            config_cls = getattr(cls, "default_config", None)
+            if config_cls is None or not dataclasses.is_dataclass(config_cls):
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": "Analyzer has no config dataclass", "data": None}
+                return
+
+            # Build config: start with saved analyzer_config overrides, then force workdir
+            saved_overrides = _settings.get("analyzer_config") or {}
+            valid_keys = {f.name for f in dataclasses.fields(config_cls)}
+            init_kwargs = {k: v for k, v in saved_overrides.items() if k in valid_keys}
+            init_kwargs["workdir"] = folder
+            cfg = config_cls(**init_kwargs)
+            analyzer = cls(cfg)
+
+            total = len(req.steps)
+            completed = 0
+            for i, step in enumerate(req.steps):
+                if stop_ev.is_set():
+                    update(f"[stopped] Cancelled before {step}", int(i / total * 100))
+                    break
+
+                update(f"[{i+1}/{total}] {step} — running…", int(i / total * 100))
+                try:
+                    if step == 'prep_data':
+                        analyzer.prep_data()
+                    else:
+                        analyzer.run(steps=[step])
+                    update(f"[{i+1}/{total}] {step} — done", int((i+1) / total * 100))
+                    completed += 1
+                except Exception as e:
+                    update(f"[{i+1}/{total}] {step} — ERROR: {e}", int(i / total * 100))
+                    _jobs[job_id]["status"] = "error"
+                    return
+
+            _stop_events.pop(job_id, None)
+            if stop_ev.is_set():
+                _jobs[job_id]["status"] = "done"
+            else:
+                update(f"─── Finished {completed}/{total} step(s) ───", 100)
+                _jobs[job_id]["status"] = "done"
+                _jobs[job_id]["progress"] = 100
+
+        except Exception as e:
+            _stop_events.pop(job_id, None)
+            log.append(f"FATAL: {e}")
+            _jobs[job_id] = {"status": "error", "progress": 0, "message": "\n".join(log), "data": None}
+
+    await asyncio.to_thread(run)
+
+
+class Hyp3ActionRequest(BaseModel):
+    folder_path:    str
+    job_file:       str
+    action:         str   # "refresh" | "retry" | "download"
+    processor_type: str = "Hyp3_InSAR"
+
+
+@app.post("/api/folder-hyp3-action", response_model=JobResponse)
+async def folder_hyp3_action(req: Hyp3ActionRequest, background_tasks: BackgroundTasks):
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "running", "progress": 0, "message": "Starting…", "data": None}
+    background_tasks.add_task(_run_hyp3_action, job_id, req)
+    return {"job_id": job_id}
+
+
+async def _run_hyp3_action(job_id: str, req: Hyp3ActionRequest):
+    def run():
+        try:
+            folder = Path(req.folder_path)
+            job_file = folder / req.job_file
+            if not job_file.exists():
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": f"{req.job_file} not found", "data": None}
+                return
+
+            proc_cls = Processor._registry.get(req.processor_type)
+            if proc_cls is None:
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": f"Unknown processor: {req.processor_type}", "data": None}
+                return
+            cfg_cls = getattr(proc_cls, "default_config", None)
+            if cfg_cls is None or not dataclasses.is_dataclass(cfg_cls):
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": "Processor has no config", "data": None}
+                return
+
+            cfg = cfg_cls(workdir=folder)
+            cfg.saved_job_path = str(job_file)
+            _jobs[job_id]["message"] = "Initializing processor…"
+            processor = Processor.create(req.processor_type, cfg)
+
+            if req.action == "refresh":
+                _jobs[job_id]["message"] = "Refreshing job statuses…"
+                batchs = processor.refresh()
+                lines = []
+                counts: dict[str, int] = {}
+                for user, batch in batchs.items():
+                    lines.append(f"[{user}]")
+                    for j in batch.jobs:
+                        sc = j.status_code
+                        counts[sc] = counts.get(sc, 0) + 1
+                        lines.append(f"  {j.name:<35} {j.job_id:<12} | {sc}")
+                total = sum(counts.values())
+                summary = f"{total} jobs — " + ", ".join(
+                    f"{v} {k.lower()}" for k, v in sorted(counts.items())
+                )
+                lines.insert(0, summary)
+                _jobs[job_id] = {"status": "done", "progress": 100, "message": "\n".join(lines), "data": None}
+
+            elif req.action == "retry":
+                _jobs[job_id]["message"] = "Retrying failed jobs…"
+                processor.retry()
+                _jobs[job_id] = {"status": "done", "progress": 100, "message": "Retry submitted. New job file saved.", "data": None}
+
+            elif req.action == "download":
+                import threading as _threading
+                dl_stop = _threading.Event()
+                _stop_events[job_id] = dl_stop
+                _jobs[job_id]["message"] = "Downloading succeeded jobs…"
+
+                def _dl_progress(msg: str, pct: int):
+                    _jobs[job_id]["progress"] = pct
+                    _jobs[job_id]["message"]  = msg
+
+                _, dl_results = processor.download(progress_callback=_dl_progress, stop_event=dl_stop)
+                _stop_events.pop(job_id, None)
+                r = dl_results
+                summary = (f"{r['downloaded']} downloaded, {r['skipped']} existing, {r['failed']} failed")
+                if dl_stop.is_set():
+                    summary = f"Stopped. {summary}"
+                pct = 100 if not dl_stop.is_set() else _jobs[job_id].get("progress", 0)
+                _jobs[job_id] = {"status": "done", "progress": pct, "message": summary, "data": None}
+
+            else:
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": f"Unknown action: {req.action}", "data": None}
+
         except Exception as e:
             _jobs[job_id] = {"status": "error", "progress": 0, "message": str(e), "data": None}
 

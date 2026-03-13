@@ -344,7 +344,7 @@ class Hyp3Base(Hyp3Processor):
         else:
             raise ValueError(f'No batches exist to save. Did you submit or refresh a job?')
     
-    def download(self):
+    def download(self, progress_callback=None, stop_event: threading.Event | None = None):
         """
         Download all succeeded jobs for all users.
 
@@ -362,7 +362,8 @@ class Hyp3Base(Hyp3Processor):
             raise ValueError(f"{Fore.RED}No jobs found. Call submit or load jobs first.")
         
         exist_files = {p.name: p for p in self.output_dir.glob('*.zip')}
-        stop_event = threading.Event()
+        if stop_event is None:
+            stop_event = threading.Event()
         def _is_valid_zip(path: Path) -> bool:
             """Check ZIP magic bytes at start and EOCD signature at end. No file reading."""
             try:
@@ -409,7 +410,18 @@ class Hyp3Base(Hyp3Processor):
                 raise
 
         overall_results = {"downloaded": 0, "skipped": 0, "failed": 0, "corrupt": 0}
-        
+        completed_files = 0
+
+        # Pre-count total downloadable files across all users for progress reporting
+        total_files = 0
+        for _, batch in self.batchs.items():
+            for job in batch.jobs:
+                if job.status_code == "SUCCEEDED" and job.files:
+                    total_files += sum(
+                        1 for fm in job.files
+                        if fm.get('url') or fm.get('s3_uri') or fm.get('download_url')
+                    )
+
         for username, batch in self.batchs.items():
             print(f"{Fore.CYAN}{Style.BRIGHT}User: {username} ({len(batch)} jobs){Style.RESET_ALL}")
             succeeded = [job for job in batch.jobs if job.status_code == "SUCCEEDED"]
@@ -417,7 +429,7 @@ class Hyp3Base(Hyp3Processor):
             if not succeeded:
                 print("No succeeded jobs found, skipping.")
                 continue
-            
+
             tasks: list[tuple[str, str, Path]] = [] # (url, dest_path)
 
             for job in succeeded:
@@ -434,6 +446,7 @@ class Hyp3Base(Hyp3Processor):
                             if self.config.skip_existing:
                                 print(f"{Fore.YELLOW}  ✓ {fname} already exists and is valid, skipping.{Style.RESET_ALL}")
                                 overall_results["skipped"] += 1
+                                completed_files += 1
                                 continue
 
                     # File exists but is corrupt — re-download
@@ -467,27 +480,36 @@ class Hyp3Base(Hyp3Processor):
                                     tqdm.write(f"{Fore.RED}  ✗ {fname} failed ZIP check, deleting.{Style.RESET_ALL}")
                                     dest.unlink(missing_ok=True)
                                     overall_results["failed"] += 1
-                            except InterruptedError:                          # NEW: raised by stop_event
+                            except InterruptedError:
                                 tqdm.write(f"{Fore.YELLOW}  ⚠ {fname} cancelled.{Style.RESET_ALL}")
                                 overall_results["failed"] += 1
                             except Exception as e:
                                 tqdm.write(f"{Fore.RED}  ✗ {fname} failed: {e}{Style.RESET_ALL}")
                                 overall_results["failed"] += 1
+                            completed_files += 1
                             pbar.update(1)
+                            if progress_callback and total_files > 0:
+                                r = overall_results
+                                pct = int(completed_files / total_files * 100)
+                                progress_callback(
+                                    f"Downloading… {completed_files}/{total_files} files "
+                                    f"({r['downloaded']} ok, {r['failed']} failed, {r['skipped']} existing)",
+                                    pct,
+                                )
 
-            # NEW block: catches Ctrl+C, signals all threads, waits for clean shutdown
+            # catches Ctrl+C, signals all threads, waits for clean shutdown
             except KeyboardInterrupt:
                 print(f"\n{Fore.YELLOW}Ctrl+C detected — cancelling downloads...{Style.RESET_ALL}")
                 stop_event.set()
                 executor.shutdown(wait=True, cancel_futures=True)
                 print(f"{Fore.YELLOW}Downloads stopped. Partial files cleaned up.{Style.RESET_ALL}")
-                break    # NEW: stop processing remaining users too
+                break
 
         print(f"\n{Fore.CYAN}{Style.BRIGHT}Download Summary:{Style.RESET_ALL}")
         print(f"  {Fore.GREEN}Downloaded : {overall_results['downloaded']}{Style.RESET_ALL}")
-        print(f"  {Fore.YELLOW}Skipped    : {overall_results['skipped']}{Style.RESET_ALL}")
+        print(f"  {Fore.YELLOW}Existing    : {overall_results['skipped']}{Style.RESET_ALL}")
         print(f"  {Fore.RED}Failed     : {overall_results['failed']}{Style.RESET_ALL}")
-        return self.output_dir
+        return self.output_dir, overall_results
                 
     def watch(self, refresh_interval: int = 300):
         """

@@ -23,7 +23,7 @@ pairs, baselines = select_pairs(search_results=results)
 
 ::: insarhub.utils.select_pairs
     options:
-        members: flase
+        members: false
         heading_level: 0
 
 
@@ -46,7 +46,7 @@ Example:
 
 ::: insarhub.utils.plot_pair_network
     options:
-        members: flase
+        members: false
         heading_level: 0
 
 ### Earth Credit Pool
@@ -70,7 +70,7 @@ processor= Processor.create('Hyp3_InSAR', earthdata_credentials_pool=ec_pool, ..
 
 ::: insarhub.utils.earth_credit_pool
     options:
-        members: flase
+        members: false
         heading_level: 0
 
 ### Slurm Job Config
@@ -91,6 +91,6 @@ config.to_script("analysis.slurm")
 
 ::: insarhub.utils.Slurmjob_Config
     options:
-        members: flase
+        members: false
         heading_level: 0
 

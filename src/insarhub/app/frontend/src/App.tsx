@@ -189,6 +189,8 @@ export default function App() {
   const [detailScene,     setDetailScene]     = useState<GeoJSON.Feature | null>(null)
   const [workdir,         setWorkdir]         = useState('.')
   const [settingsOpen,    setSettingsOpen]    = useState(false)
+  const [settingsInitialTab,          setSettingsInitialTab]          = useState<'general' | 'auth' | 'downloader' | 'processor' | 'analyzer'>('general')
+  const [settingsInitialAnalyzerType, setSettingsInitialAnalyzerType] = useState<string | undefined>(undefined)
   const [jobsOpen,        setJobsOpen]        = useState(false)
   const [rasterOverlay,   setRasterOverlay]   = useState<RasterOverlay | null>(null)
   const [rasterPixelVal,  setRasterPixelVal]  = useState<number | null>(null)
@@ -462,6 +464,11 @@ export default function App() {
           workdir={workdir}
           onClose={() => setJobsOpen(false)}
           onRasterSelect={setRasterOverlay}
+          onSettingsOpen={(analyzerType) => {
+            setSettingsInitialTab('analyzer')
+            setSettingsInitialAnalyzerType(analyzerType)
+            setSettingsOpen(true)
+          }}
         />
       )}
 
@@ -476,8 +483,12 @@ export default function App() {
           aoiWkt={aoiWkt}
           onDatesChange={(s, e) => setFilters(f => ({ ...f, startDate: s, endDate: e }))}
           onAoiWktChange={handleAoiWktChange}
+          initialTab={settingsInitialTab}
+          initialAnalyzerType={settingsInitialAnalyzerType}
           onClose={() => {
             setSettingsOpen(false)
+            setSettingsInitialTab('general')
+            setSettingsInitialAnalyzerType(undefined)
             fetch(`${API}/api/settings`).then(r => r.json()).then(d => { setWorkdir(d.workdir); setDownloaderType(d.downloader) }).catch(() => {})
           }}
         />

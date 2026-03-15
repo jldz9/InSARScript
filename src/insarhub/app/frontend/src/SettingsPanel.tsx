@@ -68,6 +68,8 @@ interface Props {
   aoiWkt:                  string | null
   onDatesChange:           (start: string, end: string) => void
   onAoiWktChange:          (wkt: string | null) => void
+  initialTab?:             Tab
+  initialAnalyzerType?:    string
 }
 
 type Tab = 'general' | 'auth' | 'downloader' | 'processor' | 'analyzer'
@@ -75,8 +77,9 @@ type Tab = 'general' | 'auth' | 'downloader' | 'processor' | 'analyzer'
 
 
 export default function SettingsPanel({ theme: t, onClose, downloaderType, onDownloaderTypeChange,
-  startDate, endDate, aoiWkt, onDatesChange, onAoiWktChange }: Props) {
-  const [tab,         setTab]         = useState<Tab>('general')
+  startDate, endDate, aoiWkt, onDatesChange, onAoiWktChange,
+  initialTab, initialAnalyzerType }: Props) {
+  const [tab,         setTab]         = useState<Tab>(initialTab ?? 'general')
   const [loading,     setLoading]     = useState(true)
   const [authLoading, setAuthLoading] = useState(false)
   const [saving,      setSaving]      = useState(false)
@@ -134,7 +137,7 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
       setDownloaderConfig(s.downloader_config)
       setProcessorType(s.processor)
       setProcessorConfig(s.processor_config)
-      setAnalyzerType(s.analyzer)
+      setAnalyzerType(initialAnalyzerType ?? s.analyzer)
       setAnalyzerConfig(s.analyzer_config)
       setLoading(false)
     }).catch(() => setLoading(false))

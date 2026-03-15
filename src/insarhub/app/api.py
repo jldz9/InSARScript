@@ -1181,10 +1181,14 @@ async def _run_analyzer(job_id: str, req: RunAnalyzerRequest):
                 _jobs[job_id] = {"status": "error", "progress": 0, "message": "Analyzer has no config dataclass", "data": None}
                 return
 
-            # Build config: start with saved analyzer_config overrides, then force workdir
-            saved_overrides = _settings.get("analyzer_config") or {}
-            valid_keys = {f.name for f in dataclasses.fields(config_cls)}
-            init_kwargs = {k: v for k, v in saved_overrides.items() if k in valid_keys}
+            # Build config from the analyzer's own defaults; only apply saved overrides
+            # when the saved analyzer type matches (prevents cross-type contamination,
+            # e.g. Mintpy_SBAS_Base load_processor="auto" overriding Hyp3_SBAS's "hyp3")
+            init_kwargs: dict = {}
+            if _settings.get("analyzer") == req.analyzer_type:
+                saved_overrides = _settings.get("analyzer_config") or {}
+                valid_keys = {f.name for f in dataclasses.fields(config_cls)}
+                init_kwargs = {k: v for k, v in saved_overrides.items() if k in valid_keys}
             init_kwargs["workdir"] = folder
             cfg = config_cls(**init_kwargs)
             analyzer = cls(cfg)

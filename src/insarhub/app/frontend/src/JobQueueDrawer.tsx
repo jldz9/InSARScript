@@ -38,6 +38,7 @@ interface Props {
   workdir:        string
   onClose:        () => void
   onRasterSelect: (overlay: RasterOverlay | null) => void
+  onSettingsOpen: (analyzerType: string) => void
 }
 
 // Color per workflow role
@@ -635,9 +636,9 @@ function ProcessModal({ theme: t, folderPath, downloaderType, onClose, onDone }:
 
 // ── Analyzer Panel (MintPy step runner) ──────────────────────────────────────
 
-interface AnalyzerPanelProps { theme: Theme; folderPath: string; analyzerType: string }
+interface AnalyzerPanelProps { theme: Theme; folderPath: string; analyzerType: string; onSettingsOpen: (analyzerType: string) => void }
 
-function AnalyzerPanel({ theme: t, folderPath, analyzerType }: AnalyzerPanelProps) {
+function AnalyzerPanel({ theme: t, folderPath, analyzerType, onSettingsOpen }: AnalyzerPanelProps) {
   const [steps,       setSteps]      = useState<string[]>([])
   const [checked,     setChecked]    = useState<Set<string>>(new Set())
   const [loading,     setLoading]    = useState(true)
@@ -750,6 +751,7 @@ function AnalyzerPanel({ theme: t, folderPath, analyzerType }: AnalyzerPanelProp
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ color: t.textMuted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Steps</div>
         <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => onSettingsOpen(analyzerType)} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, cursor: 'pointer', background: 'transparent', color: t.accent, border: `1px solid ${t.border}` }}>Config</button>
           <button onClick={() => toggleAll(true)} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, cursor: 'pointer', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}` }}>All</button>
           <button onClick={() => toggleAll(false)} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, cursor: 'pointer', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}` }}>None</button>
         </div>
@@ -1368,9 +1370,10 @@ interface L2Props {
   onClose:           () => void
   onFolderRefresh:   () => void
   onRasterSelect:    (overlay: RasterOverlay | null) => void
+  onSettingsOpen:    (analyzerType: string) => void
 }
 
-function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onRasterSelect }: L2Props) {
+function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onRasterSelect, onSettingsOpen }: L2Props) {
   const rc = ROLE_COLORS[role] ?? ROLE_FALLBACK
 
   // Downloader-specific state
@@ -1704,7 +1707,7 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
           {/* ── Analyzer: MintPy step runner ── */}
           {role === 'analyzer' && (
             <>
-              <AnalyzerPanel theme={t} folderPath={job.path} analyzerType={cls} />
+              <AnalyzerPanel theme={t} folderPath={job.path} analyzerType={cls} onSettingsOpen={onSettingsOpen} />
               {mintpyHasData && (
                 <button
                   onClick={() => setMintpyViewerOpen(o => !o)}
@@ -1738,7 +1741,7 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
 
 // ── Main Drawer ───────────────────────────────────────────────────────────────
 
-export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSelect }: Props) {
+export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSelect, onSettingsOpen }: Props) {
   const [jobs,    setJobs]    = useState<JobFolder[]>([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState('')
@@ -1773,6 +1776,7 @@ export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSel
           onClose={() => setL2(null)}
           onFolderRefresh={loadJobs}
           onRasterSelect={onRasterSelect}
+          onSettingsOpen={onSettingsOpen}
         />
       )}
 

@@ -8,12 +8,161 @@ import ScenePanel from './ScenePanel'
 import StackSceneList from './StackSceneList'
 import SceneDetailPanel from './SceneDetailPanel'
 import SettingsPanel from './SettingsPanel'
-import JobQueueDrawer from './JobQueueDrawer'
+import JobQueueDrawer, { type RasterOverlay } from './JobQueueDrawer'
 import { bboxToWkt, geometryToWkt, getGeometryBbox, type Bbox } from './geoUtils'
 import { DARK, LIGHT } from './theme'
 import shpjs from 'shpjs'
 
 const API = 'http://localhost:8000'
+
+// ── Colorbar ────────────────────────────────────────────────────────────────
+function colormapGradient(type: string): string {
+  if (type === 'unw_phase') {
+    // HSV rainbow
+    return 'linear-gradient(to top, hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%), hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%))'
+  }
+  if (type === 'corr') {
+    return 'linear-gradient(to top, #000, #fff)'
+  }
+  if (type === 'velocity') {
+    // RdBu_r diverging: blue → white → red
+    return 'linear-gradient(to top, #2166ac, #f7f7f7, #b2182b)'
+  }
+  return 'linear-gradient(to top, #440154, #31688e, #35b779, #fde725)'
+}
+
+function Colorbar({ overlay }: { overlay: import('./JobQueueDrawer').RasterOverlay }) {
+  const fmt = (v: number) => Math.abs(v) >= 1000 || (Math.abs(v) < 0.01 && v !== 0)
+    ? v.toExponential(2) : v.toFixed(2)
+  return (
+    <div style={{
+      position: 'absolute', bottom: 32, right: 12, zIndex: 500,
+      display: 'flex', flexDirection: 'row', alignItems: 'stretch', gap: 4,
+      background: 'rgba(0,0,0,0.55)', borderRadius: 6, padding: '8px 10px',
+      pointerEvents: 'none',
+    }}>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                    alignItems: 'flex-end', fontSize: 11, color: '#eee', minWidth: 40 }}>
+        <span>{fmt(overlay.vmax)}</span>
+        <span style={{ color: '#aaa', fontSize: 10 }}>{overlay.label || overlay.type}</span>
+        <span>{fmt(overlay.vmin)}</span>
+      </div>
+      <div style={{
+        width: 14, minHeight: 120,
+        background: colormapGradient(overlay.type),
+        borderRadius: 3, border: '1px solid rgba(255,255,255,0.2)',
+      }} />
+    </div>
+  )
+}
+
+// ── Time Series Drawer ────────────────────────────────────────────────────────
+interface TsData { dates: string[]; values: number[]; file: string; unit: string }
+
+function TimeSeriesDrawer({ data, onClose, theme: t }: { data: TsData; onClose: () => void; theme: import('./theme').Theme }) {
+  const raw    = data.values.map(v => isFinite(v) ? v * 100 : NaN)
+  const first  = raw.find(v => isFinite(v)) ?? 0
+  const vals_mm = raw.map(v => isFinite(v) ? v - first : NaN)
+  const valid   = vals_mm.filter(v => isFinite(v))
+  if (valid.length === 0) return null
+
+  const W = 600, H = 150
+  const PAD = { t: 12, r: 16, b: 28, l: 52 }
+  const iW  = W - PAD.l - PAD.r
+  const iH  = H - PAD.t - PAD.b
+
+  // MintPy dates are YYYYMMDD — convert to ISO before parsing
+  const parseDate = (d: string) => {
+    if (d.length === 8 && !d.includes('-'))
+      return new Date(`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`).getTime()
+    return new Date(d).getTime()
+  }
+  const ts   = data.dates.map(parseDate)
+  const tMin = ts.reduce((a, b) => Math.min(a, b), Infinity)
+  const tMax = ts.reduce((a, b) => Math.max(a, b), -Infinity)
+  const vMin = Math.min(...valid), vMax = Math.max(...valid)
+  const vRange = vMax - vMin || 1
+
+  const sx = (t: number) => ((t - tMin) / (tMax - tMin || 1)) * iW
+  const sy = (v: number) => iH - ((v - vMin) / vRange) * iH
+
+  const pts = data.dates.map((d, i) => isFinite(vals_mm[i])
+    ? [sx(new Date(d).getTime()), sy(vals_mm[i])] as [number, number]
+    : null
+  ).filter(Boolean) as [number, number][]
+
+  const polyline = pts.map(([x, y]) => `${x},${y}`).join(' ')
+
+  const n    = data.dates.length
+  const step = Math.max(1, Math.floor(n / 6))
+  const xLabels = data.dates
+    .map((d, i) => {
+      const iso = d.length === 8 && !d.includes('-')
+        ? `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}` : d
+      return { x: sx(parseDate(d)), label: iso.slice(0, 7), i }
+    })
+    .filter(({ i }) => i % step === 0 || i === n - 1)
+
+  const yLabels = [0, 0.5, 1].map(f => ({
+    y: sy(vMin + f * vRange),
+    label: (vMin + f * vRange).toFixed(1),
+  }))
+
+  const gridColor = t.isDark ? '#222' : '#ddd'
+  return (
+    <div style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0, height: 210,
+      background: t.bg2, borderTop: `1px solid ${t.border}`,
+      display: 'flex', flexDirection: 'column', zIndex: 600,
+      boxShadow: '0 -4px 20px rgba(0,0,0,0.4)',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', padding: '5px 14px',
+        borderBottom: `1px solid ${t.border}`, flexShrink: 0,
+      }}>
+        <span style={{ color: t.accent, fontSize: 11, fontWeight: 600 }}>Time Series</span>
+        <span style={{ color: t.textMuted, fontSize: 10, marginLeft: 8 }}>{data.file} · {data.unit} · relative to first date</span>
+        <button onClick={onClose} style={{
+          marginLeft: 'auto', background: 'none', border: 'none',
+          color: t.textMuted, cursor: 'pointer', fontSize: 18, lineHeight: 1,
+        }}>×</button>
+      </div>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <svg width={W} height={H}>
+          <g transform={`translate(${PAD.l},${PAD.t})`}>
+            {/* grid lines */}
+            {yLabels.map(({ y }) => (
+              <line key={y} x1={0} y1={y} x2={iW} y2={y} stroke={gridColor} strokeWidth={1} />
+            ))}
+            {/* zero line */}
+            {vMin < 0 && vMax > 0 && (
+              <line x1={0} y1={sy(0)} x2={iW} y2={sy(0)} stroke={t.border} strokeWidth={1} strokeDasharray="4 2" />
+            )}
+            {/* line */}
+            <polyline points={polyline} fill="none" stroke={t.accent} strokeWidth={1.5} />
+            {/* dots */}
+            {pts.map(([x, y], i) => <circle key={i} cx={x} cy={y} r={2.5} fill={t.accent} />)}
+            {/* axes */}
+            <line x1={0} y1={iH} x2={iW} y2={iH} stroke={t.border} strokeWidth={1} />
+            <line x1={0} y1={0}  x2={0}  y2={iH} stroke={t.border} strokeWidth={1} />
+            {/* x labels */}
+            {xLabels.map(({ x, label }) => (
+              <text key={label} x={x} y={iH + 18} textAnchor="middle" style={{ fontSize: 9, fill: t.textMuted }}>{label}</text>
+            ))}
+            {/* y labels */}
+            {yLabels.map(({ y, label }) => (
+              <text key={label} x={-6} y={y + 4} textAnchor="end" style={{ fontSize: 9, fill: t.textMuted }}>{label}</text>
+            ))}
+            {/* y axis unit */}
+            <text x={-38} y={iH / 2} textAnchor="middle"
+              transform={`rotate(-90, -38, ${iH / 2})`}
+              style={{ fontSize: 9, fill: t.textMuted }}>cm</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  )
+}
 
 export default function App() {
   // Theme
@@ -41,8 +190,11 @@ export default function App() {
   const [workdir,         setWorkdir]         = useState('.')
   const [settingsOpen,    setSettingsOpen]    = useState(false)
   const [jobsOpen,        setJobsOpen]        = useState(false)
+  const [rasterOverlay,   setRasterOverlay]   = useState<RasterOverlay | null>(null)
+  const [rasterPixelVal,  setRasterPixelVal]  = useState<number | null>(null)
   const [downloaderType,    setDownloaderType]    = useState('S1_SLC')
   const [downloaderOptions, setDownloaderOptions] = useState<string[]>(['S1_SLC'])
+  const [tsData,            setTsData]            = useState<TsData | null>(null)
 
   // Fetch server settings + available downloaders once on mount
   useEffect(() => {
@@ -93,6 +245,20 @@ export default function App() {
       }
     }, 1500)
   }, [])
+
+  // ── MintPy time series click ──────────────────────────────────────────────
+  async function handleMapClick(lat: number, lng: number) {
+    if (rasterOverlay?.source?.kind !== 'mintpy') return
+    try {
+      const tsParam = rasterOverlay.source.tsFile
+        ? `&ts_file=${encodeURIComponent(rasterOverlay.source.tsFile)}`
+        : ''
+      const r = await fetch(`${API}/api/timeseries-pixel?path=${encodeURIComponent(rasterOverlay.source.folderPath)}&lat=${lat}&lon=${lng}${tsParam}`)
+      if (!r.ok) return
+      const d = await r.json()
+      if (Array.isArray(d.dates) && d.dates.length > 0) setTsData(d)
+    } catch { /* ignore fetch errors */ }
+  }
 
   // ── Search ────────────────────────────────────────────────────────────────
   async function handleSearch() {
@@ -199,7 +365,6 @@ export default function App() {
         onDatesChange={(s, e) => setFilters(f => ({ ...f, startDate: s, endDate: e }))}
         onSearch={() => handleSearch()}
         searching={searching}
-        resultCount={resultCount}
         theme={theme}
         onThemeToggle={() => {
           setIsDark(d => {
@@ -221,6 +386,7 @@ export default function App() {
         onClearAoi={handleClearAoi}
         onShapefileUpload={handleShapefileUpload}
         mouseCoords={mouseCoords}
+        rasterValue={rasterPixelVal}
         theme={theme}
       />
 
@@ -233,15 +399,19 @@ export default function App() {
           drawMode={drawMode}
           basemap={basemap}
           footprintOpacity={0.5}
+          rasterOverlay={rasterOverlay}
           onAoiDrawn={handleAoiDrawn}
           onMouseMove={setMouseCoords}
           onFootprintClick={setSelectedFeature}
+          onRasterPixel={setRasterPixelVal}
+          onMapClick={handleMapClick}
         />
         <BasemapSwitcher
           basemap={basemap}
           onBasemapChange={setBasemap}
           theme={theme}
         />
+        {rasterOverlay && <Colorbar overlay={rasterOverlay} />}
       </div>
 
       {/* Cascading scene panels — L3 · L2 · L1 (left to right) */}
@@ -291,6 +461,7 @@ export default function App() {
           theme={theme}
           workdir={workdir}
           onClose={() => setJobsOpen(false)}
+          onRasterSelect={setRasterOverlay}
         />
       )}
 
@@ -311,6 +482,9 @@ export default function App() {
           }}
         />
       )}
+
+      {/* MintPy time series drawer */}
+      {tsData && <TimeSeriesDrawer data={tsData} onClose={() => setTsData(null)} theme={theme} />}
 
       {/* Filter panel — mounts fresh each open so draft resets */}
       {filtersOpen && (

@@ -75,8 +75,10 @@ def write_workflow_marker(workdir: Path, **roles: str) -> None:
         existing = {}
     existing.update(roles)
     existing["updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    ordered = {k: existing[k] for k in ("downloader", "processor", "analyzer", "updated_at") if k in existing}
+    ordered.update({k: v for k, v in existing.items() if k not in ordered})
     try:
-        path.write_text(json.dumps(existing, indent=2))
+        path.write_text(json.dumps(ordered, indent=2))
     except Exception as exc:
         logger.warning("Could not write %s: %s", path, exc)
 

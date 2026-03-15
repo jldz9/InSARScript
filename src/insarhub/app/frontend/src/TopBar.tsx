@@ -13,7 +13,6 @@ interface Props {
   onDatesChange:    (start: string, end: string) => void
   onSearch:         () => void
   searching:        boolean
-  resultCount:      string
   theme:            Theme
   onThemeToggle:    () => void
   onFiltersOpen:    () => void
@@ -26,7 +25,7 @@ interface Props {
 export default function TopBar({
   downloaderType, downloaderOptions, onDownloaderTypeChange,
   aoiWkt, onAoiWktChange, startDate, endDate, onDatesChange,
-  onSearch, searching, resultCount,
+  onSearch, searching,
   theme: t, onThemeToggle, onFiltersOpen, hasActiveFilters, onJobsOpen, jobsOpen, onSettingsOpen,
 }: Props) {
   const [wktInput, setWktInput] = useState(aoiWkt ?? '')
@@ -79,8 +78,8 @@ export default function TopBar({
       {/* AOI WKT */}
       <span style={labelStyle}>Area of Interest</span>
       <input
-        style={{ ...inputStyle, width: 200, fontFamily: 'monospace', fontSize: 11 }}
-        placeholder="Draw on map or paste WKT…"
+        style={{ ...inputStyle, width: 120, fontFamily: 'monospace', fontSize: 11 }}
+        placeholder="Draw or paste WKT…"
         value={wktInput}
         onChange={e => setWktInput(e.target.value)}
         onBlur={handleWktBlur}

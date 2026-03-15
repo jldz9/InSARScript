@@ -310,6 +310,7 @@ class Hyp3_InSAR_Config(Hyp3_Base_Config):
         "looks":                    {"type": "select", "options": ["20x4", "10x2"],
                                      "hint": "Range × azimuth looks (20x4 ≈ 80 m, 10x2 ≈ 40 m)"},
         "phase_filter_parameter":   {"type": "number", "min": 0, "max": 1, "step": 0.1,
+                                     "default": 0.6,
                                      "hint": "Goldstein filter strength (0 = off, 1 = maximum)"},
         "name_prefix":              {"type": "text"},
         "apply_water_mask":         {"type": "bool"},
@@ -322,6 +323,7 @@ class Hyp3_InSAR_Config(Hyp3_Base_Config):
         "skip_existing":            {"type": "bool",
                                      "hint": "Skip re-downloading already-completed jobs"},
         "submission_chunk_size":    {"type": "number", "min": 1, "max": 500, "step": 1,
+                                     "default": 200,
                                      "hint": "Jobs per API batch request"},
     }
     # ─────────────────────────────────────────────────────────────────────────
@@ -421,11 +423,13 @@ class Mintpy_SBAS_Base_Config:
     _ui_fields: ClassVar[dict] = {
         # Compute Resources
         "compute_maxMemory":   {"type": "number", "min": 1, "max": 512, "step": 1,
+                                "default": _env['memory'],
                                 "hint": "Maximum memory size in GB for each dask worker"},
         "compute_cluster":     {"type": "select",
                                 "options": ["local", "slurm", "pbs", "lsf", "oar", "sge", "none"],
                                 "hint": "Cluster type for parallel processing (local = dask LocalCluster)"},
         "compute_numWorker":   {"type": "number", "min": 1, "max": 64, "step": 1,
+                                "default": _env['cpu'],
                                 "hint": "Number of workers for parallel processing"},
         "compute_config":      {"type": "text",
                                 "hint": "Configuration file for dask distributed cluster"},

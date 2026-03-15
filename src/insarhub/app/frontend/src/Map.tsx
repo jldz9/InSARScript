@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { bboxToWkt, geometryToWkt, getGeometryBbox, type Bbox } from './geoUtils'
 import type { DrawMode, Basemap } from './MapToolbar'
+import type { RasterOverlay } from './JobQueueDrawer'
 
 interface Props {
   footprints?:        GeoJSON.FeatureCollection | null
@@ -11,9 +12,12 @@ interface Props {
   drawMode:           DrawMode
   basemap:            Basemap
   footprintOpacity:   number
+  rasterOverlay?:     RasterOverlay | null
   onAoiDrawn:         (wkt: string, bbox: Bbox, feature?: GeoJSON.Feature) => void
   onMouseMove?:       (coords: { lat: number; lng: number } | null) => void
   onFootprintClick?:  (feature: GeoJSON.Feature) => void
+  onRasterPixel?:     (val: number | null) => void
+  onMapClick?:        (lat: number, lng: number) => void
 }
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
@@ -35,22 +39,26 @@ const BASEMAP_TILES: Record<Basemap, { tiles: string[]; overlay?: string[]; attr
 
 export default function Map({
   footprints, aoi, aoiGeojson, drawMode, basemap,
-  footprintOpacity, onAoiDrawn, onMouseMove, onFootprintClick,
+  footprintOpacity, rasterOverlay, onAoiDrawn, onMouseMove, onFootprintClick, onRasterPixel, onMapClick,
 }: Props) {
   const containerRef        = useRef<HTMLDivElement>(null)
   const mapRef              = useRef<maplibregl.Map | null>(null)
   const drawModeRef         = useRef(drawMode)
-  const onAoiDrawnRef       = useRef(onAoiDrawn)         // always-fresh callback ref
-  const onFootprintClickRef = useRef(onFootprintClick)   // always-fresh callback ref
-  // Box drawing
+  const onAoiDrawnRef       = useRef(onAoiDrawn)
+  const onFootprintClickRef = useRef(onFootprintClick)
+  const rasterOverlayRef    = useRef(rasterOverlay ?? null)
+  const onRasterPixelRef    = useRef(onRasterPixel)
+  const onMapClickRef       = useRef(onMapClick)
   const boxStartRef    = useRef<[number, number] | null>(null)
-  // Polygon drawing
   const polyPointsRef  = useRef<[number, number][]>([])
   const mousePosRef    = useRef<[number, number]>([0, 0])
 
   useEffect(() => { drawModeRef.current = drawMode }, [drawMode])
   useEffect(() => { onAoiDrawnRef.current = onAoiDrawn }, [onAoiDrawn])
   useEffect(() => { onFootprintClickRef.current = onFootprintClick }, [onFootprintClick])
+  useEffect(() => { rasterOverlayRef.current = rasterOverlay ?? null }, [rasterOverlay])
+  useEffect(() => { onRasterPixelRef.current = onRasterPixel }, [onRasterPixel])
+  useEffect(() => { onMapClickRef.current = onMapClick }, [onMapClick])
 
   // ── Init map ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -176,6 +184,14 @@ export default function Map({
       map.on('mouseleave', 'footprints-line', onFootprintMouseLeave)
       map.on('click',      'footprints-fill', onFootprintClick)
       map.on('click',      'footprints-line', onFootprintClick)
+
+      // General map click — fires when not drawing and not on a footprint
+      map.on('click', (e) => {
+        if (drawModeRef.current) return
+        const hits = map.queryRenderedFeatures(e.point, { layers: ['footprints-fill'] })
+        if (hits.length > 0) return
+        onMapClickRef.current?.(e.lngLat.lat, e.lngLat.lng)
+      })
     })
 
     // ── Helper: update polygon-in-progress preview ────────────────────────
@@ -217,6 +233,21 @@ export default function Map({
       const pt: [number, number] = [e.lngLat.lng, e.lngLat.lat]
       mousePosRef.current = pt
       onMouseMove?.({ lat: e.lngLat.lat, lng: e.lngLat.lng })
+
+      // Raster pixel lookup
+      const ov = rasterOverlayRef.current
+      if (ov) {
+        const [W, S, E, N] = ov.bounds
+        const lng = e.lngLat.lng, lat = e.lngLat.lat
+        if (lng >= W && lng <= E && lat >= S && lat <= N) {
+          const col = Math.floor((lng - W) / (E - W) * ov.width)
+          const row = Math.floor((N - lat) / (N - S) * ov.height)
+          const val = ov.pixelData[row * ov.width + col]
+          onRasterPixelRef.current?.((ov.nodata !== null && val === ov.nodata) ? null : val)
+        } else {
+          onRasterPixelRef.current?.(null)
+        }
+      }
 
       // Box preview
       if (boxStartRef.current && drawModeRef.current === 'box') {
@@ -379,6 +410,46 @@ export default function Map({
     if (!map?.isStyleLoaded()) return
     map.setPaintProperty('footprints-line', 'line-opacity', footprintOpacity)
   }, [footprintOpacity])
+
+  // ── Raster overlay ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const applyOverlay = () => {
+      try {
+        if (map.getLayer('raster-overlay')) map.removeLayer('raster-overlay')
+        if (map.getSource('raster-overlay')) map.removeSource('raster-overlay')
+
+        if (!rasterOverlay) return
+
+        const [W, S, E, N] = rasterOverlay.bounds
+        console.debug('[InSARHub] raster overlay bounds W,S,E,N:', W, S, E, N)
+
+        if (!isFinite(W) || !isFinite(S) || !isFinite(E) || !isFinite(N) || W >= E || S >= N) {
+          console.error('[InSARHub] invalid raster overlay bounds — skipping:', rasterOverlay.bounds)
+          return
+        }
+
+        map.addSource('raster-overlay', {
+          type: 'image', url: rasterOverlay.url,
+          coordinates: [[W, N], [E, N], [E, S], [W, S]],
+        } as any)
+        map.addLayer({ id: 'raster-overlay', type: 'raster', source: 'raster-overlay',
+          paint: { 'raster-opacity': 0.85 } })
+        map.fitBounds([[W, S], [E, N]], { padding: 40, duration: 0 })
+      } catch (err) {
+        console.error('[InSARHub] raster-overlay error:', err)
+      }
+    }
+
+    if (map.isStyleLoaded()) {
+      applyOverlay()
+    } else {
+      map.once('load', applyOverlay)
+      return () => { map.off('load', applyOverlay) }
+    }
+  }, [rasterOverlay])
 
   // ── Finished AOI display ──────────────────────────────────────────────────
   useEffect(() => {

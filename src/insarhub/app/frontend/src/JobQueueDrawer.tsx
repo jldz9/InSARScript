@@ -1,6 +1,23 @@
 import { useState, useEffect, useRef } from 'react'
 import type { Theme } from './theme'
 
+// ── Raster overlay passed up to the map ──────────────────────────────────────
+
+export interface RasterOverlay {
+  id:        string
+  url:       string          // blob URL of rendered canvas
+  bounds:    [number, number, number, number]  // [west, south, east, north]
+  pixelData: Float32Array
+  width:     number
+  height:    number
+  nodata:    number | null
+  type:      string
+  label:     string
+  vmin:      number
+  vmax:      number
+  source?:   { kind: 'mintpy'; folderPath: string; tsFile: string | null }
+}
+
 const API = 'http://localhost:8000'
 
 interface JobFolder {
@@ -17,9 +34,10 @@ interface FolderDetails {
 }
 
 interface Props {
-  theme:   Theme
-  workdir: string
-  onClose: () => void
+  theme:          Theme
+  workdir:        string
+  onClose:        () => void
+  onRasterSelect: (overlay: RasterOverlay | null) => void
 }
 
 // Color per workflow role
@@ -620,15 +638,46 @@ function ProcessModal({ theme: t, folderPath, downloaderType, onClose, onDone }:
 interface AnalyzerPanelProps { theme: Theme; folderPath: string; analyzerType: string }
 
 function AnalyzerPanel({ theme: t, folderPath, analyzerType }: AnalyzerPanelProps) {
-  const [steps,      setSteps]      = useState<string[]>([])
-  const [checked,    setChecked]    = useState<Set<string>>(new Set())
-  const [loading,    setLoading]    = useState(true)
-  const [runMsg,     setRunMsg]     = useState('')
-  const [runStat,    setRunStat]    = useState<'idle' | 'running' | 'done' | 'error'>('idle')
-  const [progress,   setProgress]   = useState(0)
+  const [steps,       setSteps]      = useState<string[]>([])
+  const [checked,     setChecked]    = useState<Set<string>>(new Set())
+  const [loading,     setLoading]    = useState(true)
+  const [runMsg,      setRunMsg]     = useState('')
+  const [runStat,     setRunStat]    = useState<'idle' | 'running' | 'done' | 'error'>('idle')
+  const [progress,    setProgress]   = useState(0)
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  const _storageKey = `analyzer_job:${folderPath}`
+
+  function _saveState(jobId: string, msg: string, pct: number) {
+    localStorage.setItem(_storageKey, JSON.stringify({ jobId, msg, pct }))
+  }
+  function _clearState() { localStorage.removeItem(_storageKey) }
+
+  function _startPolling(job_id: string) {
+    setActiveJobId(job_id)
+    if (pollRef.current) clearInterval(pollRef.current)
+    pollRef.current = setInterval(async () => {
+      try {
+        const r = await fetch(`${API}/api/jobs/${job_id}`)
+        const job = await r.json()
+        const msg = job.message ?? ''
+        const pct = job.progress ?? 0
+        setRunMsg(msg)
+        setProgress(pct)
+        _saveState(job_id, msg, pct)
+        if (job.status === 'done') {
+          clearInterval(pollRef.current!); setRunStat('done'); setProgress(100)
+          setActiveJobId(null); _clearState()
+        } else if (job.status === 'error') {
+          clearInterval(pollRef.current!); setRunStat('error')
+          setActiveJobId(null); _clearState()
+        }
+      } catch { /* network blip — keep polling */ }
+    }, 1500)
+  }
+
+  // On mount: load steps, then reconnect any in-progress job
   useEffect(() => {
     setLoading(true)
     fetch(`${API}/api/analyzer-steps?analyzer_type=${encodeURIComponent(analyzerType)}`)
@@ -636,11 +685,23 @@ function AnalyzerPanel({ theme: t, folderPath, analyzerType }: AnalyzerPanelProp
       .then(d => {
         const s: string[] = d.steps ?? []
         setSteps(s)
-        setChecked(new Set(s))   // all checked by default
+        setChecked(new Set(s))
         setLoading(false)
+
+        // Reconnect to a running job if one was saved for this folder
+        const saved = localStorage.getItem(`analyzer_job:${folderPath}`)
+        if (saved) {
+          try {
+            const { jobId, msg, pct } = JSON.parse(saved)
+            setRunStat('running')
+            setRunMsg(msg ?? '')
+            setProgress(pct ?? 0)
+            _startPolling(jobId)
+          } catch { localStorage.removeItem(`analyzer_job:${folderPath}`) }
+        }
       })
       .catch(() => setLoading(false))
-  }, [analyzerType])
+  }, [analyzerType, folderPath])
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
 
@@ -668,20 +729,7 @@ function AnalyzerPanel({ theme: t, folderPath, analyzerType }: AnalyzerPanelProp
       body: JSON.stringify({ folder_path: folderPath, analyzer_type: analyzerType, steps: selected }),
     })
       .then(r => r.json())
-      .then(({ job_id }) => {
-        setActiveJobId(job_id)
-        pollRef.current = setInterval(async () => {
-          const r = await fetch(`${API}/api/jobs/${job_id}`)
-          const job = await r.json()
-          setRunMsg(job.message ?? '')
-          setProgress(job.progress ?? 0)
-          if (job.status === 'done') {
-            clearInterval(pollRef.current!); setRunStat('done'); setProgress(100); setActiveJobId(null)
-          } else if (job.status === 'error') {
-            clearInterval(pollRef.current!); setRunStat('error'); setActiveJobId(null)
-          }
-        }, 1500)
-      })
+      .then(({ job_id }) => { _saveState(job_id, 'Submitting…', 0); _startPolling(job_id) })
       .catch(e => { setRunStat('error'); setRunMsg(String(e)) })
   }
 
@@ -767,13 +815,185 @@ function AnalyzerPanel({ theme: t, folderPath, analyzerType }: AnalyzerPanelProp
 }
 
 
+// ── Server-rendered TIF → RasterOverlay ──────────────────────────────────────
+
+async function renderTif(
+  zipPath: string, filename: string, typeHint: string, label: string,
+): Promise<RasterOverlay> {
+  const url = `${API}/api/render-tif?zip=${encodeURIComponent(zipPath)}&file=${encodeURIComponent(filename)}&type_hint=${encodeURIComponent(typeHint)}`
+  const resp = await fetch(url)
+  if (!resp.ok) throw new Error(`render-tif ${resp.status}`)
+  const d = await resp.json()
+
+  // PNG blob URL
+  const pngBytes = Uint8Array.from(atob(d.png_b64), c => c.charCodeAt(0))
+  const imgUrl   = URL.createObjectURL(new Blob([pngBytes], { type: 'image/png' }))
+
+  // Float32 pixel data for hover
+  const rawBuf   = Uint8Array.from(atob(d.pixel_b64), c => c.charCodeAt(0)).buffer
+  const pixelData = new Float32Array(rawBuf)
+
+  const id = `${zipPath}|${filename}`
+  return {
+    id,
+    url:   imgUrl,
+    bounds: d.bounds as [number,number,number,number],
+    pixelData,
+    width:  d.pixel_width,
+    height: d.pixel_height,
+    nodata: d.nodata,
+    type:   d.type,
+    label,
+    vmin:   d.vmin,
+    vmax:   d.vmax,
+  }
+}
+
+// ── L3: Interferogram Viewer Drawer ──────────────────────────────────────────
+
+interface IfgPair {
+  name:   string
+  zip:    string
+  files:  { filename: string; type: string }[]
+  bounds: [number, number, number, number] | null
+}
+
+interface IfgViewerProps {
+  theme:          Theme
+  folderPath:     string
+  onClose:        () => void
+  onRasterSelect: (overlay: RasterOverlay | null) => void
+}
+
+function IfgViewerDrawer({ theme: t, folderPath, onClose, onRasterSelect }: IfgViewerProps) {
+  const [pairs,        setPairs]       = useState<IfgPair[]>([])
+  const [loading,      setLoading]     = useState(true)
+  const [error,        setError]       = useState('')
+  const [active,       setActive]      = useState<string | null>(null)
+  const [decoding,     setDecoding]    = useState(false)
+  const [expandedPair, setExpandedPair] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`${API}/api/folder-ifg-list?path=${encodeURIComponent(folderPath)}`)
+      .then(r => r.json())
+      .then(d => { if (d.detail) { setError(d.detail); setLoading(false); return } setPairs(d.pairs ?? []); setLoading(false) })
+      .catch(e => { setError(String(e)); setLoading(false) })
+  }, [folderPath])
+
+  async function handleFileClick(pair: IfgPair, f: { filename: string; type: string }) {
+    const key = `${pair.zip}|${f.filename}`
+    if (active === key) { setActive(null); onRasterSelect(null); return }
+    if (!pair.bounds) { setActive(key); return }
+    setActive(key); setDecoding(true)
+    try {
+      const label   = `${pair.name} · ${f.type}`
+      const overlay = await renderTif(pair.zip, f.filename, f.type, label)
+      onRasterSelect(overlay)
+    } catch(e) { console.error(e) }
+    setDecoding(false)
+  }
+
+  const TYPE_COLORS: Record<string, string> = {
+    unw_phase: '#7986cb', corr: '#80cbc4', dem: '#a5d6a7',
+    lv_theta: '#ffcc80', lv_phi: '#f48fb1', water_mask: '#90caf9',
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', top: 48, right: 500, bottom: 0, width: 300,
+      background: t.bg, borderLeft: `1px solid ${t.border}`,
+      display: 'flex', flexDirection: 'column', zIndex: 113,
+      boxShadow: '-4px 0 20px rgba(0,0,0,0.25)',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '10px 14px', borderBottom: `1px solid ${t.border}`,
+        background: t.bg2, flexShrink: 0,
+      }}>
+        <span style={{ color: t.text, fontWeight: 600, fontSize: 12 }}>Data</span>
+        <button onClick={onClose} style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: t.textMuted, fontSize: 20, lineHeight: 1, padding: '0 4px',
+        }}>×</button>
+      </div>
+
+      {decoding && (
+        <div style={{ padding: '4px 14px', background: '#0d3b6e', fontSize: 10, color: '#90caf9' }}>
+          Decoding TIF…
+        </div>
+      )}
+
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {loading ? (
+          <div style={{ color: t.textMuted, fontSize: 11, textAlign: 'center', padding: '32px 0' }}>Loading…</div>
+        ) : error ? (
+          <div style={{ color: '#e53935', fontSize: 11, padding: 14 }}>{error}</div>
+        ) : pairs.length === 0 ? (
+          <div style={{ color: t.textMuted, fontSize: 11, textAlign: 'center', padding: '32px 0' }}>
+            No zip files found. Download results first.
+          </div>
+        ) : pairs.map(pair => {
+          const isExpanded = expandedPair === pair.zip
+          return (
+            <div key={pair.zip} style={{ borderBottom: `1px solid ${t.divider}` }}>
+              {/* Pair header — click to expand/collapse */}
+              <button
+                onClick={() => setExpandedPair(isExpanded ? null : pair.zip)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 14px', background: t.bg2,
+                  border: 'none', cursor: 'pointer', textAlign: 'left',
+                }}
+              >
+                <span style={{ fontSize: 9, color: t.textMuted, flexShrink: 0 }}>
+                  {isExpanded ? '▾' : '▸'}
+                </span>
+                <span style={{ color: t.text, fontSize: 10, fontFamily: 'monospace' }}>{pair.name}</span>
+              </button>
+              {/* Files — only shown when expanded */}
+              {isExpanded && pair.files.map(f => {
+                const key = `${pair.zip}|${f.filename}`
+                const isActive = active === key
+                const color = TYPE_COLORS[f.type] ?? t.textMuted
+                return (
+                  <button key={f.filename}
+                    onClick={() => handleFileClick(pair, f)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '5px 14px 5px 28px',
+                      background: isActive ? t.btnActiveBg : 'transparent',
+                      border: 'none', cursor: 'pointer', textAlign: 'left',
+                    }}
+                  >
+                    <span style={{
+                      display: 'inline-block', width: 8, height: 8, borderRadius: 2,
+                      background: color, flexShrink: 0,
+                    }} />
+                    <span style={{ fontSize: 10, fontFamily: 'monospace', color: isActive ? t.accent : t.text }}>
+                      {f.type}
+                    </span>
+                    {!pair.bounds && (
+                      <span style={{ fontSize: 9, color: t.textMuted, marginLeft: 'auto' }}>no bounds</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Processor Panel (HyP3 job actions) ───────────────────────────────────────
 
 interface Hyp3File { name: string; total: number; users: string[] }
 
-interface ProcessorPanelProps { theme: Theme; folderPath: string; processorType: string; onFolderRefresh: () => void }
+interface ProcessorPanelProps { theme: Theme; folderPath: string; processorType: string; onFolderRefresh: () => void; ifgViewerOpen: boolean; onViewIfgToggle: () => void }
 
-function ProcessorPanel({ theme: t, folderPath, processorType, onFolderRefresh }: ProcessorPanelProps) {
+function ProcessorPanel({ theme: t, folderPath, processorType, onFolderRefresh, ifgViewerOpen, onViewIfgToggle }: ProcessorPanelProps) {
   const [files,      setFiles]      = useState<Hyp3File[]>([])
   const [loading,    setLoading]    = useState(true)
   const [selected,   setSelected]   = useState('')
@@ -930,6 +1150,25 @@ function ProcessorPanel({ theme: t, folderPath, processorType, onFolderRefresh }
             )}
           </div>
 
+          {/* View Data */}
+          <button
+            onClick={() => onViewIfgToggle()}
+            style={{
+              width: '100%', padding: '6px 12px', fontSize: 11, textAlign: 'left',
+              background: ifgViewerOpen ? '#0d3b6e' : 'transparent',
+              color: ifgViewerOpen ? '#90caf9' : t.text,
+              border: `1px solid ${ifgViewerOpen ? '#1565c0' : t.border}`,
+              borderRadius: 4, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            {ifgViewerOpen ? 'Hide Data' : 'View Data'}
+          </button>
+
           {/* Progress bar — shown during download */}
           {currentAction === 'download' && actionStat === 'running' && (
             <div style={{ background: t.bg2, borderRadius: 3, border: `1px solid ${t.divider}`, overflow: 'hidden', height: 6 }}>
@@ -952,35 +1191,33 @@ function ProcessorPanel({ theme: t, folderPath, processorType, onFolderRefresh }
 
           {/* ── Analyzer section ── */}
           {analyzers.length > 0 && (
-            <>
-              <div style={{ borderTop: `1px solid ${t.divider}`, marginTop: 4, paddingTop: 8 }}>
-                <div style={{ color: t.textMuted, fontSize: 10, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Run Analyzer</div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <select
-                    value={selectedAnalyzer}
-                    onChange={e => { setSelectedAnalyzer(e.target.value); setAnalyzerStat('idle'); setAnalyzerMsg('') }}
-                    style={{
-                      flex: 1, fontSize: 11, padding: '3px 5px', borderRadius: 4,
-                      background: t.bg2, color: t.text, border: `1px solid ${t.border}`,
-                    }}
-                  >
-                    {analyzers.map(a => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                  <button onClick={runInitAnalyzer} style={{
-                    fontSize: 11, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
-                    background: ROLE_COLORS.analyzer.bg, color: ROLE_COLORS.analyzer.color,
-                    border: `1px solid ${ROLE_COLORS.analyzer.border}`,
-                  }}>Init</button>
-                </div>
-                {analyzerMsg && (
-                  <div style={{
-                    marginTop: 4, fontSize: 10, fontFamily: 'monospace', padding: '3px 6px', borderRadius: 3,
-                    background: t.bg2, border: `1px solid ${t.divider}`,
-                    color: analyzerStat === 'ok' ? '#4caf50' : analyzerStat === 'error' ? '#e53935' : t.textMuted,
-                  }}>{analyzerMsg}</div>
-                )}
+            <div style={{ borderTop: `1px solid ${t.divider}`, marginTop: 4, paddingTop: 8 }}>
+              <div style={{ color: t.textMuted, fontSize: 10, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Run Analyzer</div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <select
+                  value={selectedAnalyzer}
+                  onChange={e => { setSelectedAnalyzer(e.target.value); setAnalyzerStat('idle'); setAnalyzerMsg('') }}
+                  style={{
+                    flex: 1, fontSize: 11, padding: '3px 5px', borderRadius: 4,
+                    background: t.bg2, color: t.text, border: `1px solid ${t.border}`,
+                  }}
+                >
+                  {analyzers.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+                <button onClick={runInitAnalyzer} style={{
+                  fontSize: 11, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+                  background: ROLE_COLORS.analyzer.bg, color: ROLE_COLORS.analyzer.color,
+                  border: `1px solid ${ROLE_COLORS.analyzer.border}`,
+                }}>Init</button>
               </div>
-            </>
+              {analyzerMsg && (
+                <div style={{
+                  marginTop: 4, fontSize: 10, fontFamily: 'monospace', padding: '3px 6px', borderRadius: 3,
+                  background: t.bg2, border: `1px solid ${t.divider}`,
+                  color: analyzerStat === 'ok' ? '#4caf50' : analyzerStat === 'error' ? '#e53935' : t.textMuted,
+                }}>{analyzerMsg}</div>
+              )}
+            </div>
           )}
         </>
       )}
@@ -989,18 +1226,151 @@ function ProcessorPanel({ theme: t, folderPath, processorType, onFolderRefresh }
 }
 
 
+// ── L3: MintPy Results Viewer ─────────────────────────────────────────────────
+
+interface MintpyViewerProps {
+  theme:          Theme
+  folderPath:     string
+  tsList:         string[]
+  onClose:        () => void
+  onRasterSelect: (overlay: RasterOverlay | null) => void
+}
+
+function MintpyViewerDrawer({ theme: t, folderPath, tsList, onClose, onRasterSelect }: MintpyViewerProps) {
+  const [active,         setActive]         = useState(false)
+  const [decoding,       setDecoding]       = useState(false)
+  const [error,          setError]          = useState('')
+  const [boundsInfo,     setBoundsInfo]     = useState<string>('')
+  const [selectedTsFile, setSelectedTsFile] = useState<string | null>(tsList[0] ?? null)
+  const rc = ROLE_COLORS.analyzer
+
+  async function handleVelocityClick() {
+    if (active) { setActive(false); onRasterSelect(null); setBoundsInfo(''); return }
+    setDecoding(true); setError('')
+    try {
+      const resp = await fetch(`${API}/api/render-velocity?path=${encodeURIComponent(folderPath)}`)
+      if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error(e.detail ?? `HTTP ${resp.status}`) }
+      const d = await resp.json()
+      const [W, S, E, N] = d.bounds as number[]
+      setBoundsInfo(`W:${W?.toFixed(3)} S:${S?.toFixed(3)} E:${E?.toFixed(3)} N:${N?.toFixed(3)}`)
+      const pngBytes  = Uint8Array.from(atob(d.png_b64), c => c.charCodeAt(0))
+      const imgUrl    = URL.createObjectURL(new Blob([pngBytes], { type: 'image/png' }))
+      const pixelData = new Float32Array(Uint8Array.from(atob(d.pixel_b64), c => c.charCodeAt(0)).buffer)
+      onRasterSelect({
+        id:        `mintpy:${folderPath}:velocity`,
+        url:       imgUrl,
+        bounds:    d.bounds as [number, number, number, number],
+        pixelData,
+        width:     d.pixel_width,
+        height:    d.pixel_height,
+        nodata:    null,
+        type:      'velocity',
+        label:     `Velocity (${d.unit ?? 'm/year'})`,
+        vmin:      d.vmin,
+        vmax:      d.vmax,
+        source:    { kind: 'mintpy', folderPath, tsFile: selectedTsFile },
+      })
+      setActive(true)
+    } catch (e) { setError(String(e)) }
+    setDecoding(false)
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', top: 48, right: 500, bottom: 0, width: 260,
+      background: t.bg, borderLeft: `1px solid ${t.border}`,
+      display: 'flex', flexDirection: 'column', zIndex: 113,
+      boxShadow: '-4px 0 20px rgba(0,0,0,0.25)',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '10px 14px', borderBottom: `1px solid ${t.border}`,
+        background: t.bg2, flexShrink: 0,
+      }}>
+        <span style={{ color: t.text, fontWeight: 600, fontSize: 12 }}>Results</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer',
+          color: t.textMuted, fontSize: 20, lineHeight: 1, padding: '0 4px' }}>×</button>
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Time series file selector */}
+        {tsList.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 10, color: t.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Time Series File
+            </span>
+            {tsList.map(f => (
+              <button
+                key={f}
+                onClick={() => setSelectedTsFile(f)}
+                style={{
+                  width: '100%', padding: '5px 10px', borderRadius: 4, textAlign: 'left',
+                  fontSize: 10, fontFamily: 'monospace', cursor: 'pointer',
+                  background: selectedTsFile === f ? rc.bg : 'transparent',
+                  color: selectedTsFile === f ? rc.color : t.textMuted,
+                  border: `1px solid ${selectedTsFile === f ? rc.border : t.border}`,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}
+                title={f}
+              >
+                {selectedTsFile === f ? '● ' : '○ '}{f}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {error && <span style={{ color: '#e53935', fontSize: 10 }}>{error}</span>}
+
+        {boundsInfo && (
+          <span style={{ fontSize: 9, color: t.textMuted, fontFamily: 'monospace', wordBreak: 'break-all' }}>
+            {boundsInfo}
+          </span>
+        )}
+
+        {active && (
+          <div style={{
+            padding: '8px 10px', borderRadius: 4, fontSize: 10, lineHeight: 1.6,
+            background: t.bg2, border: `1px solid ${t.divider}`, color: t.textMuted,
+          }}>
+            Click on the velocity map to extract the time series at that location.
+          </div>
+        )}
+      </div>
+
+      {/* Plot button fixed at the bottom */}
+      <div style={{ padding: '10px 14px', borderTop: `1px solid ${t.border}`, flexShrink: 0 }}>
+        <button
+          onClick={handleVelocityClick}
+          disabled={decoding}
+          style={{
+            width: '100%', padding: '8px 12px', borderRadius: 4,
+            background: active ? rc.bg : t.btnActiveBg,
+            color: active ? rc.color : t.btnActiveFg,
+            border: `1px solid ${active ? rc.border : t.btnActiveBorder}`,
+            cursor: decoding ? 'wait' : 'pointer', fontSize: 12, fontWeight: 600,
+          }}
+        >
+          {decoding ? 'Loading…' : active ? 'Hide Velocity' : 'Plot'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+
 // ── L2: Role drawer ───────────────────────────────────────────────────────────
 
 interface L2Props {
-  theme:          Theme
-  job:            JobFolder
-  role:           string
-  cls:            string
-  onClose:        () => void
-  onFolderRefresh: () => void
+  theme:             Theme
+  job:               JobFolder
+  role:              string
+  cls:               string
+  onClose:           () => void
+  onFolderRefresh:   () => void
+  onRasterSelect:    (overlay: RasterOverlay | null) => void
 }
 
-function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh }: L2Props) {
+function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onRasterSelect }: L2Props) {
   const rc = ROLE_COLORS[role] ?? ROLE_FALLBACK
 
   // Downloader-specific state
@@ -1012,6 +1382,10 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh }: L
   const [procOpen,     setProcOpen]     = useState(false)
   const [dlJobId,      setDlJobId]      = useState<string | null>(null)
   const [dlStatus,     setDlStatus]     = useState<string>('')
+  const [ifgViewerOpen,     setIfgViewerOpen]     = useState(false)
+  const [mintpyViewerOpen,  setMintpyViewerOpen]  = useState(false)
+  const [mintpyHasData,     setMintpyHasData]     = useState(false)
+  const [mintpyTsList,      setMintpyTsList]      = useState<string[]>([])
 
   function loadDetails() {
     setDetLoading(true)
@@ -1024,6 +1398,18 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh }: L
   useEffect(() => {
     if (role !== 'downloader') return
     loadDetails()
+  }, [job.path, role])
+
+  useEffect(() => {
+    if (role !== 'analyzer') return
+    fetch(`${API}/api/mintpy-check?path=${encodeURIComponent(job.path)}`)
+      .then(r => r.json())
+      .then(d => {
+        const tsList: string[] = Array.isArray(d.timeseries_files) ? d.timeseries_files : []
+        setMintpyTsList(tsList)
+        setMintpyHasData(d.has_velocity && tsList.length > 0)
+      })
+      .catch(() => {})
   }, [job.path, role])
 
   // Poll download job
@@ -1082,6 +1468,27 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh }: L
       {/* L3 pairs drawer */}
       {pairsOpen && (
         <PairsDrawer theme={t} folderPath={job.path} onClose={() => setPairsOpen(false)} />
+      )}
+
+      {/* L3 MintPy results viewer */}
+      {mintpyViewerOpen && (
+        <MintpyViewerDrawer
+          theme={t}
+          folderPath={job.path}
+          tsList={mintpyTsList}
+          onClose={() => setMintpyViewerOpen(false)}
+          onRasterSelect={onRasterSelect}
+        />
+      )}
+
+      {/* L3 interferogram viewer */}
+      {ifgViewerOpen && (
+        <IfgViewerDrawer
+          theme={t}
+          folderPath={job.path}
+          onClose={() => setIfgViewerOpen(false)}
+          onRasterSelect={onRasterSelect}
+        />
       )}
 
       {/* Select Pairs modal */}
@@ -1289,12 +1696,34 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh }: L
               folderPath={job.path}
               processorType={cls}
               onFolderRefresh={onFolderRefresh}
+              ifgViewerOpen={ifgViewerOpen}
+              onViewIfgToggle={() => setIfgViewerOpen(o => !o)}
             />
           )}
 
           {/* ── Analyzer: MintPy step runner ── */}
           {role === 'analyzer' && (
-            <AnalyzerPanel theme={t} folderPath={job.path} analyzerType={cls} />
+            <>
+              <AnalyzerPanel theme={t} folderPath={job.path} analyzerType={cls} />
+              {mintpyHasData && (
+                <button
+                  onClick={() => setMintpyViewerOpen(o => !o)}
+                  style={{
+                    width: '100%', padding: '6px 12px', fontSize: 11, textAlign: 'left',
+                    background: mintpyViewerOpen ? ROLE_COLORS.analyzer.bg : 'transparent',
+                    color: mintpyViewerOpen ? ROLE_COLORS.analyzer.color : t.text,
+                    border: `1px solid ${mintpyViewerOpen ? ROLE_COLORS.analyzer.border : t.border}`,
+                    borderRadius: 4, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                  </svg>
+                  {mintpyViewerOpen ? 'Hide Results' : 'View Results'}
+                </button>
+              )}
+            </>
           )}
 
           {/* ── Other roles: placeholder ── */}
@@ -1309,7 +1738,7 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh }: L
 
 // ── Main Drawer ───────────────────────────────────────────────────────────────
 
-export default function JobQueueDrawer({ theme: t, workdir, onClose }: Props) {
+export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSelect }: Props) {
   const [jobs,    setJobs]    = useState<JobFolder[]>([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState('')
@@ -1343,6 +1772,7 @@ export default function JobQueueDrawer({ theme: t, workdir, onClose }: Props) {
           cls={l2.cls}
           onClose={() => setL2(null)}
           onFolderRefresh={loadJobs}
+          onRasterSelect={onRasterSelect}
         />
       )}
 

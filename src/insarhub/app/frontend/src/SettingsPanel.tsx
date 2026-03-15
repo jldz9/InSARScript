@@ -500,8 +500,19 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
           ) : tab === 'general' ? (
             <div style={fieldStyle}>
               <label style={labelStyle}>Work Directory</label>
-              <input style={{ ...inputStyle, width: '100%' }} value={workdir}
-                onChange={e => setWorkdir(e.target.value)} placeholder="/path/to/workdir" />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input style={{ ...inputStyle, flex: 1 }} value={workdir}
+                  onChange={e => setWorkdir(e.target.value)} placeholder="/path/to/workdir" />
+                <button
+                  onClick={() =>
+                    fetch(`${API}/api/pick-folder`)
+                      .then(r => r.json())
+                      .then(d => { if (d.path) setWorkdir(d.path) })
+                  }
+                  title="Browse for folder"
+                  style={{ ...inputStyle, width: 'auto', padding: '0 10px', cursor: 'pointer', flexShrink: 0 }}
+                >Browse…</button>
+              </div>
               <div style={hintStyle}>Downloaded scenes and processed results are saved here.</div>
             </div>
 

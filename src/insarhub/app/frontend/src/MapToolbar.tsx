@@ -10,6 +10,7 @@ interface Props {
   onClearAoi:       () => void
   onShapefileUpload:(file: File) => void
   mouseCoords:      { lat: number; lng: number } | null
+  rasterValue?:     number | null
 }
 
 // ── Flat SVG icons ─────────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ const DRAW_TOOLS: { mode: DrawMode; icon: React.ReactNode; title: string }[] = [
 // ── Component ───────────────────────────────────────────────────────────────
 
 export default function MapToolbar({
-  drawMode, theme, onDrawModeChange, onClearAoi, onShapefileUpload, mouseCoords,
+  drawMode, theme, onDrawModeChange, onClearAoi, onShapefileUpload, mouseCoords, rasterValue,
 }: Props) {
   const t = theme
 
@@ -111,6 +112,11 @@ export default function MapToolbar({
         {mouseCoords && (
           <span style={{ color: t.textMuted, fontSize: 11, fontFamily: 'monospace', marginLeft: 8 }}>
             lat {mouseCoords.lat.toFixed(4)}°&nbsp;&nbsp;lon {mouseCoords.lng.toFixed(4)}°
+          </span>
+        )}
+        {rasterValue != null && (
+          <span style={{ color: '#90caf9', fontSize: 11, fontFamily: 'monospace', marginLeft: 4 }}>
+            val {rasterValue.toFixed(4)}
           </span>
         )}
       </div>

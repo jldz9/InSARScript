@@ -1011,8 +1011,13 @@ def cmd_downloader(args, extra_args: list[str]):
         else:
             workdir = _resolve_workdir(args.workdir)
             _cfg = args.config if (args.config and args.config != "__default__") else None
-            cfg_path = (Path(_cfg).expanduser().resolve()
-                        if _cfg else _find_subfolder_config(workdir, "downloader_config.json"))
+            if _cfg:
+                cfg_path = Path(_cfg).expanduser().resolve()
+            elif args.config == "__default__":
+                _direct = workdir / "downloader_config.json"
+                cfg_path = _direct if _direct.exists() else _find_subfolder_config(workdir, "downloader_config.json")
+            else:
+                cfg_path = None
             values = _read_config_json(cfg_path) if cfg_path else {}
             if not values:
                 print(f"[INFO] No saved config found. Showing defaults.")
@@ -1025,8 +1030,22 @@ def cmd_downloader(args, extra_args: list[str]):
     # Resolve workdir early so saved config can serve as base defaults
     workdir = _resolve_workdir(args.workdir)
     _cfg = args.config if (args.config and args.config != "__default__") else None
-    cfg_path = (Path(_cfg).expanduser().resolve()
-                if _cfg else _find_subfolder_config(workdir, "downloader_config.json"))
+    _default_cfg_requested = (args.config == "__default__")
+    if _cfg:
+        cfg_path = Path(_cfg).expanduser().resolve()
+    elif _default_cfg_requested:
+        # --config with no value: look for downloader_config.json in workdir first,
+        # then fall back to a p*_f* subfolder
+        _direct = workdir / "downloader_config.json"
+        cfg_path = _direct if _direct.exists() else _find_subfolder_config(workdir, "downloader_config.json")
+        if cfg_path is None:
+            print(
+                f"[ERROR] --config specified but no downloader_config.json found in {workdir}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    else:
+        cfg_path = None
     saved_cfg = _read_config_json(cfg_path) if cfg_path else {}
     if saved_cfg:
         print(f"[INFO] Loaded saved config from {cfg_path}")
@@ -1153,8 +1172,13 @@ def cmd_processor(args, extra_args: list[str]):
         else:
             workdir = _resolve_workdir(getattr(args, "workdir", None))
             _cfg = args.config if (args.config and args.config != "__default__") else None
-            cfg_path = (Path(_cfg).expanduser().resolve()
-                        if _cfg else _find_subfolder_config(workdir, "processor_config.json"))
+            if _cfg:
+                cfg_path = Path(_cfg).expanduser().resolve()
+            elif args.config == "__default__":
+                _direct = workdir / "processor_config.json"
+                cfg_path = _direct if _direct.exists() else _find_subfolder_config(workdir, "processor_config.json")
+            else:
+                cfg_path = None
             values = _read_config_json(cfg_path) if cfg_path else {}
             if not values:
                 print(f"[INFO] No saved config found. Showing defaults.")
@@ -1218,8 +1242,21 @@ def _proc_submit(args, extra_args: list[str]):
     # Resolve workdir early so saved config can serve as base defaults
     workdir = _resolve_workdir(args.workdir)
     _cfg = args.config if (args.config and args.config != "__default__") else None
-    cfg_path = (Path(_cfg).expanduser().resolve()
-                if _cfg else _find_subfolder_config(workdir, "processor_config.json"))
+    _default_cfg_requested = (args.config == "__default__")
+    if _cfg:
+        cfg_path = Path(_cfg).expanduser().resolve()
+    elif _default_cfg_requested:
+        # --config with no value: check workdir itself first, then p*_f* subfolders
+        _direct = workdir / "processor_config.json"
+        cfg_path = _direct if _direct.exists() else _find_subfolder_config(workdir, "processor_config.json")
+        if cfg_path is None:
+            print(
+                f"[ERROR] --config specified but no processor_config.json found in {workdir}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    else:
+        cfg_path = None
     saved_cfg = _read_config_json(cfg_path) if cfg_path else {}
     if saved_cfg:
         print(f"[INFO] Loaded saved config from {cfg_path}")
@@ -1292,8 +1329,14 @@ def _proc_submit(args, extra_args: list[str]):
             for t in targets:
                 _stamp_process_dir(t)
         else:
-            print(f"[dry-run] No process directories found under {workdir} "
-                  f"(need insarhub_workflow.json + downloader_config.json)", file=sys.stderr)
+            _checked = [workdir] + ([sub for sub in sorted(workdir.iterdir()) if sub.is_dir()] if workdir.is_dir() else [])
+            for _d in _checked:
+                if not (_d / "downloader_config.json").exists():
+                    print(f"[dry-run] downloader_config.json is missing for {_d}", file=sys.stderr)
+                elif not (_d / "insarhub_workflow.json").exists():
+                    print(f"[dry-run] insarhub_workflow.json is missing for {_d}", file=sys.stderr)
+            if not _checked:
+                print(f"[dry-run] No directories found under {workdir}", file=sys.stderr)
 
     pairs_data = _load_pairs(args, workdir)
 

@@ -297,6 +297,82 @@ async def get_workdir():
     return {"workdir": _settings["workdir"]}
 
 
+@app.get("/api/pick-folder")
+async def pick_folder():
+    """Open a native folder-picker dialog and return the selected path."""
+    import subprocess, sys
+    from pathlib import Path as _Path
+
+    # ── WSL: delegate to PowerShell's WinForms FolderBrowserDialog ──────────
+    is_wsl = _Path("/proc/version").exists() and \
+             "microsoft" in _Path("/proc/version").read_text().lower()
+    if is_wsl:
+        ps_script = (
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$f = New-Object System.Windows.Forms.FolderBrowserDialog; "
+            "$f.Description = 'Select work directory'; "
+            "$null = $f.ShowDialog(); "
+            "Write-Output $f.SelectedPath"
+        )
+        res = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", ps_script],
+            capture_output=True, text=True
+        )
+        win_path = res.stdout.strip()
+        if not win_path:
+            return {"path": None}
+        conv = subprocess.run(["wslpath", "-u", win_path], capture_output=True, text=True)
+        return {"path": conv.stdout.strip() or None}
+
+    # ── Windows native ───────────────────────────────────────────────────────
+    if sys.platform == "win32":
+        ps_script = (
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$f = New-Object System.Windows.Forms.FolderBrowserDialog; "
+            "$f.Description = 'Select work directory'; "
+            "$null = $f.ShowDialog(); "
+            "Write-Output $f.SelectedPath"
+        )
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_script],
+            capture_output=True, text=True
+        )
+        return {"path": res.stdout.strip() or None}
+
+    # ── macOS ────────────────────────────────────────────────────────────────
+    if sys.platform == "darwin":
+        res = subprocess.run(
+            ["osascript", "-e", "POSIX path of (choose folder with prompt \"Select work directory\")"],
+            capture_output=True, text=True
+        )
+        return {"path": res.stdout.strip().rstrip("/") or None}
+
+    # ── Linux (native): zenity → kdialog → tkinter ──────────────────────────
+    for cmd in [
+        ["zenity", "--file-selection", "--directory", "--title=Select work directory"],
+        ["kdialog", "--getexistingdirectory", "/"],
+    ]:
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if res.returncode == 0 and res.stdout.strip():
+                return {"path": res.stdout.strip()}
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+
+    # tkinter fallback (Linux without zenity/kdialog, or any platform)
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk(); root.withdraw(); root.wm_attributes("-topmost", True)
+        path = filedialog.askdirectory(title="Select work directory")
+        root.destroy()
+        return {"path": path or None}
+    except Exception:
+        pass
+
+    return {"path": None}
+
+
 @app.get("/api/job-folders")
 async def get_job_folders():
     """
@@ -696,6 +772,14 @@ async def add_job(req: AddJobRequest):
     cfg_cls = getattr(dl_cls, "default_config", S1_SLC_Config) if dl_cls else S1_SLC_Config
     cfg_instance = cfg_cls(workdir=subdir)
     valid_fields = {f.name for f in dataclasses.fields(cfg_instance)}
+    # Apply saved downloader settings from global settings first
+    for key, val in _settings.get("downloader_config", {}).items():
+        if key in valid_fields and key != "workdir" and val is not None:
+            try:
+                setattr(cfg_instance, key, val)
+            except Exception:
+                pass
+    # Then apply request-specific fields (override saved settings)
     for key, val in {
         "start": req.start, "end": req.end,
         "relativeOrbit": req.relativeOrbit, "frame": req.frame,
@@ -940,10 +1024,28 @@ async def _run_folder_process(job_id: str, req: ProcessRequest):
 
             if req.dry_run:
                 n = len(pairs)
+                msgs = []
+                try:
+                    proc_cfg_path = folder / "processor_config.json"
+                    proc_cfg_path.write_text(json.dumps({
+                        "name": req.processor_type,
+                        "processor_config": req.processor_config,
+                    }, indent=2))
+                    msgs.append("wrote  processor_config.json")
+                except Exception as e:
+                    msgs.append(f"could not write processor_config.json: {e}")
+                try:
+                    write_workflow_marker(folder, processor=req.processor_type)
+                    msgs.append(f"marked insarhub_workflow.json  processor={req.processor_type}")
+                except Exception as e:
+                    msgs.append(f"could not update insarhub_workflow.json: {e}")
                 _jobs[job_id] = {
                     "status": "done", "progress": 100,
-                    "message": f"[Dry run] Would submit {n} pair{'s' if n != 1 else ''} "
-                               f"via {req.processor_type} from {folder.name}",
+                    "message": (
+                        f"[Dry run] Would submit {n} pair{'s' if n != 1 else ''} "
+                        f"via {req.processor_type} from {folder.name}\n"
+                        + "\n".join(msgs)
+                    ),
                     "data": None,
                 }
                 return
@@ -1123,6 +1225,517 @@ async def _run_analyzer(job_id: str, req: RunAnalyzerRequest):
     await asyncio.to_thread(run)
 
 
+def _rgba_to_png_bytes(rgba) -> bytes:
+    """Encode an H×W×4 uint8 numpy array as PNG bytes. Uses PIL when available."""
+    try:
+        from PIL import Image
+        import io
+        buf = io.BytesIO()
+        Image.fromarray(rgba, 'RGBA').save(buf, format='PNG', optimize=False, compress_level=1)
+        return buf.getvalue()
+    except ImportError:
+        pass
+    import struct, zlib
+    h, w = rgba.shape[:2]
+    def _chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack('>I', len(data)) + tag + data + struct.pack('>I', zlib.crc32(tag + data) & 0xffffffff)
+    ihdr = struct.pack('>IIBBBBB', w, h, 8, 6, 0, 0, 0)
+    raw  = b''.join(b'\x00' + bytes(row) for row in rgba)
+    return b'\x89PNG\r\n\x1a\n' + _chunk(b'IHDR', ihdr) + _chunk(b'IDAT', zlib.compress(raw, 6)) + _chunk(b'IEND', b'')
+
+
+def _colormap_numpy(data, mask, vmin: float, vmax: float, type_name: str):
+    """Apply colormap to a 2-D float32 array; return H×W×4 uint8 RGBA."""
+    import numpy as np
+    rng = vmax - vmin or 1.0
+    t   = np.clip((data - vmin) / rng, 0.0, 1.0)
+    h, w = data.shape
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    if type_name == 'unw_phase':
+        hd  = (t * 360.0) % 360.0
+        hi  = (hd / 60).astype(np.int32) % 6
+        f   = hd / 60.0 - np.floor(hd / 60.0)
+        r = np.select([hi==0,hi==1,hi==2,hi==3,hi==4,hi==5],[1,1-f,0,0,f,1])
+        g = np.select([hi==0,hi==1,hi==2,hi==3,hi==4,hi==5],[f,1,1,f,0,0])
+        b = np.select([hi==0,hi==1,hi==2,hi==3,hi==4,hi==5],[0,0,f,1,1,1-f])
+        rgba[:,:,0] = (r*255).astype(np.uint8)
+        rgba[:,:,1] = (g*255).astype(np.uint8)
+        rgba[:,:,2] = (b*255).astype(np.uint8)
+    elif type_name == 'corr':
+        v = (t*255).astype(np.uint8)
+        rgba[:,:,0] = v; rgba[:,:,1] = v; rgba[:,:,2] = v
+    elif type_name == 'velocity':
+        # RdBu_r diverging: blue (neg) → white (zero) → red (pos)
+        stops_t = np.array([0.0, 0.5, 1.0])
+        rgba[:,:,0] = np.interp(t, stops_t, [33,  247, 178]).astype(np.uint8)
+        rgba[:,:,1] = np.interp(t, stops_t, [102, 247, 24 ]).astype(np.uint8)
+        rgba[:,:,2] = np.interp(t, stops_t, [172, 247, 43 ]).astype(np.uint8)
+    else:
+        stops_t = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
+        rgba[:,:,0] = np.interp(t, stops_t, [68,  59,  33,  94,  253]).astype(np.uint8)
+        rgba[:,:,1] = np.interp(t, stops_t, [1,   82,  145, 201, 231]).astype(np.uint8)
+        rgba[:,:,2] = np.interp(t, stops_t, [84,  139, 140, 98,  37 ]).astype(np.uint8)
+    rgba[:,:,3] = np.where(mask, 0, 255).astype(np.uint8)
+    return rgba
+
+
+def _tif_file_type(stem: str) -> str:
+    for token in ("unw_phase", "corr", "dem", "lv_theta", "lv_phi", "water_mask",
+                  "inc_map", "los_disp", "wrapped_phase", "browse"):
+        if token in stem:
+            return token
+    return stem.split("_")[-1]
+
+
+def _tif_bounds_wgs84(zip_path: str, tif_name: str) -> list | None:
+    """Return [west, south, east, north] in WGS84 using /vsizip/ (no full extraction)."""
+    try:
+        try:
+            import rasterio
+            from rasterio.warp import transform_bounds
+            with rasterio.open(f"/vsizip/{zip_path}/{tif_name}") as src:
+                return list(transform_bounds(src.crs, "EPSG:4326", *src.bounds))
+        except ImportError:
+            from osgeo import gdal, osr
+            ds = gdal.Open(f"/vsizip/{zip_path}/{tif_name}")
+            if ds is None:
+                return None
+            gt = ds.GetGeoTransform()
+            cols, rows = ds.RasterXSize, ds.RasterYSize
+            src_srs = osr.SpatialReference()
+            src_srs.ImportFromWkt(ds.GetProjection())
+            tgt_srs = osr.SpatialReference()
+            tgt_srs.ImportFromEPSG(4326)
+            tgt_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            ct = osr.CoordinateTransformation(src_srs, tgt_srs)
+            corners = [(gt[0], gt[3]), (gt[0] + cols * gt[1], gt[3]),
+                       (gt[0] + cols * gt[1], gt[3] + rows * gt[5]),
+                       (gt[0], gt[3] + rows * gt[5])]
+            lons, lats = [], []
+            for x, y in corners:
+                pt = ct.TransformPoint(x, y)
+                lons.append(pt[0]); lats.append(pt[1])
+            ds = None
+            return [min(lons), min(lats), max(lons), max(lats)]
+    except Exception:
+        return None
+
+
+@app.get("/api/folder-ifg-list")
+async def folder_ifg_list(path: str):
+    """List interferogram zip files in a folder with per-file types and WGS84 bounds.
+
+    Searches the folder itself first, then falls back to out_dir stored in any
+    hyp3*.json batch file (the download destination may differ from the config folder).
+    """
+    import zipfile as _zipfile
+    folder = Path(path)
+    if not folder.exists():
+        raise HTTPException(status_code=404, detail="Folder not found")
+
+    # Determine search roots: folder itself + out_dir from .insarhub_cache.json / hyp3*.json
+    search_roots: list[Path] = [folder]
+    expected_names: list[str] = []
+
+    # Prefer the filecache (written by refresh action — has exact filenames + out_dir)
+    cache_file = folder / ".insarhub_cache.json"
+    if cache_file.exists():
+        try:
+            cache = json.loads(cache_file.read_text())
+            expected_names = cache.get("filenames", [])
+            out_dir = cache.get("out_dir")
+            if out_dir:
+                p = Path(out_dir)
+                if p.exists() and p not in search_roots:
+                    search_roots.append(p)
+        except Exception:
+            pass
+    else:
+        # Fall back to reading out_dir from hyp3*.json batch files
+        for job_file in sorted(folder.glob("hyp3*.json")):
+            if job_file.name == ".insarhub_cache.json":
+                continue
+            try:
+                data = json.loads(job_file.read_text())
+                out_dir = data.get("out_dir")
+                if out_dir:
+                    p = Path(out_dir)
+                    if p.exists() and p not in search_roots:
+                        search_roots.append(p)
+            except Exception:
+                pass
+
+    seen: set[str] = set()
+    pairs = []
+
+    def _process_zip(zip_path: Path):
+        k = str(zip_path)
+        if k in seen:
+            return
+        seen.add(k)
+        try:
+            with _zipfile.ZipFile(zip_path) as zf:
+                # TIFs may be at root level OR inside a single subdirectory (HyP3 convention)
+                all_names = zf.namelist()
+                tif_names = sorted([n for n in all_names if n.endswith(".tif") and not n.endswith("/")])
+                if not tif_names:
+                    return
+                bounds = _tif_bounds_wgs84(k, tif_names[0])
+                files = [{"filename": t, "type": _tif_file_type(Path(t).stem)}
+                         for t in tif_names]
+                pairs.append({"name": zip_path.stem, "zip": k,
+                              "files": files, "bounds": bounds})
+        except Exception:
+            pass
+
+    if expected_names:
+        # Fast path: search for exact filenames from the cache
+        for root in search_roots:
+            for name in expected_names:
+                candidate = root / name
+                if candidate.exists():
+                    _process_zip(candidate)
+            # Also rglob in case zips landed in subdirs
+            if not pairs:
+                for name in expected_names:
+                    for found in root.rglob(name):
+                        _process_zip(found)
+    else:
+        # No cache: glob all zips in every search root
+        for root in search_roots:
+            for zip_path in sorted(root.glob("*.zip")):
+                _process_zip(zip_path)
+            # Rglob fallback if still nothing found
+            if not pairs:
+                for zip_path in sorted(root.rglob("*.zip")):
+                    _process_zip(zip_path)
+
+    return {"pairs": pairs}
+
+
+@app.get("/api/serve-tif")
+async def serve_tif(zip: str, file: str):
+    """Serve a TIF file extracted from a zip archive."""
+    import zipfile as _zipfile
+    from fastapi.responses import Response as _Resp
+    try:
+        with _zipfile.ZipFile(zip) as zf:
+            data = zf.read(file)
+            return _Resp(content=data, media_type="image/tiff",
+                         headers={"Cache-Control": "no-store",
+                                  "Content-Disposition": f"inline; filename={Path(file).name}"})
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"'{file}' not in archive")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/render-tif")
+async def render_tif_colored(zip: str, file: str, type_hint: str = ""):
+    """Server-side render a TIF to colored PNG + downsampled float32 for hover.
+
+    Returns JSON:
+      png_b64      – base64 PNG (display, max 1024 px on longer side)
+      pixel_b64    – base64 float32 array (hover, max 256 px)
+      bounds       – [W, S, E, N] WGS84
+      vmin / vmax  – data range
+      nodata       – nodata value or null
+      width/height – original raster size
+      pixel_width/pixel_height – downsampled pixel array size
+    """
+    import numpy as np, base64, zipfile as _zf
+
+    MAX_DISPLAY = 1024
+    MAX_PIXEL   = 256
+
+    try:
+        with _zf.ZipFile(zip) as zf:
+            tif_bytes = zf.read(file)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    try:
+        import rasterio
+        from rasterio.warp import transform_bounds
+        from rasterio.io import MemoryFile
+
+        with MemoryFile(tif_bytes) as memf:
+            with memf.open() as src:
+                orig_h, orig_w = src.height, src.width
+                # Downsample on read for display
+                scale_d = min(1.0, MAX_DISPLAY / max(orig_h, orig_w))
+                dh = max(1, int(orig_h * scale_d))
+                dw = max(1, int(orig_w * scale_d))
+                disp_data = src.read(1, out_shape=(dh, dw)).astype(np.float32)
+                nodata_val = src.nodata
+                bounds_wgs84 = list(transform_bounds(src.crs, "EPSG:4326", *src.bounds))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"rasterio error: {e}")
+
+    # Build nodata mask
+    mask = ~np.isfinite(disp_data)
+    if nodata_val is not None:
+        mask |= (disp_data == float(nodata_val))
+
+    valid = disp_data[~mask]
+    vmin = float(valid.min()) if valid.size else 0.0
+    vmax = float(valid.max()) if valid.size else 1.0
+
+    type_name = type_hint or _tif_file_type(Path(file).stem)
+    rgba = _colormap_numpy(disp_data, mask, vmin, vmax, type_name)
+    png_bytes = _rgba_to_png_bytes(rgba)
+    png_b64   = base64.b64encode(png_bytes).decode()
+
+    # Pixel hover data (smaller)
+    scale_p = min(1.0, MAX_PIXEL / max(dh, dw))
+    ph = max(1, int(dh * scale_p))
+    pw = max(1, int(dw * scale_p))
+    row_idx = (np.arange(ph) * dh / ph).astype(int)
+    col_idx = (np.arange(pw) * dw / pw).astype(int)
+    pix_data = disp_data[np.ix_(row_idx, col_idx)]
+    pixel_b64 = base64.b64encode(pix_data.astype(np.float32).tobytes()).decode()
+
+    return {
+        "png_b64":      png_b64,
+        "pixel_b64":    pixel_b64,
+        "bounds":       bounds_wgs84,
+        "vmin":         vmin,
+        "vmax":         vmax,
+        "nodata":       nodata_val,
+        "type":         type_name,
+        "width":        orig_w,
+        "height":       orig_h,
+        "pixel_width":  pw,
+        "pixel_height": ph,
+    }
+
+
+# ── MintPy helpers ────────────────────────────────────────────────────────────
+
+_TS_PRIORITY = [
+    'timeseries_ERA5_ramp_demErr.h5',
+    'timeseries_ERA5_ramp.h5',
+    'timeseries_ERA5_demErr.h5',
+    'timeseries_ERA5.h5',
+    'timeseriesResidual_ramp.h5',
+    'timeseriesResidual.h5',
+    'timeseries.h5',
+]
+
+
+def _mintpy_attr_val(attrs, key):
+    """Return the value for key from attrs, decoding bytes/numpy scalars/arrays to Python native."""
+    import numpy as np
+    v = attrs[key]
+    if isinstance(v, (bytes, bytearray)):
+        return v.decode().strip()
+    if isinstance(v, np.ndarray):
+        # flatten and take first element (attribute arrays are always 1-element in MintPy)
+        v = v.flat[0]
+        if isinstance(v, (bytes, bytearray, np.bytes_)):
+            return v.decode().strip() if hasattr(v, 'decode') else str(v)
+        return v.item() if hasattr(v, 'item') else float(v)
+    if hasattr(v, 'item'):            # numpy scalar
+        return v.item()
+    return v
+
+
+def _mintpy_epsg(attrs) -> int:
+    """Determine EPSG code from MintPy attributes; raises ValueError if not found."""
+    import re
+    # 1. Explicit EPSG attribute
+    if 'EPSG' in attrs:
+        try:
+            return int(float(str(_mintpy_attr_val(attrs, 'EPSG')).strip()))
+        except Exception:
+            pass
+    # 2. UTM_ZONE attribute  e.g. '10N', '10S', '10'
+    for key in ('UTM_ZONE', 'utmZone', 'utm_zone'):
+        if key in attrs:
+            s = str(_mintpy_attr_val(attrs, key)).strip().upper()
+            m = re.match(r'(\d+)([NS]?)', s)
+            if m:
+                zone = int(m.group(1))
+                hemi = m.group(2) or 'N'
+                return (32600 if hemi == 'N' else 32700) + zone
+    raise ValueError(
+        'Projected coordinates detected (X_FIRST out of ±360° range) '
+        'but no EPSG or UTM_ZONE attribute found in the HDF5 file.'
+    )
+
+
+def _mintpy_bounds(attrs) -> list:
+    """[west, south, east, north] in WGS84 degrees from MintPy HDF5 geo-attributes.
+
+    Handles both geographic (degrees) and projected (UTM metres) coordinate systems.
+    """
+    x_first = float(_mintpy_attr_val(attrs, 'X_FIRST'))
+    y_first = float(_mintpy_attr_val(attrs, 'Y_FIRST'))
+    x_step  = float(_mintpy_attr_val(attrs, 'X_STEP'))
+    y_step  = float(_mintpy_attr_val(attrs, 'Y_STEP'))
+    width   = int(float(str(_mintpy_attr_val(attrs, 'WIDTH')).strip()))
+    length  = int(float(str(_mintpy_attr_val(attrs, 'LENGTH')).strip()))
+
+    x_last = x_first + x_step * width
+    y_last = y_first + y_step * length
+    # Use min/max to handle either sign of Y_STEP
+    west  = min(x_first, x_last)
+    east  = max(x_first, x_last)
+    south = min(y_first, y_last)
+    north = max(y_first, y_last)
+
+    # Detect projected coordinates (UTM easting ~100 000 – 900 000 m)
+    if abs(x_first) > 360 or abs(y_first) > 90:
+        epsg = _mintpy_epsg(attrs)
+        from pyproj import Transformer
+        tf = Transformer.from_crs(epsg, 4326, always_xy=True)
+        xs, ys = tf.transform([west, east, west, east],
+                               [south, south, north, north])
+        return [min(xs), min(ys), max(xs), max(ys)]
+
+    return [west, south, east, north]
+
+
+@app.get("/api/mintpy-check")
+async def mintpy_check(path: str):
+    """Return whether velocity.h5 exists and list all available timeseries*.h5 files."""
+    folder = Path(path)
+    has_velocity = (folder / 'velocity.h5').exists()
+    ts_files = [n for n in _TS_PRIORITY if (folder / n).exists()]
+    return {"has_velocity": has_velocity, "timeseries_files": ts_files}
+
+
+@app.get("/api/render-velocity")
+async def render_velocity(path: str):
+    """Render velocity.h5 → colored PNG + float32 pixel array for hover."""
+    import numpy as np, base64
+
+    MAX_PIXEL = 256
+
+    vel_path = Path(path) / 'velocity.h5'
+    if not vel_path.exists():
+        raise HTTPException(status_code=404, detail='velocity.h5 not found')
+    try:
+        import h5py, rasterio
+        from rasterio.warp import transform_bounds as rio_transform_bounds
+
+        # ── Read pixel data via h5py ──────────────────────────────────────────
+        with h5py.File(vel_path, 'r') as f:
+            ds   = f['velocity']
+            data = ds[:].astype(np.float32)
+            attrs = {k: v for k, v in f.attrs.items()}
+            attrs.update({k: v for k, v in ds.attrs.items()})
+        if data.ndim == 3:
+            data = data[0]
+        orig_h, orig_w = data.shape
+
+        # ── Bounds: try rasterio/GDAL HDF5 driver first (same as render-tif) ──
+        bounds = None
+        try:
+            hdf_path = f'HDF5:"{vel_path}"://velocity'
+            with rasterio.open(hdf_path) as src:
+                if src.crs:
+                    bounds = list(rio_transform_bounds(src.crs, 'EPSG:4326', *src.bounds))
+        except Exception:
+            pass
+
+        # ── Fallback: parse MintPy custom attributes (handles UTM via pyproj) ─
+        if bounds is None:
+            bounds = _mintpy_bounds(attrs)
+
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=f'Missing geo-attribute in velocity.h5: {e}')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'h5py error: {e}')
+
+    # Use native data resolution — data already in memory, PIL encodes quickly
+    mask  = ~np.isfinite(data) | (data == 0)
+    valid = data[~mask]
+    if valid.size == 0:
+        raise HTTPException(status_code=500, detail='No valid velocity data')
+
+    vmin, vmax = -0.1, 0.1
+
+    rgba      = _colormap_numpy(data, mask, vmin, vmax, 'velocity')
+    png_bytes = _rgba_to_png_bytes(rgba)
+    png_b64   = base64.b64encode(png_bytes).decode()
+
+    # Pixel hover data — keep small for fast JS lookup
+    scale_p = min(1.0, MAX_PIXEL / max(orig_h, orig_w))
+    ph = max(1, int(orig_h * scale_p))
+    pw = max(1, int(orig_w * scale_p))
+    row_p     = (np.arange(ph) * orig_h / ph).astype(int)
+    col_p     = (np.arange(pw) * orig_w / pw).astype(int)
+    pix_data  = data[np.ix_(row_p, col_p)]
+    pixel_b64 = base64.b64encode(pix_data.astype(np.float32).tobytes()).decode()
+
+    unit = str(attrs.get('UNIT', 'm/year'))
+    return {
+        'png_b64':      png_b64,
+        'pixel_b64':    pixel_b64,
+        'bounds':       bounds,
+        'vmin':         vmin,
+        'vmax':         vmax,
+        'nodata':       None,
+        'type':         'velocity',
+        'label':        f'Velocity ({unit})',
+        'width':        orig_w,
+        'height':       orig_h,
+        'pixel_width':  pw,
+        'pixel_height': ph,
+        'unit':         unit,
+    }
+
+
+@app.get("/api/timeseries-pixel")
+async def timeseries_pixel(path: str, lat: float, lon: float, ts_file: str | None = None):
+    """Extract a single pixel time series without loading the full 3-D stack."""
+    folder = Path(path)
+    if ts_file:
+        ts_name = ts_file if (folder / ts_file).exists() else None
+    else:
+        ts_name = next((n for n in _TS_PRIORITY if (folder / n).exists()), None)
+    if ts_name is None:
+        raise HTTPException(status_code=404, detail='No timeseries file found')
+    try:
+        import h5py
+        with h5py.File(folder / ts_name, 'r') as f:
+            ds_ts = f['timeseries']
+            # Merge file-level and dataset-level attrs
+            attrs = {k: v for k, v in f.attrs.items()}
+            attrs.update({k: v for k, v in ds_ts.attrs.items()})
+            raw_dates = f['date'][:]
+            x_first = float(_mintpy_attr_val(attrs, 'X_FIRST'))
+            y_first = float(_mintpy_attr_val(attrs, 'Y_FIRST'))
+            x_step  = float(_mintpy_attr_val(attrs, 'X_STEP'))
+            y_step  = float(_mintpy_attr_val(attrs, 'Y_STEP'))
+            width   = int(float(str(_mintpy_attr_val(attrs, 'WIDTH')).strip()))
+            length  = int(float(str(_mintpy_attr_val(attrs, 'LENGTH')).strip()))
+            # If projected, convert the incoming (lon, lat) to native CRS
+            query_x, query_y = lon, lat
+            if abs(x_first) > 360 or abs(y_first) > 90:
+                epsg = _mintpy_epsg(attrs)
+                from pyproj import Transformer
+                tf = Transformer.from_crs(4326, epsg, always_xy=True)
+                query_x, query_y = tf.transform(lon, lat)
+            col = max(0, min(int(round((query_x - x_first) / x_step)), width  - 1))
+            row = max(0, min(int(round((query_y - y_first) / y_step)), length - 1))
+            # Lazy slice — reads only T values for this one pixel
+            values = [float(v) for v in ds_ts[:, row, col]]
+        def _decode_date(d):
+            s = d.decode() if isinstance(d, (bytes, bytearray)) else str(d)
+            return s.strip()
+        dates     = [_decode_date(d) for d in raw_dates]
+        iso_dates = [f'{d[:4]}-{d[4:6]}-{d[6:8]}' for d in dates if len(d) >= 8]
+        unit      = str(_mintpy_attr_val(attrs, 'UNIT')) if 'UNIT' in attrs else 'm'
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=f'Missing geo-attribute: {e}')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'h5py error: {e}')
+
+    return {'dates': iso_dates, 'values': values, 'file': ts_name, 'unit': unit}
+
+
 class Hyp3ActionRequest(BaseModel):
     folder_path:    str
     job_file:       str
@@ -1166,12 +1779,25 @@ async def _run_hyp3_action(job_id: str, req: Hyp3ActionRequest):
                 batchs = processor.refresh()
                 lines = []
                 counts: dict[str, int] = {}
+                filenames: list[str] = []
                 for user, batch in batchs.items():
                     lines.append(f"[{user}]")
                     for j in batch.jobs:
                         sc = j.status_code
                         counts[sc] = counts.get(sc, 0) + 1
                         lines.append(f"  {j.name:<35} {j.job_id:<12} | {sc}")
+                        if sc == "SUCCEEDED" and j.files:
+                            for fm in j.files:
+                                fn = fm.get("filename") or fm.get("s3", {}).get("key", "").split("/")[-1]
+                                if fn and fn.endswith(".zip"):
+                                    filenames.append(fn)
+                # Save file list cache so folder-ifg-list can find zips without a live API call
+                try:
+                    cache = {"filenames": filenames, "out_dir": processor.output_dir.as_posix()}
+                    cache_path = folder / ".insarhub_cache.json"
+                    cache_path.write_text(json.dumps(cache, indent=2))
+                except Exception:
+                    pass
                 total = sum(counts.values())
                 summary = f"{total} jobs — " + ", ".join(
                     f"{v} {k.lower()}" for k, v in sorted(counts.items())

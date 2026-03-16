@@ -142,7 +142,8 @@ _settings: dict[str, Any] = {
     "processor":            _DEFAULT_PROCESSOR,
     "processor_config":     _default_config_values(_DEFAULT_PROCESSOR, _PROCESSORS_META),
     "analyzer":             _DEFAULT_ANALYZER,
-    "analyzer_config":      _default_config_values(_DEFAULT_ANALYZER,  _ANALYZERS_META),
+    # Per-type configs: each analyzer type stores its own config independently
+    "analyzer_configs":     {name: _default_config_values(name, _ANALYZERS_META) for name in _ANALYZERS_META},
 }
 
 
@@ -407,9 +408,30 @@ async def get_job_folders():
     return {"jobs": jobs}
 
 
+@app.delete("/api/job-folder")
+async def delete_job_folder(path: str):
+    """Delete an entire job folder and all its contents."""
+    folder = Path(path)
+    workdir = Path(_settings["workdir"])
+    # Safety: must be a direct child of workdir
+    if not folder.exists():
+        raise HTTPException(status_code=404, detail="Folder not found")
+    try:
+        folder.relative_to(workdir)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Folder is not inside workdir")
+    if not folder.is_dir():
+        raise HTTPException(status_code=400, detail="Path is not a directory")
+    import shutil as _shutil
+    _shutil.rmtree(folder)
+    return {"ok": True}
+
+
 @app.get("/api/settings")
 async def get_settings():
     """Return current settings including downloader/processor/analyzer config."""
+    cur_analyzer = _settings["analyzer"]
+    analyzer_configs: dict = _settings.get("analyzer_configs", {})
     return {
         "workdir":              _settings["workdir"],
         "max_download_workers": _settings["max_download_workers"],
@@ -417,8 +439,8 @@ async def get_settings():
         "downloader_config":    _settings["downloader_config"],
         "processor":            _settings["processor"],
         "processor_config":     _settings["processor_config"],
-        "analyzer":             _settings["analyzer"],
-        "analyzer_config":      _settings["analyzer_config"],
+        "analyzer":             cur_analyzer,
+        "analyzer_configs":     analyzer_configs,
     }
 
 
@@ -430,7 +452,7 @@ class SettingsUpdate(BaseModel):
     processor:            str | None             = None
     processor_config:     dict[str, Any] | None  = None
     analyzer:             str | None             = None
-    analyzer_config:      dict[str, Any] | None  = None
+    analyzer_config:      dict[str, Any] | None  = None  # config for the `analyzer` type only
 
 
 @app.patch("/api/settings")
@@ -456,9 +478,15 @@ async def update_settings(req: SettingsUpdate):
         _settings["processor_config"].update(req.processor_config)
     if req.analyzer is not None:
         _settings["analyzer"] = req.analyzer
-        _settings["analyzer_config"] = _default_config_values(req.analyzer, _ANALYZERS_META)
+        # Ensure this type has an entry; do NOT reset other types
+        if req.analyzer not in _settings["analyzer_configs"]:
+            _settings["analyzer_configs"][req.analyzer] = _default_config_values(req.analyzer, _ANALYZERS_META)
     if req.analyzer_config is not None:
-        _settings["analyzer_config"].update(req.analyzer_config)
+        # Store config under the specific analyzer type it belongs to
+        target = req.analyzer if req.analyzer is not None else _settings["analyzer"]
+        if target not in _settings["analyzer_configs"]:
+            _settings["analyzer_configs"][target] = _default_config_values(target, _ANALYZERS_META)
+        _settings["analyzer_configs"][target].update(req.analyzer_config)
     return await get_settings()
 
 
@@ -1181,14 +1209,10 @@ async def _run_analyzer(job_id: str, req: RunAnalyzerRequest):
                 _jobs[job_id] = {"status": "error", "progress": 0, "message": "Analyzer has no config dataclass", "data": None}
                 return
 
-            # Build config from the analyzer's own defaults; only apply saved overrides
-            # when the saved analyzer type matches (prevents cross-type contamination,
-            # e.g. Mintpy_SBAS_Base load_processor="auto" overriding Hyp3_SBAS's "hyp3")
-            init_kwargs: dict = {}
-            if _settings.get("analyzer") == req.analyzer_type:
-                saved_overrides = _settings.get("analyzer_config") or {}
-                valid_keys = {f.name for f in dataclasses.fields(config_cls)}
-                init_kwargs = {k: v for k, v in saved_overrides.items() if k in valid_keys}
+            # Each analyzer type has its own config stored independently
+            saved_overrides = _settings.get("analyzer_configs", {}).get(req.analyzer_type, {})
+            valid_keys = {f.name for f in dataclasses.fields(config_cls)}
+            init_kwargs: dict = {k: v for k, v in saved_overrides.items() if k in valid_keys}
             init_kwargs["workdir"] = folder
             cfg = config_cls(**init_kwargs)
             analyzer = cls(cfg)
@@ -1689,6 +1713,25 @@ async def render_velocity(path: str):
         'pixel_height': ph,
         'unit':         unit,
     }
+
+
+@app.post("/api/folder-analyzer-cleanup")
+async def folder_analyzer_cleanup(req: RunAnalyzerRequest):
+    """Run analyzer.cleanup() to remove tmp dirs and zip archives."""
+    folder = Path(req.folder_path)
+    cls = Analyzer._registry.get(req.analyzer_type)
+    if cls is None:
+        raise HTTPException(status_code=400, detail=f"Unknown analyzer: {req.analyzer_type}")
+    config_cls = getattr(cls, "default_config", None)
+    if config_cls is None or not dataclasses.is_dataclass(config_cls):
+        raise HTTPException(status_code=400, detail="Analyzer has no config dataclass")
+    cfg = config_cls(workdir=folder)
+    analyzer = cls(cfg)
+    try:
+        analyzer.cleanup()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"ok": True}
 
 
 @app.get("/api/timeseries-pixel")

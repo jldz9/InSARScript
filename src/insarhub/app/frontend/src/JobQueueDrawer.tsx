@@ -646,6 +646,7 @@ function AnalyzerPanel({ theme: t, folderPath, analyzerType, onSettingsOpen }: A
   const [runStat,     setRunStat]    = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [progress,    setProgress]   = useState(0)
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
+  const [cleanupMsg,  setCleanupMsg]  = useState('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const _storageKey = `analyzer_job:${folderPath}`
@@ -661,6 +662,13 @@ function AnalyzerPanel({ theme: t, folderPath, analyzerType, onSettingsOpen }: A
     pollRef.current = setInterval(async () => {
       try {
         const r = await fetch(`${API}/api/jobs/${job_id}`)
+        if (!r.ok) {
+          // 404 = server restarted, job is gone
+          clearInterval(pollRef.current!); setRunStat('error')
+          setRunMsg('Job not found — server may have restarted. Please re-run.')
+          setActiveJobId(null); _clearState()
+          return
+        }
         const job = await r.json()
         const msg = job.message ?? ''
         const pct = job.progress ?? 0
@@ -694,10 +702,20 @@ function AnalyzerPanel({ theme: t, folderPath, analyzerType, onSettingsOpen }: A
         if (saved) {
           try {
             const { jobId, msg, pct } = JSON.parse(saved)
-            setRunStat('running')
-            setRunMsg(msg ?? '')
-            setProgress(pct ?? 0)
-            _startPolling(jobId)
+            // Verify job still exists on server before restoring running state
+            fetch(`${API}/api/jobs/${jobId}`).then(r => {
+              if (!r.ok) { localStorage.removeItem(`analyzer_job:${folderPath}`); return }
+              return r.json()
+            }).then(job => {
+              if (!job) return
+              if (job.status === 'done' || job.status === 'error') {
+                localStorage.removeItem(`analyzer_job:${folderPath}`)
+                setRunStat(job.status); setRunMsg(job.message ?? msg); setProgress(job.progress ?? pct)
+              } else {
+                setRunStat('running'); setRunMsg(msg ?? ''); setProgress(pct ?? 0)
+                _startPolling(jobId)
+              }
+            }).catch(() => localStorage.removeItem(`analyzer_job:${folderPath}`))
           } catch { localStorage.removeItem(`analyzer_job:${folderPath}`) }
         }
       })
@@ -802,6 +820,30 @@ function AnalyzerPanel({ theme: t, folderPath, analyzerType, onSettingsOpen }: A
           Run {checked.size} step{checked.size !== 1 ? 's' : ''}
         </button>
       )}
+
+      {/* Cleanup button */}
+      <button
+        disabled={busy}
+        onClick={() => {
+          if (!confirm('Remove tmp dirs and zip archives in this folder?')) return
+          setCleanupMsg('Cleaning…')
+          fetch(`${API}/api/folder-analyzer-cleanup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder_path: folderPath, analyzer_type: analyzerType, steps: [] }),
+          })
+            .then(r => r.json())
+            .then(() => setCleanupMsg('Cleaned'))
+            .catch(e => setCleanupMsg(`Error: ${e}`))
+        }}
+        style={{
+          padding: '6px 0', fontSize: 11, borderRadius: 4,
+          cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1,
+          background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`,
+        }}
+        title="Remove tmp dirs and zip archives"
+      >Cleanup</button>
+      {cleanupMsg && <div style={{ fontSize: 10, color: t.textMuted }}>{cleanupMsg}</div>}
 
       {/* Status message */}
       {runMsg && (
@@ -1822,14 +1864,28 @@ export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSel
             const wfEntries = Object.entries(job.workflow).filter(([k]) => k !== 'updated_at')
             return (
               <div key={job.path} style={{ padding: '10px 16px', borderBottom: `1px solid ${t.divider}` }}>
-                {/* Folder name */}
-                <span style={{
-                  color: t.text, fontSize: 12, fontFamily: 'monospace',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  display: 'block', marginBottom: wfEntries.length ? 6 : 0,
-                }} title={job.path}>
-                  {job.name}
-                </span>
+                {/* Folder name + remove button */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: wfEntries.length ? 6 : 0 }}>
+                  <span style={{
+                    color: t.text, fontSize: 12, fontFamily: 'monospace',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                  }} title={job.path}>
+                    {job.name}
+                  </span>
+                  <button
+                    title="Remove job folder"
+                    onClick={() => {
+                      if (!confirm(`Delete "${job.name}" and all its contents?`)) return
+                      fetch(`${API}/api/job-folder?path=${encodeURIComponent(job.path)}`, { method: 'DELETE' })
+                        .then(r => { if (r.ok) { if (l2?.job.path === job.path) setL2(null); loadJobs() } })
+                        .catch(() => {})
+                    }}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: t.textMuted, padding: '0 2px', fontSize: 14, lineHeight: 1, flexShrink: 0,
+                    }}
+                  >🗑</button>
+                </div>
 
                 {/* Clickable role tags — ordered downloader → processor → analyzer */}
                 {wfEntries.length > 0 && (

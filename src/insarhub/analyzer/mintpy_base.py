@@ -16,7 +16,6 @@ from insarhub.utils.tool import write_workflow_marker
 
 class Mintpy_SBAS_Base_Analyzer(BaseAnalyzer):
 
-    name = 'Mintpy_SBAS_Base_Analyzer'
     description = "Generic MintPy SBAS analyzer, fully customizable configs."
     compatible_processor = 'all'
     default_config = Mintpy_SBAS_Base_Config

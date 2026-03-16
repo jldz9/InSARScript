@@ -29,7 +29,6 @@ class ASF_Base_Downloader(BaseDownloader):
     """
     Simplify searching and downloading satellite data using ASF Search API.
     """
-    name = "ASF_Base_Downloader"
     description = "Generic ASF Search API downloader. Supports Sentinel-1, ALOS, NISAR, and more."
     default_config = ASF_Base_Config
     _DATASET_GROUP_KEYS = {

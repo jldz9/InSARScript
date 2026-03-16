@@ -40,7 +40,7 @@ interface ServerSettings {
   processor:            string
   processor_config:     Record<string, any>
   analyzer:             string
-  analyzer_config:      Record<string, any>
+  analyzer_configs:     Record<string, Record<string, any>>
 }
 
 interface PoolAccount {
@@ -96,9 +96,10 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
   const [processorType,   setProcessorType]   = useState('Hyp3_InSAR')
   const [processorConfig, setProcessorConfig] = useState<Record<string, any>>({})
 
-  // Analyzer
-  const [analyzerType,   setAnalyzerType]   = useState('Hyp3_SBAS')
-  const [analyzerConfig, setAnalyzerConfig] = useState<Record<string, any>>({})
+  // Analyzer — each type stores its own config independently
+  const [analyzerType,       setAnalyzerType]       = useState('Hyp3_SBAS')
+  const [analyzerConfig,     setAnalyzerConfig]     = useState<Record<string, any>>({})
+  const [allAnalyzerConfigs, setAllAnalyzerConfigs] = useState<Record<string, Record<string, any>>>({})
 
   // Workflow/component metadata from server
   const [meta, setMeta] = useState<WorkflowsData | null>(null)
@@ -137,8 +138,11 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
       setDownloaderConfig(s.downloader_config)
       setProcessorType(s.processor)
       setProcessorConfig(s.processor_config)
-      setAnalyzerType(initialAnalyzerType ?? s.analyzer)
-      setAnalyzerConfig(s.analyzer_config)
+      const allCfgs = s.analyzer_configs ?? {}
+      const activeType = initialAnalyzerType ?? s.analyzer
+      setAllAnalyzerConfigs(allCfgs)
+      setAnalyzerType(activeType)
+      setAnalyzerConfig(allCfgs[activeType] ?? {})
       setLoading(false)
     }).catch(() => setLoading(false))
 
@@ -206,9 +210,12 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
   }
 
   function handleAnalyzerTypeChange(type: string) {
+    // Persist current edits before switching
+    setAllAnalyzerConfigs(prev => ({ ...prev, [analyzerType]: analyzerConfig }))
     setAnalyzerType(type)
     setOpenGroups(new Set())
-    setAnalyzerConfig(applyDefaults(meta?.analyzers ?? {}, type))
+    // Load saved config for this type, fall back to defaults
+    setAnalyzerConfig(allAnalyzerConfigs[type] ?? applyDefaults(meta?.analyzers ?? {}, type))
   }
 
   async function handleSave() {
@@ -231,6 +238,7 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
       if (!res.ok) throw new Error(await res.text())
       const updated: ServerSettings = await res.json()
       setWorkdir(updated.workdir)
+      setAllAnalyzerConfigs(updated.analyzer_configs ?? {})
       setSaveMsg('Saved')
       setTimeout(() => setSaveMsg(''), 2500)
     } catch (e) {

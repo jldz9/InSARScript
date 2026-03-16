@@ -34,10 +34,9 @@ def serve(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> No
 
     print(f"\n  InSARHub is running at http://{host}:{port}\n  Open that URL in your browser to get started.\n")
     uvicorn.run(
-        "insarhub.app.api:app",
+        app,
         host=host,
         port=port,
-        reload=reload,
     )
 
 

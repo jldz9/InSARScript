@@ -10,13 +10,6 @@
     "aliases": []
   },
   {
-    "version": "v0.2.0.post1",
-    "title": "v0.2.0.post1",
-    "aliases": [
-      "latest"
-    ]
-  },
-  {
     "version": "v0.2.0",
     "title": "v0.2.0",
     "aliases": []

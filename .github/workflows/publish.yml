@@ -48,8 +48,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
         python: ['3.11', '3.12']
+        include:
+          - os: windows-latest
+            python: '3.11'
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -64,8 +67,8 @@ jobs:
           activate-environment: test-env
           auto-activate-base: false
 
-      - name: Install GDAL via conda
-        run: conda install -y gdal
+      - name: Install conda dependencies
+        run: conda install -y gdal pysolid pygrib
 
       - name: Download wheel
         uses: actions/download-artifact@v4

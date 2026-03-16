@@ -7,7 +7,7 @@ export function parseStack(s: string): { path: number; frame: number } | null {
   return { path: parseInt(m[1]), frame: parseInt(m[2]) }
 }
 
-const API = 'http://localhost:8000'
+const API = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 interface Props {
   feature:      GeoJSON.Feature

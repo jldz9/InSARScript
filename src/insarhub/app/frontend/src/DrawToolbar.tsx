@@ -7,7 +7,7 @@ interface Props {
 }
 
 const TOOLS: { mode: 'box' | 'polygon' | 'pin'; label: string; title: string }[] = [
-  { mode: 'box',     label: '⬜', title: 'Drag box AOI' },
+  { mode: 'box',     label: '⬜', title: 'Click box AOI' },
   { mode: 'polygon', label: '⬡',  title: 'Draw polygon AOI' },
   { mode: 'pin',     label: '📍', title: 'Place point AOI' },
 ]

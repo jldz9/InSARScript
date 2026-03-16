@@ -30,7 +30,7 @@ classifiers = [
 
 [project.scripts]
 insarhub = "insarhub.cli.main:main"
-insarhub-app = "insarhub.app.main:serve"
+insarhub-app = "insarhub.app.main:main"
 
 [project.urls]
 homepage = "https://jldz9.github.io/InSARHub"
@@ -38,6 +38,9 @@ repository = "https://github.com/jldz9/InSARHub"
 
 [tool.setuptools.packages.find]
 where = ['src']
+
+[tool.setuptools.package-data]
+"insarhub.app" = ["frontend/dist/**/*", "frontend/dist/index.html"]
 
 [tool.setuptools.dynamic]
 version = {attr = "insarhub._version.__version__"}

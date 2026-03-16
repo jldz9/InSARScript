@@ -18,7 +18,7 @@ export interface RasterOverlay {
   source?:   { kind: 'mintpy'; folderPath: string; tsFile: string | null }
 }
 
-const API = 'http://localhost:8000'
+const API = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 interface JobFolder {
   name:     string

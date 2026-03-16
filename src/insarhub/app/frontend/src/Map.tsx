@@ -221,12 +221,32 @@ export default function Map({
       ;(map.getSource('poly-drawing') as maplibregl.GeoJSONSource)?.setData(EMPTY_FC)
     }
 
-    // ── Box rubber-band ───────────────────────────────────────────────────
-    map.on('mousedown', (e) => {
+    // ── Box click-click ───────────────────────────────────────────────────
+    map.on('click', (e) => {
       if (drawModeRef.current !== 'box') return
-      e.preventDefault()
-      map.dragPan.disable()
-      boxStartRef.current = [e.lngLat.lng, e.lngLat.lat]
+      if (!boxStartRef.current) {
+        // First click — store start, disable pan so user can move freely
+        map.dragPan.disable()
+        boxStartRef.current = [e.lngLat.lng, e.lngLat.lat]
+      } else {
+        // Second click — complete the box
+        const start = boxStartRef.current
+        boxStartRef.current = null
+        map.dragPan.enable()
+        map.getCanvas().style.cursor = 'crosshair'
+        ;(map.getSource('box-preview') as maplibregl.GeoJSONSource)?.setData(EMPTY_FC)
+        const bbox: Bbox = [
+          Math.min(start[0], e.lngLat.lng), Math.min(start[1], e.lngLat.lat),
+          Math.max(start[0], e.lngLat.lng), Math.max(start[1], e.lngLat.lat),
+        ]
+        const [w, s, e2, n] = bbox
+        ;(map.getSource('aoi') as maplibregl.GeoJSONSource)?.setData({
+          type: 'FeatureCollection', features: [{ type: 'Feature', properties: {},
+            geometry: { type: 'Polygon', coordinates: [[[w,s],[e2,s],[e2,n],[w,n],[w,s]]] },
+          }],
+        })
+        onAoiDrawnRef.current(bboxToWkt(bbox), bbox)
+      }
     })
 
     map.on('mousemove', (e) => {
@@ -271,26 +291,6 @@ export default function Map({
 
     map.on('mouseleave', () => onMouseMove?.(null))
 
-    map.on('mouseup', (e) => {
-      if (!boxStartRef.current || drawModeRef.current !== 'box') return
-      const start = boxStartRef.current
-      boxStartRef.current = null
-      map.dragPan.enable()
-      map.getCanvas().style.cursor = 'crosshair'
-      ;(map.getSource('box-preview') as maplibregl.GeoJSONSource)?.setData(EMPTY_FC)
-      const bbox: Bbox = [
-        Math.min(start[0], e.lngLat.lng), Math.min(start[1], e.lngLat.lat),
-        Math.max(start[0], e.lngLat.lng), Math.max(start[1], e.lngLat.lat),
-      ]
-      // Show shape immediately; zoom handled by React [aoi] effect
-      const [w, s, e2, n] = bbox
-      ;(map.getSource('aoi') as maplibregl.GeoJSONSource)?.setData({
-        type: 'FeatureCollection', features: [{ type: 'Feature', properties: {},
-          geometry: { type: 'Polygon', coordinates: [[[w,s],[e2,s],[e2,n],[w,n],[w,s]]] },
-        }],
-      })
-      onAoiDrawnRef.current(bboxToWkt(bbox), bbox)
-    })
 
     // ── Polygon: single click adds vertex ─────────────────────────────────
     map.on('click', (e) => {
@@ -485,7 +485,6 @@ export default function Map({
       type: 'Feature', properties: {},
       geometry: { type: 'Polygon', coordinates: [[[w,s],[e,s],[e,n],[w,n],[w,s]]] },
     }]})
-    map.fitBounds([[w, s], [e, n]], { padding: 60 })
   }, [aoi, aoiGeojson])
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />

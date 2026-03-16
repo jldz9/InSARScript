@@ -13,7 +13,7 @@ import { bboxToWkt, geometryToWkt, getGeometryBbox, type Bbox } from './geoUtils
 import { DARK, LIGHT } from './theme'
 import shpjs from 'shpjs'
 
-const API = 'http://localhost:8000'
+const API = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 // ── Colorbar ────────────────────────────────────────────────────────────────
 function colormapGradient(type: string): string {
@@ -171,7 +171,7 @@ export default function App() {
 
   // Search state
   const [searching,   setSearching]   = useState(false)
-  const [resultCount, setResultCount] = useState('')
+  const [_resultCount, setResultCount] = useState('')
   const [footprints,  setFootprints]  = useState<GeoJSON.FeatureCollection | null>(null)
   const [_sessionId,  setSessionId]   = useState<string | null>(null)
 

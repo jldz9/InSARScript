@@ -19,8 +19,8 @@ from pip:
     Since GDAL depends on non-Python system libraries, we will add it via conda: 
 
 ```bash
-pip install insarhub
 conda install gdal
+pip install insarhub
 ```
 
 ### Development Setup

@@ -1,0 +1,112 @@
+name: Build, Test & Publish
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  # ── 1. Build wheel (Linux only — pure Python, works on all platforms) ─────
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/insarhub/app/frontend/package-lock.json
+
+      - name: Build React frontend
+        working-directory: src/insarhub/app/frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # ── 2. Test install on all platforms ─────────────────────────────────────
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Install from wheel
+        shell: bash
+        run: pip install dist/*.whl
+
+      - name: Smoke test — import
+        run: python -c "import insarhub; print('version:', insarhub.__version__)"
+
+      - name: Smoke test — insarhub-app --version
+        run: insarhub-app --version
+
+  # ── 3. Publish to TestPyPI  (tags like v0.2.0rc1, v0.2.0a1, v0.2.0b1) ───
+  publish-testpypi:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') && (contains(github.ref, 'rc') || contains(github.ref, 'a') || contains(github.ref, 'b'))
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  # ── 4. Publish to PyPI  (clean tags like v0.2.0) ─────────────────────────
+  publish-pypi:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, 'rc') && !contains(github.ref, 'a') && !contains(github.ref, 'b')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

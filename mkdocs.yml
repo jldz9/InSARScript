@@ -42,16 +42,17 @@ nav:
   - QuickStart:
         - Installation: quickstart/install.md
         - API Setup: quickstart/api_setup.md
-        - Running: 
+        - Running:
           - API: quickstart/running.md
           - CLI: quickstart/cli.md
+          - Web UI: quickstart/frontend.md
   - Advanced:
         - Downloader: advanced/downloader.md
         - Processor: advanced/processor.md
         - Analyzer: advanced/analyzer.md
         - Utilities: advanced/utilities.md
+        - Frontend Reference: advanced/frontend.md
 
-  - About: about.md
 
 extra:
   social:

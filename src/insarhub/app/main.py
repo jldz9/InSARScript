@@ -47,7 +47,12 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload (dev only)")
+    parser.add_argument("--version", action="store_true", help="Print version and exit")
     args = parser.parse_args()
+    if args.version:
+        from insarhub._version import __version__
+        print(__version__)
+        return
     serve(host=args.host, port=args.port, reload=args.reload)
 
 

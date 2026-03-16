@@ -8,29 +8,31 @@
       
       
       
-        <link rel="canonical" href="https://jldz9.github.io/InSARHub/dev/">
+        <link rel="canonical" href="https://jldz9.github.io/InSARHub/dev/quickstart/frontend/">
       
       
+        <link rel="prev" href="../cli/">
       
-        <link rel="next" href="quickstart/install/">
+      
+        <link rel="next" href="../../advanced/downloader/">
       
       
         
       
       
-      <link rel="icon" href="assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
     
     
       
-        <title>InSARHub</title>
+        <title>Web UI - InSARHub</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -49,11 +51,11 @@
       
     
     
-      <link rel="stylesheet" href="assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -125,7 +127,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#welcome-to-insarhub" class="md-skip">
+        <a href="#web-ui" class="md-skip">
           Skip to content
         </a>
       
@@ -145,7 +147,7 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="InSARHub" class="md-header__button md-logo" aria-label="InSARHub" data-md-component="logo">
+    <a href="../.." title="InSARHub" class="md-header__button md-logo" aria-label="InSARHub" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -165,7 +167,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              Web UI
             
           </span>
         </div>
@@ -270,11 +272,9 @@
   
   
   
-    
   
-  
-    <li class="md-tabs__item md-tabs__item--active">
-      <a href="." class="md-tabs__link">
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
         
   
   
@@ -291,11 +291,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="quickstart/install/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../install/" class="md-tabs__link">
           
   
   
@@ -315,7 +317,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="advanced/downloader/" class="md-tabs__link">
+        <a href="../../advanced/downloader/" class="md-tabs__link">
           
   
   
@@ -355,7 +357,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="InSARHub" class="md-nav__button md-logo" aria-label="InSARHub" data-md-component="logo">
+    <a href="../.." title="InSARHub" class="md-nav__button md-logo" aria-label="InSARHub" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -382,35 +384,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Home
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="." class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -426,68 +403,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#welcome-to-insarhub" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Welcome to InSARHub !
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#system-requirement" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        System Requirement
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#disclaimer" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Disclaimer
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#need-help" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Need Help?
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -496,28 +411,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
-        
-          
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
             
   
   
@@ -535,7 +453,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -553,7 +471,7 @@
   
   
     <li class="md-nav__item">
-      <a href="quickstart/install/" class="md-nav__link">
+      <a href="../install/" class="md-nav__link">
         
   
   
@@ -581,7 +499,7 @@
   
   
     <li class="md-nav__item">
-      <a href="quickstart/api_setup/" class="md-nav__link">
+      <a href="../api_setup/" class="md-nav__link">
         
   
   
@@ -606,28 +524,31 @@
                 
   
   
+    
   
   
+  
     
     
     
     
       
       
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
         
           
+          
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_3" >
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3" checked>
         
           
-          <label class="md-nav__link" for="__nav_2_3" id="__nav_2_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_3" id="__nav_2_3_label" tabindex="">
             
   
   
@@ -645,7 +566,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -663,7 +584,7 @@
   
   
     <li class="md-nav__item">
-      <a href="quickstart/running/" class="md-nav__link">
+      <a href="../running/" class="md-nav__link">
         
   
   
@@ -691,7 +612,7 @@
   
   
     <li class="md-nav__item">
-      <a href="quickstart/cli/" class="md-nav__link">
+      <a href="../cli/" class="md-nav__link">
         
   
   
@@ -716,10 +637,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="quickstart/frontend/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -735,6 +683,114 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#launch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Launch
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interface-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interface Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#top-bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Top Bar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#drawing-an-aoi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Drawing an AOI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#search-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search &amp; Results
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#job-folders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Job Folders
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next Steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -816,7 +872,7 @@
   
   
     <li class="md-nav__item">
-      <a href="advanced/downloader/" class="md-nav__link">
+      <a href="../../advanced/downloader/" class="md-nav__link">
         
   
   
@@ -844,7 +900,7 @@
   
   
     <li class="md-nav__item">
-      <a href="advanced/processor/" class="md-nav__link">
+      <a href="../../advanced/processor/" class="md-nav__link">
         
   
   
@@ -872,7 +928,7 @@
   
   
     <li class="md-nav__item">
-      <a href="advanced/analyzer/" class="md-nav__link">
+      <a href="../../advanced/analyzer/" class="md-nav__link">
         
   
   
@@ -900,7 +956,7 @@
   
   
     <li class="md-nav__item">
-      <a href="advanced/utilities/" class="md-nav__link">
+      <a href="../../advanced/utilities/" class="md-nav__link">
         
   
   
@@ -928,7 +984,7 @@
   
   
     <li class="md-nav__item">
-      <a href="advanced/frontend/" class="md-nav__link">
+      <a href="../../advanced/frontend/" class="md-nav__link">
         
   
   
@@ -973,6 +1029,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -981,10 +1039,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#welcome-to-insarhub" class="md-nav__link">
+  <a href="#launch" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Welcome to InSARHub !
+        Launch
       
     </span>
   </a>
@@ -992,10 +1050,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#system-requirement" class="md-nav__link">
+  <a href="#interface-overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        System Requirement
+        Interface Overview
       
     </span>
   </a>
@@ -1003,10 +1061,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#disclaimer" class="md-nav__link">
+  <a href="#top-bar" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Disclaimer
+        Top Bar
       
     </span>
   </a>
@@ -1014,10 +1072,54 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#need-help" class="md-nav__link">
+  <a href="#drawing-an-aoi" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Need Help?
+        Drawing an AOI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#search-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search &amp; Results
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#job-folders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Job Folders
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next Steps
       
     </span>
   </a>
@@ -1044,56 +1146,146 @@
   
 
 
-  <h1>Home</h1>
+<h1 id="web-ui">Web UI</h1>
+<p>InSARHub includes a built-in web interface that lets you run the full InSAR workflow from a browser — no Python scripting required.</p>
+<h2 id="launch">Launch</h2>
+<p>After installing InSARHub, start the web server with:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>insarhub-app
+</span></code></pre></div>
+<p>Then open <strong><a href="http://127.0.0.1:8000">http://127.0.0.1:8000</a></strong> in your browser.</p>
+<p>Options:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>insarhub-app<span class="w"> </span>--host<span class="w"> </span><span class="m">0</span>.0.0.0<span class="w">   </span><span class="c1"># expose to your local network</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>insarhub-app<span class="w"> </span>--port<span class="w"> </span><span class="m">8080</span><span class="w">       </span><span class="c1"># change port</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>insarhub-app<span class="w"> </span>--version<span class="w">         </span><span class="c1"># print version and exit</span>
+</span></code></pre></div>
+<hr />
+<h2 id="interface-overview">Interface Overview</h2>
+<div style="text-align: center;">
+<pre class="mermaid"><code>graph LR
+    A[Top Bar\nSearch &amp; Filters] --&gt; B[Map]
+    B --&gt; C[Draw Tools\nAOI]
+    B --&gt; D[Basemap\nSwitcher]
+    E[Job Folders\nDrawer] --&gt; F[Downloader\nPanel]
+    E --&gt; G[Processor\nPanel]
+    E --&gt; H[Analyzer\nPanel]
+    H --&gt; I[MintPy\nResults Viewer]</code></pre>
+</div>
 
-<h2 id="welcome-to-insarhub">Welcome to InSARHub ! <img alt="🎉" class="twemoji" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@16.0.1/assets/svg/1f389.svg" title=":tada:" /></h2>
-<p>InSAR Script is an open-source package designed to support the full InSAR processing pipeline.
-The primary goal of this package is to provide a streamlined and user-friendly InSAR processing experience across multiple satellite products.</p>
-<p>To begin with the tutorial, click following buttons to:</p>
-<p><a class="md-button md-button--lg md-button--primary" href="quickstart/install/">QuickStart</a></p>
-<p>This document will assume you have fundimental understanding of: </p>
-<ul>
-<li><a href="https://www.w3schools.com/python/">Python</a> </li>
-<li><a href="https://www.geeksforgeeks.org/linux-commands-cheat-sheet/">Linux</a></li>
-<li><a href="https://docs.conda.io/projects/conda/en/4.6.0/_downloads/52a95608c49671267e40c689e0bc00ca/conda-cheatsheet.pdf">Conda</a></li>
-</ul>
-<h2 id="system-requirement">System Requirement</h2>
-<p>InSARHub is designed to run on Unix-based systems. Internet connection is required. 
-Windows compatibility is under testing and may not function reliably.</p>
-<p>The package has been tested under Ubuntu 22.04.4 LTS </p>
-<p>Test environment:</p>
+<hr />
+<h2 id="top-bar">Top Bar</h2>
+<p>The top bar contains the main search controls:</p>
 <table>
 <thead>
 <tr>
-<th>Category</th>
-<th>Model</th>
+<th>Control</th>
+<th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>CPU</td>
-<td>AMD Ryzen 7 7800x3d</td>
+<td><strong>Start / End date</strong></td>
+<td>Date range for SAR scene search</td>
 </tr>
 <tr>
-<td>GPU</td>
-<td>Nvidia 4070 Super</td>
+<td><strong>Search</strong></td>
+<td>Run an ASF scene search for the current AOI</td>
 </tr>
 <tr>
-<td>Memory</td>
-<td>64GB DDR5</td>
+<td><strong>Settings</strong></td>
+<td>Open the global settings panel</td>
 </tr>
 <tr>
-<td>Operate System</td>
-<td>Ubuntu 22.04.4 LTS</td>
+<td><strong>Jobs</strong></td>
+<td>Open the Job Folders drawer</td>
+</tr>
+<tr>
+<td><strong>Theme</strong></td>
+<td>Toggle dark / light mode</td>
 </tr>
 </tbody>
 </table>
-<h2 id="disclaimer">Disclaimer</h2>
-<p>This package is provided "as-is" without any warranties, express or implied. The authors and contributors make no guarantees regarding the functionality, reliability, or suitability of the package for any particular purpose. By using this package, you assume all risks associated with its use, and the developers are not liable for any damages or issues that may arise, whether directly or indirectly, from its use.</p>
-<h2 id="need-help">Need Help?</h2>
-<p>Meanwhile, if you have any question relate to the package or the documentation, please feel free to submit <a href="https://github.com/jldz9/InSARHub/issues"><img alt="GitHub" src="https://img.shields.io/badge/Issue-%2312100E?logo=github&amp;logoColor=black&amp;color=white" /></a>, 
-join <a href="https://discord.gg/RJJM42MBUU"><img alt="Discord" src="https://img.shields.io/badge/Discord-%235865F2?logo=discord&amp;logoColor=white" /></a>, 
-or send me <a href="mailto:jiaweiliwork@outlook.com"><img alt="Email" src="https://img.shields.io/badge/Email-%23EA4335?logo=gmail&amp;logoColor=white" /></a></p>
+<hr />
+<h2 id="drawing-an-aoi">Drawing an AOI</h2>
+<p>Click one of the draw tools on the left side of the map:</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>⬜ <strong>Box</strong></td>
+<td>Click once to set the first corner, move mouse to preview, click again to finish</td>
+</tr>
+<tr>
+<td>⬡ <strong>Polygon</strong></td>
+<td>Click to add vertices, double-click to close</td>
+</tr>
+<tr>
+<td>📍 <strong>Pin</strong></td>
+<td>Click to place a point</td>
+</tr>
+<tr>
+<td>📂 <strong>Shapefile</strong></td>
+<td>Upload a <code>.zip</code> shapefile</td>
+</tr>
+</tbody>
+</table>
+<p>Click the active tool again to cancel drawing.</p>
+<hr />
+<h2 id="search-results">Search &amp; Results</h2>
+<ol>
+<li>Draw an AOI on the map</li>
+<li>Set a date range in the top bar</li>
+<li>Click <strong>Search</strong> — scene footprints appear on the map as colored outlines</li>
+<li>Click any footprint to view scene details (path, frame, date, polarization)</li>
+</ol>
+<hr />
+<h2 id="settings">Settings</h2>
+<p>Click the ⚙ Settings button to configure:</p>
+<ul>
+<li><strong>General</strong> — working directory, download workers</li>
+<li><strong>Auth</strong> — Earthdata and CDSE credentials</li>
+<li><strong>Downloader</strong> — downloader type and parameters</li>
+<li><strong>Processor</strong> — processor type and parameters</li>
+<li><strong>Analyzer</strong> — per-analyzer config (each analyzer type stores its own settings independently)</li>
+</ul>
+<hr />
+<h2 id="job-folders">Job Folders</h2>
+<p>Click <strong>Jobs</strong> to open the Job Folders drawer. InSARHub scans your working directory and lists all subfolders that contain recognized workflow files.</p>
+<p>Each folder shows clickable role tags:</p>
+<table>
+<thead>
+<tr>
+<th>Tag</th>
+<th>What it means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Downloader</strong></td>
+<td>Folder has a <code>downloader_config.json</code></td>
+</tr>
+<tr>
+<td><strong>Processor</strong></td>
+<td>Folder has a <code>hyp3_jobs.json</code></td>
+</tr>
+<tr>
+<td><strong>Analyzer</strong></td>
+<td>Folder has a <code>mintpy.cfg</code></td>
+</tr>
+</tbody>
+</table>
+<p>Click a tag to open that role's panel. Click 🗑 to delete the entire job folder.</p>
+<hr />
+<h2 id="next-steps">Next Steps</h2>
+<p>For detailed usage of each panel, see:</p>
+<p><a class="md-button" href="../../advanced/frontend/#downloader-panel">Downloader Panel</a>
+<a class="md-button" href="../../advanced/frontend/#processor-panel">Processor Panel</a>
+<a class="md-button" href="../../advanced/frontend/#analyzer-panel">Analyzer Panel</a>
+<a class="md-button" href="../../advanced/frontend/#mintpy-results-viewer">Results Viewer</a></p>
 
 
 
@@ -1196,10 +1388,10 @@ or send me <a href="mailto:jiaweiliwork@outlook.com"><img alt="Email" src="https
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.instant", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.instant", "toc.follow", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "announce.dismiss"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.instant", "toc.follow", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "announce.dismiss"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>

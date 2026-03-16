@@ -51,11 +51,21 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python: ['3.11', '3.12']
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -el {0}   # required for conda to activate correctly
     steps:
-      - name: Set up Python ${{ matrix.python }}
-        uses: actions/setup-python@v5
+      - name: Set up conda with Python ${{ matrix.python }}
+        uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: ${{ matrix.python }}
+          channels: conda-forge,defaults
+          channel-priority: strict
+          activate-environment: test-env
+          auto-activate-base: false
+
+      - name: Install GDAL via conda
+        run: conda install -y gdal
 
       - name: Download wheel
         uses: actions/download-artifact@v4
@@ -64,7 +74,6 @@ jobs:
           path: dist/
 
       - name: Install from wheel
-        shell: bash
         run: pip install dist/*.whl
 
       - name: Smoke test — import

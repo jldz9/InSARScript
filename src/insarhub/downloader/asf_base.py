@@ -840,7 +840,7 @@ Check documentation for how to setup .netrc file.\n""")
 
         try:
             for future in as_completed(futures):
-                file_id, status, value, error, _ = future.result()
+                file_id, status, value, error = future.result()
 
                 if status == 'success':
                     print(f"  {Fore.GREEN}✔ {file_id} ({value:.1f} MB/s)")

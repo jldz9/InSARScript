@@ -1092,8 +1092,8 @@ def cmd_downloader(args, extra_args: list[str]):
                 print(f"[ERROR] PATH and FRAME must be integers, got '{token}'", file=sys.stderr)
                 sys.exit(1)
         # Broad search to reduce API response; exact-pair filter applied after search
-        overrides["relativeOrbit"] = [p for p, _ in parsed]
-        overrides["frame"]         = [f for _, f in parsed]
+        overrides["relativeOrbit"] = list(dict.fromkeys(p for p, _ in parsed))
+        overrides["frame"]         = list(dict.fromkeys(f for _, f in parsed))
         stacks_filter = parsed
     else:
         # Reconstruct stacks_filter from saved config lists so the exact-pair filter
@@ -1141,6 +1141,11 @@ def cmd_downloader(args, extra_args: list[str]):
             dl_kwargs["download_orbit"] = args.orbit_files
         result = DownloadScenesCommand(downloader, **dl_kwargs).run()
         _fail(result, "download")
+    elif args.orbit_files:
+        if hasattr(downloader, "download_orbit"):
+            downloader.download_orbit()
+        else:
+            print("[WARNING] This downloader does not support orbit file download.", file=sys.stderr)
 
 
 def cmd_processor(args, extra_args: list[str]):

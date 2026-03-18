@@ -74,9 +74,19 @@ IF you wish to download orbit files from ASF and skip CDSE, use .download_orbit(
             for i, result in enumerate(results, start=1):
                 print(f"Searching orbit files for {i}/{len(results)}: {result.properties['fileID']}")
                 scene_name = result.properties['sceneName']
+                acq_time = scene_name.replace("__", "_").split("_")[4]  # e.g. 20241119T143616
                 existing = list(download_path.glob("*.EOF"))
-                if existing:
-                    print(f"{Fore.GREEN}Orbit file already exists, skipping: {existing[0].name}")
+                already_have = False
+                for eof in existing:
+                    # EOF filename: ..._V{valid_start}_{valid_end}.EOF
+                    parts = eof.stem.split("_V")
+                    if len(parts) == 2:
+                        validity = parts[1].split("_")
+                        if len(validity) == 2 and validity[0] <= acq_time <= validity[1]:
+                            print(f"{Fore.GREEN}Orbit file already exists, skipping: {eof.name}")
+                            already_have = True
+                            break
+                if already_have:
                     continue
                 print(f"Searching orbit for {scene_name}")
                 orbit_kwargs = dict(

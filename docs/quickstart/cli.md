@@ -128,17 +128,29 @@ insarhub downloader -N S1_SLC \
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-d`, `--download` | — | Download scenes after search |
-| `-O`, `--orbit-files` | — | Also download orbit files (Sentinel-1 only) |
+| `-O`, `--orbit-files [PATH]` | — | Download orbit files. Omit `PATH` to save alongside scenes (one subfolder per stack); provide `PATH` to collect all orbit files into that directory |
 | `--workers` | `3` | Parallel download workers |
 | `--footprint` | `<workdir>/footprint.png` | Save a footprint map image to this path |
 
 ```bash
-# Search, select pairs, and download in one command
+# Search, select pairs, and download with orbit files saved per-stack
 insarhub downloader -N S1_SLC \
     --AOI -113.05 37.74 -112.68 38.00 \
     --start 2020-01-01 --end 2020-12-31 \
-    --select-pairs --download --orbit-files \
+    --select-pairs --download -O \
     --footprint footprint.png
+
+# Save all orbit files to a specific directory
+insarhub downloader -N S1_SLC \
+    --AOI -113.05 37.74 -112.68 38.00 \
+    --start 2020-01-01 --end 2020-12-31 \
+    --download -O orbits/
+
+# Download orbit files only (no scene download)
+insarhub downloader -N S1_SLC \
+    --AOI -113.05 37.74 -112.68 38.00 \
+    --start 2020-01-01 --end 2020-12-31 \
+    -O orbits/
 ```
 
 ---

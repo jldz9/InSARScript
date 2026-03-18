@@ -18,6 +18,7 @@ dependencies = [
 "mintpy",
 "rasterio>=1.4",
 "sentineleof",
+"openpyxl",
 "fastapi",
 "uvicorn",
 "numpy<2.0",

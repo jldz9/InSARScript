@@ -18,6 +18,7 @@ import dataclasses
 import json
 import os
 import tempfile
+import threading as _threading
 import uuid
 from pathlib import Path
 from typing import Any
@@ -258,6 +259,25 @@ class DownloadSceneRequest(BaseModel):
 class DownloadStackRequest(BaseModel):
     urls:    list[str] = Field(..., description="List of ASF download URLs for the stack")
     workdir: str       = Field(default=".", example="/data/bryce")
+
+
+class AddJobRequest(BaseModel):
+    workdir: str
+    relativeOrbit: int
+    frame: int
+    start: str
+    end: str
+    wkt: str | None = None
+    flightDirection: str | None = None
+    platform: str | None = None
+    downloaderType: str = "S1_SLC"
+
+
+class DownloadByNameRequest(BaseModel):
+    scene_names: list[str] = Field(default=[], description="Explicit list of scene/granule names (with or without .zip/.SAFE extension)")
+    scene_file: str | None = Field(default=None, description="Path to a CSV, XLSX, or TXT file containing scene names (used if scene_names is empty)")
+    workdir: str = Field(default=".", description="Parent directory; subfolders p{path}_f{frame}/ are created automatically")
+    downloaderType: str = Field(default="S1_SLC", description="Downloader to use")
 
 
 class JobResponse(BaseModel):
@@ -736,56 +756,82 @@ async def _run_download_scene(job_id: str, req: DownloadSceneRequest):
 
 
 @app.post("/api/download-stack", response_model=JobResponse)
-async def download_stack(req: DownloadStackRequest, background_tasks: BackgroundTasks):
-    """
-    Download all scenes in a stack by their ASF URLs.
-    Authentication is handled via ~/.netrc (Earthdata Login).
-    """
+async def download_stack(req: AddJobRequest, background_tasks: BackgroundTasks):
+    """Search and download all scenes for a stack into workdir/p{path}_f{frame}/."""
     job_id = str(uuid.uuid4())
-    _jobs[job_id] = {"status": "running", "progress": 0, "message": "Starting stack download...", "data": None}
-    background_tasks.add_task(_run_download_stack, job_id, req)
+    _jobs[job_id] = {"status": "running", "progress": 0, "message": "Starting…", "data": None}
+    stop_ev = _threading.Event()
+    _stop_events[job_id] = stop_ev
+    background_tasks.add_task(_run_download_stack, job_id, req, stop_ev)
     return {"job_id": job_id}
 
 
-async def _run_download_stack(job_id: str, req: DownloadStackRequest):
+async def _run_download_stack(job_id: str, req: AddJobRequest, stop_ev: _threading.Event):
     def run():
         try:
-            import asf_search as asf
-
-            workdir = Path(req.workdir)
+            workdir = Path(req.workdir).expanduser().resolve()
             workdir.mkdir(parents=True, exist_ok=True)
 
-            total = len(req.urls)
-            _jobs[job_id]["message"] = f"Downloading {total} scenes…"
+            # workdir is the parent — download() creates p{path}_f{frame}/ subfolders itself
+            cfg = S1_SLC_Config(workdir=workdir)
+            valid_fields = {f.name for f in dataclasses.fields(cfg)}
+            for key, val in _settings.get("downloader_config", {}).items():
+                if key in valid_fields and key != "workdir" and val is not None:
+                    try:
+                        setattr(cfg, key, val)
+                    except Exception:
+                        pass
+            for key, val in {
+                "start": req.start, "end": req.end,
+                "relativeOrbit": req.relativeOrbit, "frame": req.frame,
+                "intersectsWith": req.wkt,
+                "flightDirection": req.flightDirection, "platform": req.platform,
+            }.items():
+                if key in valid_fields and val is not None:
+                    setattr(cfg, key, val)
 
-            asf.download_urls(
-                urls=req.urls,
-                path=str(workdir),
-                processes=min(_settings["max_download_workers"], total),
-            )
+            downloader = Downloader.create("S1_SLC", cfg)
+            _jobs[job_id]["message"] = "Searching scenes…"
+            search_result = SearchCommand(downloader).run()
+            if not search_result.success:
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": search_result.message, "data": None}
+                return
 
-            _jobs[job_id] = {
-                "status":   "done",
-                "progress": 100,
-                "message":  f"Downloaded {total} scene{'s' if total != 1 else ''} to {workdir}",
-                "data":     str(workdir),
-            }
+            if stop_ev.is_set():
+                _jobs[job_id] = {"status": "done", "progress": 0, "message": "Stopped.", "data": None}
+                return
+
+            total = sum(len(v) for v in downloader.results.values())
+            _jobs[job_id]["message"] = f"Downloading 0/{total}"
+            _jobs[job_id]["progress"] = 0
+
+            def _on_progress(msg: str, pct: int):
+                # msg is "[X/N] ✔ filename" — extract just the X/N count
+                count = msg.split(']')[0].lstrip('[') if ']' in msg else ''
+                _jobs[job_id]["message"] = f"Downloading {count}" if count else msg
+                _jobs[job_id]["progress"] = pct
+
+            dl_result = DownloadScenesCommand(
+                downloader,
+                stop_event=stop_ev,
+                on_progress=_on_progress,
+            ).run()
+            save_dir = workdir / f"p{req.relativeOrbit}_f{req.frame}"
+            if stop_ev.is_set():
+                _jobs[job_id] = {"status": "done", "progress": 0, "message": "Stopped.", "data": None}
+            else:
+                _jobs[job_id] = {
+                    "status":   "done" if dl_result.success else "error",
+                    "progress": 100,
+                    "message":  dl_result.message,
+                    "data":     str(save_dir),
+                }
         except Exception as e:
             _jobs[job_id] = {"status": "error", "progress": 0, "message": str(e), "data": None}
+        finally:
+            _stop_events.pop(job_id, None)
 
     await asyncio.to_thread(run)
-
-
-class AddJobRequest(BaseModel):
-    workdir: str
-    relativeOrbit: int
-    frame: int
-    start: str
-    end: str
-    wkt: str | None = None
-    flightDirection: str | None = None
-    platform: str | None = None
-    downloaderType: str = "S1_SLC"
 
 
 @app.post("/api/add-job")
@@ -821,6 +867,63 @@ async def add_job(req: AddJobRequest):
     (subdir / "downloader_config.json").write_text(json.dumps(cfg, indent=2, default=str))
     write_workflow_marker(subdir, downloader=req.downloaderType)
     return {"path": str(subdir), "name": subdir.name}
+
+
+@app.post("/api/download-orbit-stack", response_model=JobResponse)
+async def download_orbit_stack(req: AddJobRequest, background_tasks: BackgroundTasks):
+    """Search and download orbit files for a single stack (used from Stack Info panel)."""
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "running", "progress": 0, "message": "Starting orbit download…", "data": None}
+    background_tasks.add_task(_run_download_orbit_stack, job_id, req)
+    return {"job_id": job_id}
+
+
+async def _run_download_orbit_stack(job_id: str, req: AddJobRequest):
+    stop_ev = _threading.Event()
+    _stop_events[job_id] = stop_ev
+
+    def run():
+        try:
+            workdir = Path(req.workdir).expanduser().resolve()
+            save_dir = workdir / f"p{req.relativeOrbit}_f{req.frame}"
+            save_dir.mkdir(parents=True, exist_ok=True)
+
+            cfg = S1_SLC_Config(workdir=save_dir)
+            valid_fields = {f.name for f in dataclasses.fields(cfg)}
+            for key, val in _settings.get("downloader_config", {}).items():
+                if key in valid_fields and key != "workdir" and val is not None:
+                    try:
+                        setattr(cfg, key, val)
+                    except Exception:
+                        pass
+            for key, val in {
+                "start": req.start, "end": req.end,
+                "relativeOrbit": req.relativeOrbit, "frame": req.frame,
+                "intersectsWith": req.wkt,
+                "flightDirection": req.flightDirection, "platform": req.platform,
+            }.items():
+                if key in valid_fields and val is not None:
+                    setattr(cfg, key, val)
+
+            downloader = Downloader.create("S1_SLC", cfg)
+            _jobs[job_id]["message"] = "Searching scenes…"
+            search_result = SearchCommand(downloader, progress_callback=_make_progress(job_id)).run()
+            if not search_result.success:
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": search_result.message, "data": None}
+                return
+
+            _jobs[job_id]["message"] = "Downloading orbit files…"
+            downloader.download_orbit(save_dir=str(save_dir), stop_event=stop_ev)
+            if stop_ev.is_set():
+                _jobs[job_id] = {"status": "done", "progress": 0, "message": "Stopped.", "data": None}
+            else:
+                _jobs[job_id] = {"status": "done", "progress": 100, "message": "Orbit files downloaded.", "data": None}
+        except Exception as e:
+            _jobs[job_id] = {"status": "error", "progress": 0, "message": str(e), "data": None}
+        finally:
+            _stop_events.pop(job_id, None)
+
+    await asyncio.to_thread(run)
 
 
 class FolderDownloadRequest(BaseModel):
@@ -915,6 +1018,58 @@ async def _run_folder_download(job_id: str, folder_path: str):
             }
         except Exception as e:
             _jobs[job_id] = {"status": "error", "progress": 0, "message": str(e), "data": None}
+
+    await asyncio.to_thread(run)
+
+
+@app.post("/api/folder-download-orbit", response_model=JobResponse)
+async def folder_download_orbit(req: FolderDownloadRequest, background_tasks: BackgroundTasks):
+    """Download orbit files for scenes in a job folder."""
+    folder = Path(req.folder_path)
+    cfg_file = folder / "downloader_config.json"
+    if not cfg_file.exists():
+        raise HTTPException(status_code=404, detail="downloader_config.json not found in folder")
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "running", "progress": 0, "message": "Starting orbit download…", "data": None}
+    background_tasks.add_task(_run_folder_download_orbit, job_id, req.folder_path)
+    return {"job_id": job_id}
+
+
+async def _run_folder_download_orbit(job_id: str, folder_path: str):
+    stop_ev = _threading.Event()
+    _stop_events[job_id] = stop_ev
+
+    def run():
+        try:
+            folder = Path(folder_path)
+            raw: dict[str, Any] = json.loads((folder / "downloader_config.json").read_text())
+
+            cfg = S1_SLC_Config(workdir=folder)
+            valid_fields = {f.name for f in dataclasses.fields(cfg)}
+            for key, val in raw.items():
+                if key in valid_fields and key != "workdir" and val is not None:
+                    try:
+                        setattr(cfg, key, val)
+                    except Exception:
+                        pass
+
+            downloader = Downloader.create("S1_SLC", cfg)
+            _jobs[job_id]["message"] = "Searching scenes…"
+            search_result = SearchCommand(downloader, progress_callback=_make_progress(job_id)).run()
+            if not search_result.success:
+                _jobs[job_id] = {"status": "error", "progress": 0, "message": search_result.message, "data": None}
+                return
+
+            _jobs[job_id]["message"] = "Downloading orbit files…"
+            downloader.download_orbit(save_dir=str(folder), stop_event=stop_ev)
+            if stop_ev.is_set():
+                _jobs[job_id] = {"status": "done", "progress": 0, "message": "Stopped.", "data": None}
+            else:
+                _jobs[job_id] = {"status": "done", "progress": 100, "message": "Orbit files downloaded.", "data": None}
+        except Exception as e:
+            _jobs[job_id] = {"status": "error", "progress": 0, "message": str(e), "data": None}
+        finally:
+            _stop_events.pop(job_id, None)
 
     await asyncio.to_thread(run)
 
@@ -1921,6 +2076,82 @@ async def parse_aoi(req: ParseAoiRequest):
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Download by scene name
+# ---------------------------------------------------------------------------
+
+@app.post("/api/download-by-name", response_model=JobResponse)
+async def download_by_name(req: DownloadByNameRequest, background_tasks: BackgroundTasks):
+    """Search ASF by granule name(s) and download them into workdir subfolders.
+
+    Provide either ``scene_names`` (explicit list) or ``scene_file`` (path to a
+    CSV / XLSX / TXT file).  Both may be supplied; they are merged.
+    """
+    if not req.scene_names and not req.scene_file:
+        raise HTTPException(status_code=422, detail="Provide scene_names or scene_file")
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "running", "progress": 0, "message": "Starting…", "data": None}
+    stop_ev = _threading.Event()
+    _stop_events[job_id] = stop_ev
+    background_tasks.add_task(_run_download_by_name, job_id, req, stop_ev)
+    return {"job_id": job_id}
+
+
+async def _run_download_by_name(job_id: str, req: DownloadByNameRequest, stop_ev: _threading.Event):
+    def run():
+        try:
+            workdir = Path(req.workdir).expanduser().resolve()
+            workdir.mkdir(parents=True, exist_ok=True)
+
+            dl_cls  = Downloader._registry.get(req.downloaderType)
+            cfg_cls = getattr(dl_cls, "default_config", S1_SLC_Config) if dl_cls else S1_SLC_Config
+            cfg = cfg_cls(workdir=workdir)
+
+            downloader = Downloader.create(req.downloaderType, cfg)
+
+            from insarhub.utils.tool import parse_scene_names_from_file
+            names: list[str] = list(req.scene_names)
+            if req.scene_file:
+                names = list(dict.fromkeys(names + parse_scene_names_from_file(req.scene_file)))
+            cfg.granule_names = names
+            _jobs[job_id]["message"] = f"Searching {len(names)} scene(s)…"
+            downloader.search()
+
+            if stop_ev.is_set():
+                _jobs[job_id] = {"status": "done", "progress": 0, "message": "Stopped.", "data": None}
+                return
+
+            total = sum(len(v) for v in downloader.results.values())
+            _jobs[job_id]["message"] = f"Downloading 0/{total}"
+
+            def _on_progress(msg: str, pct: int):
+                count = msg.split(']')[0].lstrip('[') if ']' in msg else ''
+                _jobs[job_id]["message"] = f"Downloading {count}" if count else msg
+                _jobs[job_id]["progress"] = pct
+
+            dl_result = DownloadScenesCommand(
+                downloader,
+                stop_event=stop_ev,
+                on_progress=_on_progress,
+            ).run()
+
+            if stop_ev.is_set():
+                _jobs[job_id] = {"status": "done", "progress": 0, "message": "Stopped.", "data": None}
+            else:
+                _jobs[job_id] = {
+                    "status":   "done" if dl_result.success else "error",
+                    "progress": 100,
+                    "message":  dl_result.message,
+                    "data":     str(workdir),
+                }
+        except Exception as e:
+            _jobs[job_id] = {"status": "error", "progress": 0, "message": str(e), "data": None}
+        finally:
+            _stop_events.pop(job_id, None)
+
+    await asyncio.to_thread(run)
 
 
 # ---------------------------------------------------------------------------

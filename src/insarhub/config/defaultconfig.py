@@ -54,7 +54,8 @@ class ASF_Base_Config:
     season: list[int] | None = None
     stack_from_id: str | None = None
     maxResults: int | None = None
-    workdir: Path | str = field(default_factory=lambda: Path.cwd()) 
+    granule_names: str | list[str] | None = None
+    workdir: Path | str = field(default_factory=lambda: Path.cwd())
 
     # ── UI metadata consumed by the API / settings panel ─────────────────────
     _ui_groups: ClassVar[list] = [
@@ -71,6 +72,8 @@ class ASF_Base_Config:
         {"label": "Temporal & Location",
          "fields": ["start", "end", "processingDate", "season",
                     "intersectsWith", "stack_from_id", "maxResults"]},
+        {"label": "By Granule Name",
+         "fields": ["granule_names"]},
         {"label": "Advanced",
          "fields": ["campaign", "groupID",
                     "maxDoppler", "minDoppler", "maxFaradayRotation", "minFaradayRotation",
@@ -141,6 +144,9 @@ class ASF_Base_Config:
                             "hint": "Build stack from a reference scene ID"},
         "maxResults":      {"type": "auto_number", "min": 1, "max": 50000, "step": 100,
                             "hint": "Maximum number of search results returned"},
+        "granule_names":   {"type": "text",
+                            "hint": "Granule/scene names (comma-separated), or a path to a CSV/XLSX/TXT file. "
+                                    "When set, overrides normal parameter-based search."},
         # Advanced
         "campaign":        {"type": "text",
                             "hint": "Campaign name filter (UAVSAR / airborne datasets)"},

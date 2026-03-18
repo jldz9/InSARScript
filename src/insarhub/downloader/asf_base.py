@@ -70,8 +70,8 @@ If a .netrc file is not provide under your home directory, you will be prompt to
 Check documentation for how to setup .netrc file.\n""")
         super().__init__(config)
 
-        if self.config.dataset is None and self.config.platform is None:
-            raise ValueError(f"{Fore.RED}Dataset or platform must be specified for ASF search.")
+        if self.config.dataset is None and self.config.platform is None and not getattr(self.config, 'granule_names', None):
+            raise ValueError(f"{Fore.RED}Dataset or platform must be specified for ASF search (or provide granule_names).")
         
         self.config.intersectsWith = _to_wkt(self.config.intersectsWith)
         
@@ -223,19 +223,41 @@ Check documentation for how to setup .netrc file.\n""")
                 
     def search(self) -> dict:
         """Search for data using the ASF Search API with the provided parameters.
-        
+
+        When ``config.granule_names`` is set the search is performed by granule
+        name instead of the normal parameter search.  ``granule_names`` may be:
+
+        * A ``list[str]`` of scene/granule names (with or without extensions).
+        * A ``str`` containing a single name, a comma-separated list of names,
+          or a path to a CSV / XLSX / TXT file on disk.
+
         Returns:
             dict: Dictionary of search results grouped by (path, frame) tuples.
-            
+
         Raises:
             ValueError: If search returns no results.
             Exception: If search fails after 10 retry attempts.
         """
         self._subset = None
+
+        granule_names = getattr(self.config, 'granule_names', None)
+        if granule_names:
+            print(f"{Fore.GREEN}Granule_names provided, Performing search by granule name(s) from {self.config.granule_names}...{Fore.RESET}")
+            from insarhub.utils.tool import parse_scene_names_from_file
+            raw_inputs = granule_names if isinstance(granule_names, list) else [n.strip() for n in granule_names.split(',') if n.strip()]
+            names: list[str] = []
+            for item in raw_inputs:
+                p = Path(item)
+                if p.exists():
+                    names.extend(parse_scene_names_from_file(str(p)))
+                else:
+                    names.append(item)
+            return self._search_by_name(names)
+
         print(f"Searching for SLCs....")
-        search_opts = {k: v for k, v in asdict(self.config).items() 
-                       if v is not None and k not in ['workdir', 'name', 'bbox']}
-        
+        search_opts = {k: v for k, v in asdict(self.config).items()
+                       if v is not None and k not in ['workdir', 'name', 'bbox', 'granule_names']}
+
         for attempt in range(1, 11):
             try:
                 self.results = asf.search(**search_opts)
@@ -244,7 +266,7 @@ Check documentation for how to setup .netrc file.\n""")
                 print(f"{Fore.RED}Search failed: {e}")
                 if attempt == 10:
                     raise
-                time.sleep(2 ** attempt)  
+                time.sleep(2 ** attempt)
 
         if not self.results:
             raise ValueError(f'{Fore.RED}Search does not return any result, please check input parameters or Internet connection')
@@ -256,10 +278,55 @@ Check documentation for how to setup .netrc file.\n""")
             key = self._get_group_key(result)
             grouped[key].append(result)
         self.results = grouped
-        if len(grouped) > 1: 
+        if len(grouped) > 1:
             print(f"{Fore.YELLOW}The AOI crosses {len(grouped)} stacks")
         return grouped
-    
+
+    def _search_by_name(self, scene_names: list[str]) -> dict:
+        """Populate results from a list of scene/granule names or filenames.
+
+        Accepts names with or without file extensions (e.g. ``.zip``).
+        Uses ``asf_search.granule_search()`` so no config parameters are needed
+        and works for any ASF-supported dataset (S1 SLC, S1 Burst, ALOS, etc.).
+
+        Args:
+            scene_names: Scene or filename strings, e.g.
+                ``["S1A_IW_SLC__1SDV_20201227T133500_..._5DB4",
+                   "S1A_IW_SLC__1SDV_20201227T133500_..._5DB4.zip"]``
+
+        Returns:
+            Grouped results dict keyed by ``(relativeOrbit, frame)``.
+        """
+        # Strip common file extensions so granule_search can find them
+        clean = [Path(n).stem if '.' in n else n for n in scene_names]
+        raw = asf.granule_search(clean)
+        if not raw:
+            raise ValueError(f"No ASF results found for the {len(clean)} provided scene name(s).")
+
+        # granule_search returns all product types per granule (SLC + METADATA_SLC, etc.).
+        # Exclude metadata-only products, then deduplicate by sceneName.
+        _EXCLUDE_LEVELS = {'METADATA_SLC', 'METADATA'}
+        seen: set[str] = set()
+        deduped = []
+        for result in raw:
+            if result.properties.get('processingLevel', '') in _EXCLUDE_LEVELS:
+                continue
+            sname = result.properties.get('sceneName', '')
+            if sname not in seen:
+                seen.add(sname)
+                deduped.append(result)
+
+        grouped: dict = defaultdict(list)
+        for result in deduped:
+            key = self._get_group_key(result)
+            grouped[key].append(result)
+        self.results = grouped
+        print(f"{Fore.GREEN} -- Found {len(deduped)} scenes across {len(grouped)} stack(s).\n")
+        if len(deduped) < len(clean):
+            missing = len(clean) - len(deduped)
+            print(f"{Fore.YELLOW} -- {missing} scene(s) not found on ASF.\n")
+        return grouped
+
     def reset(self):
         """Reset the view to include all search results.
         
@@ -682,7 +749,7 @@ Check documentation for how to setup .netrc file.\n""")
 
         return pairs, baselines, scene_bperp
 
-    def download(self, save_path: str | None = None, max_workers: int = 3):
+    def download(self, save_path: str | None = None, max_workers: int = 3, stop_event=None, on_progress=None):
         """Download the search results to the specified output directory.
 
         Args:
@@ -705,7 +772,8 @@ Check documentation for how to setup .netrc file.\n""")
         if not hasattr(self, 'results'):
             raise ValueError(f"{Fore.RED}No search results found. Please run search() first.")
 
-        stop_event = threading.Event()
+        if stop_event is None:
+            stop_event = threading.Event()
         _cfg_base = {k: v for k, v in asdict(self.config).items() if k != 'workdir'}
 
         jobs = []
@@ -838,22 +906,31 @@ Check documentation for how to setup .netrc file.\n""")
         executor = ThreadPoolExecutor(max_workers=max_workers)
         futures  = {executor.submit(_download_job, args): args for args in job_args}
 
+        completed_count = 0
         try:
             for future in as_completed(futures):
                 file_id, status, value, error = future.result()
+                completed_count += 1
+                pct = int(completed_count / total_jobs * 100) if total_jobs else 100
 
                 if status == 'success':
                     print(f"  {Fore.GREEN}✔ {file_id} ({value:.1f} MB/s)")
                     success_count += 1
+                    if on_progress:
+                        on_progress(f"[{completed_count}/{total_jobs}] ✔ {file_id}", pct)
                 elif status == 'skipped':
                     print(f"  {Fore.YELLOW}⏭ {file_id} ({value:.1f} MB, already exists)")
                     success_count += 1
+                    if on_progress:
+                        on_progress(f"[{completed_count}/{total_jobs}] ⏭ {file_id} (exists)", pct)
                 elif status == 'cancelled':
                     pass  # silently skip cancelled jobs
                 else:
                     print(f"  {Fore.RED}✘ {file_id} — {error}")
                     failure_count += 1
                     failed_files.append(file_id)
+                    if on_progress:
+                        on_progress(f"[{completed_count}/{total_jobs}] ✘ {file_id}", pct)
         except KeyboardInterrupt:
             print(f"\n{Fore.YELLOW}⚠ Download interrupted by user. Cancelling pending jobs...")
             stop_event.set()

@@ -17,7 +17,7 @@ class S1_SLC(ASF_Base_Downloader):
     """
     A class to search and download Sentinel-1 data using ASF Search API."""
 
-    def download(self, save_path: str | None = None, max_workers: int = 3, force_asf: bool = False, download_orbit: bool = False):
+    def download(self, save_path: str | None = None, max_workers: int = 3, force_asf: bool = False, download_orbit: bool = False, stop_event=None, on_progress=None):
         """Download SLC data and optionally associated orbit files.
 
         Args:
@@ -25,12 +25,14 @@ class S1_SLC(ASF_Base_Downloader):
             max_workers (int): Parallel download workers. Defaults to 3.
             force_asf (bool): If True, forces downloading orbit files from ASF instead of CDSE. Defaults to False.
             download_orbit (bool): If True, also downloads orbit files after scenes. Defaults to False.
+            stop_event: Optional threading.Event to cancel the download.
+            on_progress: Optional callback(message, pct) called after each file completes.
         """
-        super().download(save_path=save_path, max_workers=max_workers)
+        super().download(save_path=save_path, max_workers=max_workers, stop_event=stop_event, on_progress=on_progress)
         if download_orbit:
             self.download_orbit(force_asf=force_asf)
 
-    def download_orbit(self, force_asf: bool = False, save_dir: str | None = None):
+    def download_orbit(self, force_asf: bool = False, save_dir: str | None = None, stop_event=None):
         """Download orbit files for the current search results.
 
         Orbit files can be downloaded from ASF or Copernicus Data Space Ecosystem (CDSE).
@@ -71,6 +73,9 @@ If CDSE download fails, ASF will be attempted as a fallback.""")
         all_items = [(key, result) for key, results in self.results.items() for result in results]  # type: ignore[union-attr]
         with tqdm(all_items, desc="Orbit files", unit="scene", bar_format="{l_bar}{bar:20}{r_bar}") as pbar:
             for key, result in pbar:
+                if stop_event is not None and stop_event.is_set():
+                    tqdm.write("Orbit download stopped.")
+                    break
                 download_path = Path(save_dir) if save_dir else Path(base_dir) / f'p{key[0]}_f{key[1]}'
                 download_path.mkdir(parents=True, exist_ok=True)
                 scene_name = result.properties['sceneName']

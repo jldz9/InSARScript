@@ -19,7 +19,7 @@ The program will prompts for login on first use.<br><br>
 
 #### [Copernicus Data Space Ecosystem](https://dataspace.copernicus.eu/)
 
-This account is required for downloading orbit files, the release of orbit files on this website is faster than NASA earthdata for couple hours to days. 
+This account is required for downloading orbit files. CDSE releases orbit files a few hours to days earlier than ASF. If CDSE is unavailable or returns an error, InSARHub automatically falls back to ASF for orbit downloads.
 
 Once the registration is complete create a file named `.netrc` under your home directory if not exist and add 
 

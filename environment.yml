@@ -18,5 +18,6 @@ dependencies:
         - cdsapi
         - fastapi
         - uvicorn
+        - openpyxl
         - numpy <2.0
         

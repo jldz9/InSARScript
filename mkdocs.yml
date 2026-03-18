@@ -45,7 +45,12 @@ nav:
         - Running:
           - API: quickstart/running.md
           - CLI: quickstart/cli.md
-          - Web UI: quickstart/frontend.md
+  - Web UI:
+        - Overview: quickstart/frontend.md
+        - Search & Download: frontend/search.md
+        - Processor: frontend/processor.md
+        - Analyzer: frontend/analyzer.md
+        - Results Viewer: frontend/results.md
   - Advanced:
         - Downloader: advanced/downloader.md
         - Processor: advanced/processor.md

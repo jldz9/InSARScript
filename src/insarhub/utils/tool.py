@@ -1354,6 +1354,98 @@ class Slurmjob_Config:
         
         filepath = Path(filename).expanduser().resolve()
         filepath.write_text("\n".join(lines))
-        
+
         return filepath
+
+
+# Pattern for an ASF-style granule name (Sentinel-1, ALOS, etc.):
+# no spaces, at least 20 chars, alphanumeric + underscores/hyphens.
+_SCENE_NAME_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_\-]{19,}$')
+
+
+def _extract_scene_names(tokens: list[str]) -> list[str]:
+    """Filter *tokens* to those matching the granule-name pattern, strip extensions."""
+    seen: dict[str, None] = {}
+    for token in tokens:
+        token = token.strip()
+        if not token or token.startswith('#'):
+            continue
+        stem = Path(token).stem if '.' in token else token
+        if _SCENE_NAME_RE.match(stem):
+            seen[stem] = None
+    return list(seen.keys())
+
+
+def parse_scene_names_from_file(file_path: str) -> list[str]:
+    """Read a file and return a deduplicated list of clean scene/granule names.
+
+    Supported formats:
+
+    * **CSV** (``.csv``) — scene names may appear in any column.
+    * **Excel** (``.xlsx``, ``.xls``) — all sheets are scanned; names may be
+      in any cell.
+    * **Plain text** (``.txt``, or any other extension) — one token per line;
+      whitespace-separated tokens on a line are each tested.
+
+    Extensions such as ``.zip`` or ``.SAFE`` are stripped automatically, so
+    the returned names are ready for ``ASF_Base_Downloader.search_by_name()``.
+    Lines / cells that are blank or start with ``#`` are ignored.
+
+    Args:
+        file_path: Path to the input file.
+
+    Returns:
+        Deduplicated list of scene name strings.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If no valid scene names were found, or the format is
+            unsupported and cannot be parsed.
+    """
+    path = Path(file_path).expanduser().resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+
+    suffix = path.suffix.lower()
+    tokens: list[str] = []
+
+    if suffix == '.csv':
+        import csv as _csv
+        with open(path, newline='', encoding='utf-8-sig') as fh:
+            for row in _csv.reader(fh):
+                tokens.extend(row)
+
+    elif suffix in ('.xlsx', '.xls'):
+        try:
+            import openpyxl as _openpyxl
+        except ImportError as exc:
+            raise ImportError(
+                "openpyxl is required to read Excel files: pip install openpyxl"
+            ) from exc
+        wb = _openpyxl.load_workbook(path, read_only=True, data_only=True)
+        for ws in wb.worksheets:
+            for row in ws.iter_rows(values_only=True):
+                for cell in row:
+                    if cell is not None:
+                        tokens.append(str(cell))
+        wb.close()
+
+    else:
+        # Plain text or unknown extension — split on whitespace / newlines
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+        tokens = text.split()
+
+    names = _extract_scene_names(tokens)
+    if not names:
+        raise ValueError(f"No valid scene names found in {path}")
+    return names
+
+
+def parse_scene_names_from_csv(csv_path: str) -> list[str]:
+    """Convenience wrapper — parse scene names from a CSV file.
+
+    Calls :func:`parse_scene_names_from_file` internally.  Prefer that
+    function for new code, as it also handles ``.xlsx`` and ``.txt`` files.
+    """
+    return parse_scene_names_from_file(csv_path)
 

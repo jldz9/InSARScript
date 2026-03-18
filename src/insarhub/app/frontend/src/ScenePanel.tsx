@@ -37,17 +37,23 @@ const row = (t: Theme, label: string, value: React.ReactNode) => (
 
 export default function ScenePanel({
   feature, theme: t, stackStart, stackEnd,
-  stackCount, stackUrls, workdir, aoiWkt, downloaderType, stackOpen, onClose, onStackClick,
+  stackCount, workdir, aoiWkt, downloaderType, stackOpen, onClose, onStackClick,
 }: Props) {
   const p     = feature.properties ?? {}
   const stack = parseStack(p._stack ?? '')
 
   const [dlStatus,  setDlStatus]  = useState<'idle'|'downloading'|'done'|'error'>('idle')
   const [dlMessage, setDlMessage] = useState('')
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null)
+  const dlJobIdRef = useRef<string | null>(null)
 
   const [ajStatus,  setAjStatus]  = useState<'idle'|'running'|'done'|'error'>('idle')
   const [ajMessage, setAjMessage] = useState('')
+
+  const [orbitStatus,  setOrbitStatus]  = useState<'idle'|'running'|'done'|'error'>('idle')
+  const [orbitMessage, setOrbitMessage] = useState('')
+  const orbitPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const orbitJobIdRef = useRef<string | null>(null)
 
   // Reset Add Job status when feature changes
   useEffect(() => { setAjStatus('idle'); setAjMessage('') }, [feature])
@@ -81,32 +87,120 @@ export default function ScenePanel({
     }
   }, [stack, stackStart, stackEnd, workdir, aoiWkt, feature.properties])
 
+  function handleStopDownload() {
+    if (pollRef.current) clearInterval(pollRef.current)
+    if (dlJobIdRef.current) {
+      fetch(`${API}/api/jobs/${dlJobIdRef.current}/stop`, { method: 'POST' }).catch(() => {})
+      dlJobIdRef.current = null
+    }
+    setDlStatus('idle')
+    setDlMessage('Stopped.')
+  }
+
   async function handleDownloadStack() {
-    if (!stackUrls.length) return
+    if (!stack || !stackStart || !stackEnd) return
     setDlStatus('downloading')
-    setDlMessage(`Queuing ${stackUrls.length} scenes…`)
+    setDlMessage('Searching scenes…')
     try {
-      const res      = await fetch(`${API}/api/download-stack`, {
+      const res  = await fetch(`${API}/api/download-stack`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ urls: stackUrls, workdir }),
+        body: JSON.stringify({
+          workdir,
+          relativeOrbit: stack.path,
+          frame: stack.frame,
+          start: stackStart,
+          end: stackEnd,
+          wkt: aoiWkt ?? null,
+          flightDirection: (feature.properties?.flightDirection as string) ?? null,
+          platform: (feature.properties?.platform as string) ?? null,
+          downloaderType,
+        }),
       })
-      const { job_id } = await res.json()
+      const data = await res.json()
+      if (!res.ok) {
+        setDlStatus('error')
+        setDlMessage(data.detail ?? `Error ${res.status}`)
+        return
+      }
+      const { job_id } = data
+      if (!job_id) { setDlStatus('error'); setDlMessage('No job ID returned'); return }
+      dlJobIdRef.current = job_id
       pollRef.current = setInterval(async () => {
-        const r   = await fetch(`${API}/api/jobs/${job_id}`)
-        const job = await r.json()
-        setDlMessage(job.message)
-        if (job.status === 'done') {
-          clearInterval(pollRef.current!)
-          setDlStatus('done')
-        } else if (job.status === 'error') {
+        try {
+          const r   = await fetch(`${API}/api/jobs/${job_id}`)
+          const job = await r.json()
+          setDlMessage(job.message)
+          if (job.status === 'done') {
+            clearInterval(pollRef.current!)
+            dlJobIdRef.current = null
+            setDlStatus('done')
+          } else if (job.status === 'error') {
+            clearInterval(pollRef.current!)
+            dlJobIdRef.current = null
+            setDlStatus('error')
+          }
+        } catch {
           clearInterval(pollRef.current!)
           setDlStatus('error')
+          setDlMessage('Lost connection to server')
         }
       }, 1500)
     } catch (e) {
       setDlStatus('error')
       setDlMessage(String(e))
+    }
+  }
+
+  function handleStopOrbit() {
+    if (orbitPollRef.current) clearInterval(orbitPollRef.current)
+    if (orbitJobIdRef.current) {
+      fetch(`${API}/api/jobs/${orbitJobIdRef.current}/stop`, { method: 'POST' }).catch(() => {})
+      orbitJobIdRef.current = null
+    }
+    setOrbitStatus('idle')
+    setOrbitMessage('Stopped.')
+  }
+
+  async function handleDownloadOrbit() {
+    if (!stack || !stackStart || !stackEnd) return
+    setOrbitStatus('running')
+    setOrbitMessage('Starting…')
+    try {
+      const res = await fetch(`${API}/api/download-orbit-stack`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workdir,
+          relativeOrbit: stack.path,
+          frame: stack.frame,
+          start: stackStart,
+          end: stackEnd,
+          wkt: aoiWkt ?? null,
+          flightDirection: (feature.properties?.flightDirection as string) ?? null,
+          platform: (feature.properties?.platform as string) ?? null,
+          downloaderType,
+        }),
+      })
+      const { job_id } = await res.json()
+      orbitJobIdRef.current = job_id
+      orbitPollRef.current = setInterval(async () => {
+        const r   = await fetch(`${API}/api/jobs/${job_id}`)
+        const job = await r.json()
+        setOrbitMessage(job.message ?? '')
+        if (job.status === 'done') {
+          clearInterval(orbitPollRef.current!)
+          orbitJobIdRef.current = null
+          setOrbitStatus('done')
+        } else if (job.status === 'error') {
+          clearInterval(orbitPollRef.current!)
+          orbitJobIdRef.current = null
+          setOrbitStatus('error')
+        }
+      }, 1500)
+    } catch (e) {
+      setOrbitStatus('error')
+      setOrbitMessage(String(e))
     }
   }
 
@@ -180,31 +274,98 @@ export default function ScenePanel({
 
         {/* Download Stack */}
         <div style={{ marginTop: 14 }}>
-          <button
-            onClick={handleDownloadStack}
-            disabled={dlStatus === 'downloading' || !stackUrls.length}
-            style={{
-              display: 'block', width: '100%', padding: '8px 0', textAlign: 'center',
-              background: dlStatus === 'done'   ? '#1b5e20'
-                        : dlStatus === 'error'  ? '#b71c1c'
-                        : t.btnActiveBg,
-              color: dlStatus === 'done'   ? '#a5d6a7'
-                   : dlStatus === 'error'  ? '#ef9a9a'
-                   : t.accent,
-              border: `1px solid ${t.btnActiveBorder}`,
-              borderRadius: 6, fontSize: 12, fontWeight: 600,
-              cursor: dlStatus === 'downloading' ? 'wait' : 'pointer',
-            }}
-          >
-            {dlStatus === 'downloading' ? `⟳ Downloading…`
-            : dlStatus === 'done'       ? '✓ Stack Downloaded'
-            : dlStatus === 'error'      ? '✕ Retry'
-            : `↓ Download Stack (${stackUrls.length})`}
-          </button>
-          {dlMessage && (
+          {dlStatus === 'downloading' ? (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button
+                onClick={handleStopDownload}
+                style={{
+                  flex: 1, padding: '8px 0', textAlign: 'center',
+                  background: '#e53935', color: '#fff',
+                  border: '1px solid #e53935',
+                  borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Stop
+              </button>
+              {dlMessage && (
+                <span style={{
+                  fontSize: 11, color: t.accent, fontFamily: 'monospace',
+                  background: t.btnActiveBg, border: `1px solid ${t.btnActiveBorder}`,
+                  borderRadius: 4, padding: '4px 8px', whiteSpace: 'nowrap',
+                }}>
+                  {dlMessage}
+                </span>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={handleDownloadStack}
+              disabled={!stack || !stackStart || !stackEnd}
+              style={{
+                display: 'block', width: '100%', padding: '8px 0', textAlign: 'center',
+                background: dlStatus === 'done'  ? '#1b5e20'
+                          : dlStatus === 'error' ? '#b71c1c'
+                          : t.btnActiveBg,
+                color: dlStatus === 'done'  ? '#a5d6a7'
+                     : dlStatus === 'error' ? '#ef9a9a'
+                     : t.accent,
+                border: `1px solid ${t.btnActiveBorder}`,
+                borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              {dlStatus === 'done'  ? '✓ Stack Downloaded'
+             : dlStatus === 'error' ? '✕ Retry'
+             : `↓ Download Stack`}
+            </button>
+          )}
+          {dlMessage && dlStatus !== 'downloading' && (
             <div style={{ color: dlStatusColor, fontSize: 11, marginTop: 5 }}>{dlMessage}</div>
           )}
         </div>
+
+        {/* Download Orbit Files — S1_SLC only */}
+        {downloaderType === 'S1_SLC' && stack && stackStart && stackEnd && (
+          <div style={{ marginTop: 8 }}>
+            {orbitStatus === 'running' ? (
+              <button
+                onClick={handleStopOrbit}
+                style={{
+                  display: 'block', width: '100%', padding: '8px 0', textAlign: 'center',
+                  background: '#e53935', color: '#fff',
+                  border: '1px solid #e53935',
+                  borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Stop
+              </button>
+            ) : (
+              <button
+                onClick={orbitStatus === 'error' ? handleDownloadOrbit : handleDownloadOrbit}
+                style={{
+                  display: 'block', width: '100%', padding: '8px 0', textAlign: 'center',
+                  background: orbitStatus === 'done'  ? '#1b3a2a'
+                            : orbitStatus === 'error' ? '#b71c1c'
+                            : 'transparent',
+                  color: orbitStatus === 'done'  ? '#a5d6a7'
+                       : orbitStatus === 'error' ? '#ef9a9a'
+                       : t.text,
+                  border: `1px solid ${t.border}`,
+                  borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                {orbitStatus === 'done'  ? '✓ Orbit Files Downloaded'
+               : orbitStatus === 'error' ? '✕ Retry'
+               : '⬡ Download Orbit Files'}
+              </button>
+            )}
+            {orbitMessage && (
+              <div style={{
+                color: orbitStatus === 'done' ? '#4caf50' : orbitStatus === 'error' ? '#e53935' : t.textMuted,
+                fontSize: 11, marginTop: 5,
+              }}>{orbitMessage}</div>
+            )}
+          </div>
+        )}
 
         {/* Add Job — run select_pairs for this stack */}
         {stack && stackStart && stackEnd && (
@@ -240,6 +401,7 @@ export default function ScenePanel({
             )}
           </div>
         )}
+
       </div>
     </div>
   )

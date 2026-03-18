@@ -9,3 +9,12 @@
 .md-grid {
     max-width: 65rem;
 }
+/* Center screenshots without overriding only-light/only-dark display:none */
+.doc-img {
+    width: 700px;
+    margin: 0 auto;
+}
+.doc-img-wide {
+    width: 800px;
+    margin: 0 auto;
+}

@@ -264,7 +264,8 @@ export default function App() {
 
   // ── Search ────────────────────────────────────────────────────────────────
   async function handleSearch() {
-    if (!filters.startDate || !filters.endDate) {
+    const byName = filters.granuleNames && filters.granuleNames.length > 0
+    if (!byName && (!filters.startDate || !filters.endDate)) {
       setResultCount('Set start and end dates in Filters')
       setFiltersOpen(true)
       return
@@ -280,13 +281,14 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         west: aoi[0], south: aoi[1], east: aoi[2], north: aoi[3],
-        wkt, start: filters.startDate, end: filters.endDate,
+        wkt, start: filters.startDate || null, end: filters.endDate || null,
         maxResults:      filters.maxResults ? parseInt(filters.maxResults) : 2000,
         flightDirection: filters.flightDirection  || null,
         pathStart:       filters.pathStart  ? parseInt(filters.pathStart)  : null,
         pathEnd:         filters.pathEnd    ? parseInt(filters.pathEnd)    : null,
         frameStart:      filters.frameStart ? parseInt(filters.frameStart) : null,
         frameEnd:        filters.frameEnd   ? parseInt(filters.frameEnd)   : null,
+        granule_names:   byName ? filters.granuleNames : null,
       }),
     })
     const { job_id } = await res.json()

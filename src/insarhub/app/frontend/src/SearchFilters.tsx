@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import type { Theme } from './theme'
 
 export interface Filters {
@@ -10,6 +10,8 @@ export interface Filters {
   frameStart:      string
   frameEnd:        string
   maxResults:      string
+  granuleNames:    string[]   // parsed scene names (empty = not used)
+  granuleFileName: string     // display name of the uploaded file
 }
 
 export const DEFAULT_FILTERS: Filters = {
@@ -21,12 +23,15 @@ export const DEFAULT_FILTERS: Filters = {
   frameStart:      '',
   frameEnd:        '',
   maxResults:      '2000',
+  granuleNames:    [],
+  granuleFileName: '',
 }
 
 export function hasActiveFilters(f: Filters): boolean {
   return !!(f.flightDirection || f.pathStart || f.pathEnd ||
             f.frameStart || f.frameEnd ||
-            (f.maxResults && f.maxResults !== '2000'))
+            (f.maxResults && f.maxResults !== '2000') ||
+            f.granuleNames.length > 0)
 }
 
 interface Props {
@@ -37,10 +42,46 @@ interface Props {
   onApply: (f: Filters) => void
 }
 
+const API = import.meta.env.DEV ? 'http://localhost:8000' : ''
+
 export default function SearchFilters({ open, filters, theme: t, onClose, onApply }: Props) {
-  const [draft, setDraft] = useState<Filters>(filters)
+  const [draft, setDraft]           = useState<Filters>(filters)
+  const [uploading, setUploading]   = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   if (!open) return null
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadError('')
+    try {
+      const suffix = file.name.split('.').pop()?.toLowerCase() ?? ''
+      if (['csv', 'txt'].includes(suffix)) {
+        // Parse locally — split on whitespace / commas / newlines, filter name-like tokens
+        const text = await file.text()
+        const tokens = text.split(/[\s,]+/).map(s => s.trim()).filter(Boolean)
+        const nameRe = /^[A-Za-z0-9][A-Za-z0-9_\-]{19,}$/
+        const names = [...new Set(tokens.map(t => t.includes('.') ? t.replace(/\.[^.]+$/, '') : t).filter(t => nameRe.test(t)))]
+        setDraft(d => ({ ...d, granuleNames: names, granuleFileName: file.name }))
+      } else {
+        // Send to backend for XLSX or other formats
+        const form = new FormData()
+        form.append('file', file)
+        const res = await fetch(`${API}/api/parse-granule-file`, { method: 'POST', body: form })
+        const data = await res.json()
+        if (!res.ok) { setUploadError(data.detail ?? 'Parse error'); return }
+        setDraft(d => ({ ...d, granuleNames: data.names, granuleFileName: file.name }))
+      }
+    } catch (err) {
+      setUploadError(String(err))
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   const sectionHead: React.CSSProperties = {
     background: t.isDark ? '#252540' : '#c8cdd4',
@@ -155,6 +196,54 @@ export default function SearchFilters({ open, filters, theme: t, onClose, onAppl
               value={draft.frameEnd}
               onChange={e => setDraft(d => ({ ...d, frameEnd: e.target.value }))} />
           </div>
+        </div>
+
+        {/* ── Granule Names ── */}
+        <div style={sectionHead}>Granule Names <span style={{ fontWeight: 400, fontSize: 11, opacity: 0.7 }}>(overrides date/spatial search)</span></div>
+        <div style={{ padding: '14px 16px 16px' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls,.txt"
+              style={{ display: 'none' }} onChange={handleFileUpload} />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              style={{
+                background: t.btnActiveBg, border: `1px solid ${t.btnActiveBorder}`,
+                color: t.accent, borderRadius: 4, padding: '5px 12px',
+                cursor: uploading ? 'wait' : 'pointer', fontSize: 12, fontWeight: 600,
+              }}
+            >
+              {uploading ? 'Parsing…' : '↑ Upload File'}
+            </button>
+            <span style={{ fontSize: 11, color: t.textMuted }}>CSV, XLSX, TXT</span>
+            {draft.granuleNames.length > 0 && (
+              <button
+                onClick={() => setDraft(d => ({ ...d, granuleNames: [], granuleFileName: '' }))}
+                style={{
+                  marginLeft: 'auto', background: 'transparent',
+                  border: `1px solid ${t.border}`, color: t.textMuted,
+                  borderRadius: 4, padding: '3px 10px', cursor: 'pointer', fontSize: 11,
+                }}
+              >Clear</button>
+            )}
+          </div>
+          {uploadError && (
+            <div style={{ color: '#e53935', fontSize: 11, marginBottom: 6 }}>{uploadError}</div>
+          )}
+          {draft.granuleNames.length > 0 ? (
+            <div style={{
+              background: t.isDark ? '#0d1b0d' : '#e8f5e9',
+              border: `1px solid ${t.isDark ? '#2e7d32' : '#a5d6a7'}`,
+              borderRadius: 4, padding: '6px 10px', fontSize: 11, color: '#4caf50',
+            }}>
+              {draft.granuleFileName && <span style={{ fontWeight: 600 }}>{draft.granuleFileName} — </span>}
+              {draft.granuleNames.length} scene{draft.granuleNames.length !== 1 ? 's' : ''} loaded
+            </div>
+          ) : (
+            <div style={{ fontSize: 11, color: t.textMuted }}>
+              No granule names loaded. Upload a file to bypass date and spatial filters.
+            </div>
+          )}
         </div>
 
         {/* Footer */}

@@ -21,6 +21,7 @@ dependencies = [
 "openpyxl",
 "fastapi",
 "uvicorn",
+"python-multipart",
 "numpy<2.0",
 ]
 requires-python = ">=3.11,<3.13"

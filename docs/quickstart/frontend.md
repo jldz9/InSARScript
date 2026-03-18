@@ -24,6 +24,13 @@ insarhub-app --version         # print version and exit
 
 ## Interface Overview
 
+<!-- screenshot: full app overview -->
+![Web UI Overview](../frontend/fig/overview_light.png#only-light){: .doc-img-wide}
+![Web UI Overview](../frontend/fig/overview_dark.png#only-dark){: .doc-img-wide}
+/// caption
+InSARHub Web UI — map, toolbar, and job panel.
+///
+
 <div style="text-align: center;">
 ```mermaid
 graph LR
@@ -109,7 +116,7 @@ Click a tag to open that role's panel. Click 🗑 to delete the entire job folde
 
 For detailed usage of each panel, see:
 
-[Downloader Panel](../advanced/frontend.md#downloader-panel){.md-button}
-[Processor Panel](../advanced/frontend.md#processor-panel){.md-button}
-[Analyzer Panel](../advanced/frontend.md#analyzer-panel){.md-button}
-[Results Viewer](../advanced/frontend.md#mintpy-results-viewer){.md-button}
+[Search & Download](../frontend/search.md){.md-button}
+[Processor](../frontend/processor.md){.md-button}
+[Analyzer](../frontend/analyzer.md){.md-button}
+[Results Viewer](../frontend/results.md){.md-button}

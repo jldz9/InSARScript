@@ -25,7 +25,7 @@ from typing import Any
 
 import geopandas as gpd
 from shapely import wkt as shapely_wkt
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -231,8 +231,8 @@ class SearchRequest(BaseModel):
     east: float  = Field(..., example=-112.68)
     north: float = Field(..., example=38.00)
     wkt: str | None = Field(default=None, description="WKT polygon — overrides bbox when provided")
-    start: str   = Field(..., example="2021-01-01")
-    end: str     = Field(..., example="2022-01-01")
+    start: str | None = Field(default=None, example="2021-01-01")
+    end: str | None   = Field(default=None, example="2022-01-01")
     workdir: str = Field(default=".")
     maxResults: int | None = Field(default=2000)
     # Filters
@@ -243,6 +243,8 @@ class SearchRequest(BaseModel):
     pathEnd:         int | None       = Field(default=None, description="Relative orbit end (path)")
     frameStart:      int | None       = Field(default=None, description="ASF frame start")
     frameEnd:        int | None       = Field(default=None, description="ASF frame end")
+    # Granule name search — when set, overrides all spatial/temporal parameters
+    granule_names:   list[str] | None = Field(default=None, description="List of granule/scene names")
 
 
 class DownloadRequest(BaseModel):
@@ -579,6 +581,25 @@ async def stream_auth_status():
     )
 
 
+@app.post("/api/parse-granule-file")
+async def parse_granule_file(file: UploadFile = File(...)):
+    """Upload a CSV, XLSX, or TXT file and return the list of parsed granule names."""
+    from insarhub.utils.tool import parse_scene_names_from_file
+    suffix = Path(file.filename or '').suffix.lower() or '.tmp'
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(await file.read())
+            tmp_path = tmp.name
+        names = parse_scene_names_from_file(tmp_path)
+        return {"names": names, "count": len(names)}
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
 @app.post("/api/search", response_model=JobResponse)
 async def start_search(req: SearchRequest, background_tasks: BackgroundTasks):
     """
@@ -596,47 +617,49 @@ async def start_search(req: SearchRequest, background_tasks: BackgroundTasks):
 async def _run_search(job_id: str, session_id: str, req: SearchRequest):
     def run():
         try:
+            if req.granule_names:
+                # Granule-name search — bypass spatial/temporal parameters entirely
+                config = S1_SLC_Config(workdir=req.workdir, granule_names=req.granule_names)
+                downloader = Downloader.create("S1_SLC", config)
+            else:
                 # Build relative-orbit list from path range
-            rel_orbit = None
-            if req.pathStart is not None:
-                p_end = req.pathEnd if req.pathEnd is not None else req.pathStart
-                rel_orbit = list(range(req.pathStart, p_end + 1))
+                rel_orbit = None
+                if req.pathStart is not None:
+                    p_end = req.pathEnd if req.pathEnd is not None else req.pathStart
+                    rel_orbit = list(range(req.pathStart, p_end + 1))
 
-            # Build asfFrame list from frame range
-            asf_frame = None
-            if req.frameStart is not None:
-                f_end = req.frameEnd if req.frameEnd is not None else req.frameStart
-                asf_frame = list(range(req.frameStart, f_end + 1))
+                # Build asfFrame list from frame range
+                asf_frame = None
+                if req.frameStart is not None:
+                    f_end = req.frameEnd if req.frameEnd is not None else req.frameStart
+                    asf_frame = list(range(req.frameStart, f_end + 1))
 
-            # Simplify WKT geometry to avoid URL-too-long errors (OSError ENAMETOOLONG).
-            # ASF search sends intersectsWith as a GET param; complex shapefiles can
-            # produce WKT with thousands of vertices that exceed OS URL length limits.
-            intersects_with = req.wkt if req.wkt else (req.west, req.south, req.east, req.north)
-            if isinstance(intersects_with, str):
-                try:
-                    geom = shapely_wkt.loads(intersects_with)
-                    # Simplify until WKT fits in ~2000 chars; tolerance in degrees (~100m–10km)
-                    for tol in (0.001, 0.005, 0.01, 0.05, 0.1):
-                        simplified = geom.simplify(tol, preserve_topology=True)
-                        if len(simplified.wkt) <= 2000:
-                            break
-                    intersects_with = simplified.wkt
-                except Exception:
-                    pass  # leave as-is if shapely fails; let ASF report the error
+                # Simplify WKT geometry to avoid URL-too-long errors (OSError ENAMETOOLONG).
+                intersects_with = req.wkt if req.wkt else (req.west, req.south, req.east, req.north)
+                if isinstance(intersects_with, str):
+                    try:
+                        geom = shapely_wkt.loads(intersects_with)
+                        for tol in (0.001, 0.005, 0.01, 0.05, 0.1):
+                            simplified = geom.simplify(tol, preserve_topology=True)
+                            if len(simplified.wkt) <= 2000:
+                                break
+                        intersects_with = simplified.wkt
+                    except Exception:
+                        pass
 
-            config = S1_SLC_Config(
-                intersectsWith=intersects_with,
-                start=req.start,
-                end=req.end,
-                workdir=req.workdir,
-                maxResults=req.maxResults,
-                beamMode=req.beamMode or None,
-                polarization=req.polarization or None,
-                flightDirection=req.flightDirection or None,
-                relativeOrbit=rel_orbit or None,
-                asfFrame=asf_frame or None,
-            )
-            downloader = Downloader.create("S1_SLC", config)
+                config = S1_SLC_Config(
+                    intersectsWith=intersects_with,
+                    start=req.start,
+                    end=req.end,
+                    workdir=req.workdir,
+                    maxResults=req.maxResults,
+                    beamMode=req.beamMode or None,
+                    polarization=req.polarization or None,
+                    flightDirection=req.flightDirection or None,
+                    relativeOrbit=rel_orbit or None,
+                    asfFrame=asf_frame or None,
+                )
+                downloader = Downloader.create("S1_SLC", config)
             cmd = SearchCommand(downloader, progress_callback=_make_progress(job_id))
             result = cmd.run()
 

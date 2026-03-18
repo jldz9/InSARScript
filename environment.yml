@@ -19,5 +19,6 @@ dependencies:
         - fastapi
         - uvicorn
         - openpyxl
+        - python-multipart
         - numpy <2.0
         

@@ -1427,6 +1427,8 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
   const [procOpen,     setProcOpen]     = useState(false)
   const [dlJobId,      setDlJobId]      = useState<string | null>(null)
   const [dlStatus,     setDlStatus]     = useState<string>('')
+  const [orbitJobId,   setOrbitJobId]   = useState<string | null>(null)
+  const [orbitStatus,  setOrbitStatus]  = useState<string>('')
   const [ifgViewerOpen,     setIfgViewerOpen]     = useState(false)
   const [mintpyViewerOpen,  setMintpyViewerOpen]  = useState(false)
   const [mintpyHasData,     setMintpyHasData]     = useState(false)
@@ -1485,6 +1487,43 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
       .then(r => r.json())
       .then(d => { if (d.job_id) setDlJobId(d.job_id) })
       .catch(e => setDlStatus(String(e)))
+  }
+
+  // Poll orbit download job
+  useEffect(() => {
+    if (!orbitJobId) return
+    const id = setInterval(() => {
+      fetch(`${API}/api/jobs/${orbitJobId}`)
+        .then(r => r.json())
+        .then(d => {
+          setOrbitStatus(d.message ?? '')
+          if (d.status === 'done' || d.status === 'error') {
+            clearInterval(id)
+            setOrbitJobId(null)
+          }
+        })
+        .catch(() => { clearInterval(id); setOrbitJobId(null) })
+    }, 1500)
+    return () => clearInterval(id)
+  }, [orbitJobId])
+
+  function handleDownloadOrbit() {
+    setOrbitStatus('Starting…')
+    fetch(`${API}/api/folder-download-orbit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder_path: job.path }),
+    })
+      .then(r => r.json())
+      .then(d => { if (d.job_id) setOrbitJobId(d.job_id) })
+      .catch(e => setOrbitStatus(String(e)))
+  }
+
+  function handleStopOrbit() {
+    if (!orbitJobId) return
+    fetch(`${API}/api/jobs/${orbitJobId}/stop`, { method: 'POST' }).catch(() => {})
+    setOrbitJobId(null)
+    setOrbitStatus('Stopped.')
   }
 
   const cfgRows = role === 'downloader' && details?.downloader_config
@@ -1730,6 +1769,45 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
               </button>
               {dlStatus && (
                 <span style={{ fontSize: 10, color: t.textMuted, fontFamily: 'monospace' }}>{dlStatus}</span>
+              )}
+              {cls === 'S1_SLC' && (
+                <>
+                  {orbitJobId ? (
+                    <button
+                      onClick={handleStopOrbit}
+                      style={{
+                        width: '100%', padding: '7px 12px', fontSize: 11,
+                        background: '#e53935', color: '#fff',
+                        border: '1px solid #e53935',
+                        borderRadius: 4, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 8,
+                      }}
+                    >
+                      Stop
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleDownloadOrbit}
+                      style={{
+                        width: '100%', padding: '7px 12px', fontSize: 11,
+                        background: 'transparent', color: t.text,
+                        border: `1px solid ${t.border}`,
+                        borderRadius: 4, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 8,
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(-30 12 12)"/>
+                        <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(30 12 12)"/>
+                        <circle cx="12" cy="12" r="2"/>
+                      </svg>
+                      Download Orbit Files
+                    </button>
+                  )}
+                  {orbitStatus && (
+                    <span style={{ fontSize: 10, color: t.textMuted, fontFamily: 'monospace' }}>{orbitStatus}</span>
+                  )}
+                </>
               )}
             </div>
           )}

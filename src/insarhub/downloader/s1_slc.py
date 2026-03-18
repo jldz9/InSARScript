@@ -4,6 +4,7 @@ from pathlib import Path
 
 from colorama import Fore
 from eof.download import download_eofs
+from tqdm import tqdm
 
 from insarhub.config import S1_SLC_Config
 from .asf_base import ASF_Base_Downloader
@@ -29,7 +30,7 @@ class S1_SLC(ASF_Base_Downloader):
         if download_orbit:
             self.download_orbit(force_asf=force_asf)
 
-    def download_orbit(self, force_asf: bool = False):
+    def download_orbit(self, force_asf: bool = False, save_dir: str | None = None):
         """Download orbit files for the current search results.
 
         Orbit files can be downloaded from ASF or Copernicus Data Space Ecosystem (CDSE).
@@ -38,14 +39,14 @@ class S1_SLC(ASF_Base_Downloader):
 
         Args:
             force_asf (bool): If True, forces downloading from ASF instead of CDSE. Defaults to False.
+            save_dir (str | None): Directory to save orbit files. Defaults to workdir if not specified.
         """
         print("""
 Orbit files can be downloaded from both ASF and Copernicus Data Space Ecosystem (CDSE) servers. Generally CDSE release orbit files a few hours to days earlier.
 To download orbit file from Copernicus Data Space Ecosystem(CDSE). Please ensure you to create an account at https://dataspace.copernicus.eu/ and setup in the .netrc file.
 If a .netrc file is not provide under your home directory, you will be prompt to enter your CDSE username and password.
 Check documentation for how to setup .netrc file.
-
-IF you wish to download orbit files from ASF and skip CDSE, use .download_orbit(force_asf=True).""")
+If CDSE download fails, ASF will be attempted as a fallback.""")
 
         self._has_cdse_netrc = self._check_netrc(keyword='machine dataspace.copernicus.eu')
         if self._has_cdse_netrc:
@@ -66,51 +67,45 @@ IF you wish to download orbit files from ASF and skip CDSE, use .download_orbit(
                     print(f"{Fore.GREEN}Credentials saved to {netrc_path}. You can now download orbit from CDSE without entering credentials again.\n")
                     break
 
-        base_dir = getattr(self, 'download_dir', None) or self.config.workdir
-        print("Downloading orbit files for SLCs...")
-        for key, results in self.results.items():  # type: ignore[union-attr]
-            download_path = Path(base_dir).joinpath(f'p{key[0]}_f{key[1]}')
-            download_path.mkdir(parents=True, exist_ok=True)
-            for i, result in enumerate(results, start=1):
-                print(f"Searching orbit files for {i}/{len(results)}: {result.properties['fileID']}")
+        base_dir = Path(save_dir) if save_dir else (getattr(self, 'download_dir', None) or Path(getattr(self.config, 'workdir', None) or Path.cwd()))
+        all_items = [(key, result) for key, results in self.results.items() for result in results]  # type: ignore[union-attr]
+        with tqdm(all_items, desc="Orbit files", unit="scene", bar_format="{l_bar}{bar:20}{r_bar}") as pbar:
+            for key, result in pbar:
+                download_path = Path(save_dir) if save_dir else Path(base_dir) / f'p{key[0]}_f{key[1]}'
+                download_path.mkdir(parents=True, exist_ok=True)
                 scene_name = result.properties['sceneName']
-                acq_time = scene_name.replace("__", "_").split("_")[4]  # e.g. 20241119T143616
-                existing = list(download_path.glob("*.EOF"))
+                short_name = scene_name[:40] + "..."
+                acq_time = scene_name.replace("__", "_").split("_")[4]
                 already_have = False
-                for eof in existing:
-                    # EOF filename: ..._V{valid_start}_{valid_end}.EOF
+                for eof in download_path.glob("*.EOF"):
                     parts = eof.stem.split("_V")
                     if len(parts) == 2:
                         validity = parts[1].split("_")
                         if len(validity) == 2 and validity[0] <= acq_time <= validity[1]:
-                            print(f"{Fore.GREEN}Orbit file already exists, skipping: {eof.name}")
+                            pbar.set_postfix_str(f"skip {short_name}")
                             already_have = True
                             break
                 if already_have:
                     continue
-                print(f"Searching orbit for {scene_name}")
-                orbit_kwargs = dict(
-                    orbit_dts=[scene_name.replace("__", "_").split("_")[4]],
-                    missions=[scene_name.split("_")[0]],
-                    save_dir=download_path.as_posix(),
-                )
+                pbar.set_postfix_str(f"fetch {short_name}")
+                _save = download_path.as_posix()
                 try:
-                    info = download_eofs(**orbit_kwargs, force_asf=force_asf)
+                    info = download_eofs(sentinel_file=scene_name, save_dir=_save, force_asf=force_asf)
                 except Exception as e:
                     if not force_asf:
-                        print(f"{Fore.YELLOW}CDSE failed ({e}), retrying from ASF...")
+                        pbar.set_postfix_str(f"CDSE fail, try ASF {short_name}")
                         try:
-                            info = download_eofs(**orbit_kwargs, force_asf=True)
+                            info = download_eofs(sentinel_file=scene_name, save_dir=_save, force_asf=True)
                         except Exception as e2:
-                            print(f"{Fore.RED}ASF fallback also failed: {e2}")
+                            tqdm.write(f"{Fore.RED}[ERROR] {scene_name}: {e2}")
                             info = []
                     else:
-                        print(f"{Fore.RED}Orbit download failed: {e}")
+                        tqdm.write(f"{Fore.RED}[ERROR] {scene_name}: {e}")
                         info = []
-                if len(info) > 0:
-                    print(f"{Fore.GREEN}Orbit files for {result.properties['sceneName']} downloaded successfully.")
+                if info:
+                    pbar.set_postfix_str(f"ok {short_name}")
                 else:
-                    print(f"{Fore.YELLOW}No orbit files found for the given parameters.")
+                    tqdm.write(f"{Fore.YELLOW}[WARN] No orbit file found for: {scene_name}")
     
     def _check_cdse_credentials(self, username: str, password: str) -> bool:
         url = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"

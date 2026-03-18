@@ -145,7 +145,8 @@ def create_parser() -> argparse.ArgumentParser:
 
     g_down = p_search.add_argument_group("download")
     g_down.add_argument("-d", "--download",    action="store_true", help="Download scenes after search")
-    g_down.add_argument("-O", "--orbit-files", action="store_true", help="Also download orbit files (S1 only)")
+    g_down.add_argument("-O", "--orbit-files", nargs="?", const=True, default=False, metavar="PATH",
+                        help="Download orbit files. Optionally specify a save directory, e.g. -O orbits/ (default: workdir)")
     g_down.add_argument("--workers", metavar="INT", type=int, default=3,
                         help="Parallel download workers (default: 3)")
     g_down.add_argument("--footprint", metavar="PATH",
@@ -1136,14 +1137,18 @@ def cmd_downloader(args, extra_args: list[str]):
         )
 
     if args.download:
+        orbit_dir = args.orbit_files if isinstance(args.orbit_files, str) else None
         dl_kwargs: dict = {"max_workers": args.workers}
         if hasattr(downloader, "download") and "download_orbit" in downloader.download.__code__.co_varnames:
-            dl_kwargs["download_orbit"] = args.orbit_files
+            dl_kwargs["download_orbit"] = bool(args.orbit_files)
         result = DownloadScenesCommand(downloader, **dl_kwargs).run()
         _fail(result, "download")
+        if args.orbit_files and hasattr(downloader, "download_orbit"):
+            downloader.download_orbit(save_dir=orbit_dir)
     elif args.orbit_files:
+        orbit_dir = args.orbit_files if isinstance(args.orbit_files, str) else None
         if hasattr(downloader, "download_orbit"):
-            downloader.download_orbit()
+            downloader.download_orbit(save_dir=orbit_dir)
         else:
             print("[WARNING] This downloader does not support orbit file download.", file=sys.stderr)
 

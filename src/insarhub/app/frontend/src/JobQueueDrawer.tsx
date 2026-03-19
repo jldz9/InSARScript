@@ -20,6 +20,10 @@ export interface RasterOverlay {
 
 const API = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
+// Persist active download job IDs across L2 drawer unmount/remount
+const _dlJobs:    Map<string, string> = new Map()
+const _orbitJobs: Map<string, string> = new Map()
+
 interface JobFolder {
   name:     string
   path:     string
@@ -78,6 +82,48 @@ interface LightboxProps { theme: Theme; imagePath: string; onClose: () => void }
 
 function NetworkLightbox({ theme: t, imagePath, onClose }: LightboxProps) {
   const src = `${API}/api/folder-image?path=${encodeURIComponent(imagePath)}`
+  const [zoom, setZoom] = useState(1)
+  const [pan,  setPan]  = useState({ x: 0, y: 0 })
+  const dragging   = useRef(false)
+  const lastPos    = useRef({ x: 0, y: 0 })
+  const canvasRef  = useRef<HTMLDivElement>(null)
+  const fitZoomRef = useRef(1)
+
+  function calcFitZoom(imgW: number, imgH: number) {
+    const el = canvasRef.current
+    if (!el || !imgW || !imgH) return 1
+    return Math.min(el.clientWidth / imgW, el.clientHeight / imgH)
+  }
+
+  function onImgLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const img = e.currentTarget
+    const fit = calcFitZoom(img.naturalWidth, img.naturalHeight)
+    fitZoomRef.current = fit
+    setZoom(fit)
+  }
+
+  function onWheel(e: React.WheelEvent) {
+    e.preventDefault()
+    setZoom(z => Math.min(10, Math.max(0.2, z * (e.deltaY < 0 ? 1.12 : 1 / 1.12))))
+  }
+
+  function onMouseDown(e: React.MouseEvent) {
+    dragging.current = true
+    lastPos.current = { x: e.clientX, y: e.clientY }
+  }
+
+  function onMouseMove(e: React.MouseEvent) {
+    if (!dragging.current) return
+    const dx = e.clientX - lastPos.current.x
+    const dy = e.clientY - lastPos.current.y
+    lastPos.current = { x: e.clientX, y: e.clientY }
+    setPan(p => ({ x: p.x + dx, y: p.y + dy }))
+  }
+
+  function onMouseUp() { dragging.current = false }
+
+  function resetView() { setZoom(fitZoomRef.current); setPan({ x: 0, y: 0 }) }
+
   return (
     <div
       onClick={onClose}
@@ -90,26 +136,68 @@ function NetworkLightbox({ theme: t, imagePath, onClose }: LightboxProps) {
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          position: 'relative',
-          maxWidth: '88vw', maxHeight: '86vh',
+          position: 'relative', width: '88vw', height: '86vh',
           background: t.bg, borderRadius: 6,
           border: `1px solid ${t.border}`,
           boxShadow: '0 8px 48px rgba(0,0,0,0.6)',
           display: 'flex', flexDirection: 'column',
         }}
       >
+        {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '8px 14px', borderBottom: `1px solid ${t.border}`,
           background: t.bg2, borderRadius: '6px 6px 0 0', flexShrink: 0,
         }}>
           <span style={{ color: t.text, fontWeight: 600, fontSize: 12 }}>Pair Network</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none',
-            cursor: 'pointer', color: t.textMuted, fontSize: 20, lineHeight: 1, padding: '0 4px' }}>×</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: t.textMuted, fontSize: 11 }}>{Math.round(zoom * 100)}%</span>
+            <button onClick={resetView} title="Reset zoom" style={{
+              background: 'none', border: `1px solid ${t.border}`, borderRadius: 4,
+              cursor: 'pointer', color: t.textMuted, fontSize: 11, padding: '2px 7px',
+            }}>Reset</button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none',
+              cursor: 'pointer', color: t.textMuted, fontSize: 20, lineHeight: 1, padding: '0 4px' }}>×</button>
+          </div>
         </div>
-        <div style={{ overflow: 'auto', padding: 16 }}>
-          <img src={src} alt="Pair network"
-            style={{ display: 'block', maxWidth: '84vw', maxHeight: '78vh', borderRadius: 4 }} />
+
+        {/* Zoom/pan canvas */}
+        <div
+          ref={canvasRef}
+          onWheel={onWheel}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onMouseLeave={onMouseUp}
+          style={{
+            flex: 1, overflow: 'hidden', position: 'relative',
+            cursor: dragging.current ? 'grabbing' : 'grab',
+            userSelect: 'none',
+          }}
+        >
+          <img
+            src={src}
+            alt="Pair network"
+            draggable={false}
+            onLoad={onImgLoad}
+            style={{
+              position: 'absolute', top: '50%', left: '50%',
+              transform: `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${zoom})`,
+              transformOrigin: 'center',
+              maxWidth: 'none',
+              borderRadius: 4,
+              transition: dragging.current ? 'none' : 'transform 0.05s',
+            }}
+          />
+        </div>
+
+        {/* Hint */}
+        <div style={{
+          padding: '4px 14px', borderTop: `1px solid ${t.border}`,
+          background: t.bg2, borderRadius: '0 0 6px 6px',
+          color: t.textMuted, fontSize: 10, flexShrink: 0,
+        }}>
+          Scroll to zoom · Drag to pan
         </div>
       </div>
     </div>
@@ -1276,11 +1364,12 @@ interface MintpyViewerProps {
   theme:          Theme
   folderPath:     string
   tsList:         string[]
+  hidden:         boolean
   onClose:        () => void
   onRasterSelect: (overlay: RasterOverlay | null) => void
 }
 
-function MintpyViewerDrawer({ theme: t, folderPath, tsList, onClose, onRasterSelect }: MintpyViewerProps) {
+function MintpyViewerDrawer({ theme: t, folderPath, tsList, hidden, onClose, onRasterSelect }: MintpyViewerProps) {
   const [active,         setActive]         = useState(false)
   const [decoding,       setDecoding]       = useState(false)
   const [error,          setError]          = useState('')
@@ -1325,6 +1414,8 @@ function MintpyViewerDrawer({ theme: t, folderPath, tsList, onClose, onRasterSel
       background: t.bg, borderLeft: `1px solid ${t.border}`,
       display: 'flex', flexDirection: 'column', zIndex: 113,
       boxShadow: '-4px 0 20px rgba(0,0,0,0.25)',
+      visibility: hidden ? 'hidden' : 'visible',
+      pointerEvents: hidden ? 'none' : 'auto',
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1409,13 +1500,14 @@ interface L2Props {
   job:               JobFolder
   role:              string
   cls:               string
+  hidden:            boolean
   onClose:           () => void
   onFolderRefresh:   () => void
   onRasterSelect:    (overlay: RasterOverlay | null) => void
   onSettingsOpen:    (analyzerType: string) => void
 }
 
-function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onRasterSelect, onSettingsOpen }: L2Props) {
+function JobRoleDrawer({ theme: t, job, role, cls, hidden, onClose, onFolderRefresh, onRasterSelect, onSettingsOpen }: L2Props) {
   const rc = ROLE_COLORS[role] ?? ROLE_FALLBACK
 
   // Downloader-specific state
@@ -1425,12 +1517,13 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
   const [pairsOpen,    setPairsOpen]    = useState(false)
   const [spOpen,       setSpOpen]       = useState(false)
   const [procOpen,     setProcOpen]     = useState(false)
-  const [dlJobId,      setDlJobId]      = useState<string | null>(null)
+  const [dlJobId,      setDlJobId]      = useState<string | null>(() => _dlJobs.get(job.path) ?? null)
   const [dlStatus,     setDlStatus]     = useState<string>('')
-  const [orbitJobId,   setOrbitJobId]   = useState<string | null>(null)
+  const [orbitJobId,   setOrbitJobId]   = useState<string | null>(() => _orbitJobs.get(job.path) ?? null)
   const [orbitStatus,  setOrbitStatus]  = useState<string>('')
   const [ifgViewerOpen,     setIfgViewerOpen]     = useState(false)
-  const [mintpyViewerOpen,  setMintpyViewerOpen]  = useState(false)
+  const [mintpyViewerOpen,     setMintpyViewerOpen]     = useState(false)
+  const [mintpyViewerEverOpen, setMintpyViewerEverOpen] = useState(false)
   const [mintpyHasData,     setMintpyHasData]     = useState(false)
   const [mintpyTsList,      setMintpyTsList]      = useState<string[]>([])
 
@@ -1462,6 +1555,7 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
   // Poll download job
   useEffect(() => {
     if (!dlJobId) return
+    _dlJobs.set(job.path, dlJobId)
     const id = setInterval(() => {
       fetch(`${API}/api/jobs/${dlJobId}`)
         .then(r => r.json())
@@ -1469,10 +1563,11 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
           setDlStatus(d.message ?? '')
           if (d.status === 'done' || d.status === 'error') {
             clearInterval(id)
+            _dlJobs.delete(job.path)
             setDlJobId(null)
           }
         })
-        .catch(() => { clearInterval(id); setDlJobId(null) })
+        .catch(() => { clearInterval(id); _dlJobs.delete(job.path); setDlJobId(null) })
     }, 1500)
     return () => clearInterval(id)
   }, [dlJobId])
@@ -1492,6 +1587,7 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
   // Poll orbit download job
   useEffect(() => {
     if (!orbitJobId) return
+    _orbitJobs.set(job.path, orbitJobId)
     const id = setInterval(() => {
       fetch(`${API}/api/jobs/${orbitJobId}`)
         .then(r => r.json())
@@ -1499,10 +1595,11 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
           setOrbitStatus(d.message ?? '')
           if (d.status === 'done' || d.status === 'error') {
             clearInterval(id)
+            _orbitJobs.delete(job.path)
             setOrbitJobId(null)
           }
         })
-        .catch(() => { clearInterval(id); setOrbitJobId(null) })
+        .catch(() => { clearInterval(id); _orbitJobs.delete(job.path); setOrbitJobId(null) })
     }, 1500)
     return () => clearInterval(id)
   }, [orbitJobId])
@@ -1519,9 +1616,18 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
       .catch(e => setOrbitStatus(String(e)))
   }
 
+  function handleStopDownload() {
+    if (!dlJobId) return
+    fetch(`${API}/api/jobs/${dlJobId}/stop`, { method: 'POST' }).catch(() => {})
+    _dlJobs.delete(job.path)
+    setDlJobId(null)
+    setDlStatus('Stopped.')
+  }
+
   function handleStopOrbit() {
     if (!orbitJobId) return
     fetch(`${API}/api/jobs/${orbitJobId}/stop`, { method: 'POST' }).catch(() => {})
+    _orbitJobs.delete(job.path)
     setOrbitJobId(null)
     setOrbitStatus('Stopped.')
   }
@@ -1549,18 +1655,23 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
         <NetworkLightbox theme={t} imagePath={details.network_image} onClose={() => setLightboxOpen(false)} />
       )}
 
-      {/* L3 pairs drawer */}
+      {/* L3 pairs drawer — kept mounted once opened so state survives hide/show */}
       {pairsOpen && (
-        <PairsDrawer theme={t} folderPath={job.path} onClose={() => setPairsOpen(false)} />
+        <PairsDrawer
+          theme={t}
+          folderPath={job.path}
+          onClose={() => setPairsOpen(false)}
+        />
       )}
 
-      {/* L3 MintPy results viewer */}
-      {mintpyViewerOpen && (
+      {/* L3 MintPy results viewer — kept mounted once opened so collapsed state survives */}
+      {mintpyViewerEverOpen && (
         <MintpyViewerDrawer
           theme={t}
           folderPath={job.path}
           tsList={mintpyTsList}
-          onClose={() => setMintpyViewerOpen(false)}
+          hidden={hidden}
+          onClose={() => { setMintpyViewerOpen(false); setMintpyViewerEverOpen(false) }}
           onRasterSelect={onRasterSelect}
         />
       )}
@@ -1603,6 +1714,8 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
         display: 'flex', flexDirection: 'column',
         zIndex: 112,
         boxShadow: '-4px 0 20px rgba(0,0,0,0.25)',
+        visibility: hidden ? 'hidden' : 'visible',
+        pointerEvents: hidden ? 'none' : 'auto',
       }}>
         {/* Header */}
         <div style={{
@@ -1749,26 +1862,45 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
           {/* ── Downloader: download button ── */}
           {role === 'downloader' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <button
-                onClick={handleDownload}
-                disabled={!!dlJobId}
-                style={{
-                  width: '100%', padding: '7px 12px', fontSize: 11,
-                  background: dlJobId ? t.bg2 : rc.bg,
-                  color: dlJobId ? t.textMuted : rc.color,
-                  border: `1px solid ${dlJobId ? t.border : rc.border}`,
-                  borderRadius: 4, cursor: dlJobId ? 'wait' : 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 8,
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                {dlJobId ? 'Downloading…' : 'Download'}
-              </button>
-              {dlStatus && (
-                <span style={{ fontSize: 10, color: t.textMuted, fontFamily: 'monospace' }}>{dlStatus}</span>
+              {dlJobId ? (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <button
+                    onClick={handleStopDownload}
+                    style={{
+                      flex: '0 0 auto', padding: '7px 12px', fontSize: 11,
+                      background: '#e53935', color: '#fff',
+                      border: '1px solid #e53935',
+                      borderRadius: 4, cursor: 'pointer',
+                    }}
+                  >
+                    ■ Stop
+                  </button>
+                  {dlStatus && (
+                    <span style={{ fontSize: 10, color: t.textMuted, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dlStatus}</span>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={handleDownload}
+                    style={{
+                      width: '100%', padding: '7px 12px', fontSize: 11,
+                      background: rc.bg, color: rc.color,
+                      border: `1px solid ${rc.border}`,
+                      borderRadius: 4, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Download
+                  </button>
+                  {dlStatus && (
+                    <span style={{ fontSize: 10, color: t.textMuted, fontFamily: 'monospace' }}>{dlStatus}</span>
+                  )}
+                </>
               )}
               {cls === 'S1_SLC' && (
                 <>
@@ -1830,7 +1962,7 @@ function JobRoleDrawer({ theme: t, job, role, cls, onClose, onFolderRefresh, onR
               <AnalyzerPanel theme={t} folderPath={job.path} analyzerType={cls} onSettingsOpen={onSettingsOpen} />
               {mintpyHasData && (
                 <button
-                  onClick={() => setMintpyViewerOpen(o => !o)}
+                  onClick={() => { setMintpyViewerOpen(o => !o); setMintpyViewerEverOpen(true) }}
                   style={{
                     width: '100%', padding: '6px 12px', fontSize: 11, textAlign: 'left',
                     background: mintpyViewerOpen ? ROLE_COLORS.analyzer.bg : 'transparent',
@@ -1865,7 +1997,10 @@ export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSel
   const [jobs,    setJobs]    = useState<JobFolder[]>([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState('')
-  const [l2,      setL2]      = useState<{ job: JobFolder; role: string; cls: string } | null>(null)
+  const [l2,        setL2]        = useState<{ job: JobFolder; role: string; cls: string } | null>(null)
+  const [l2Visible, setL2Visible] = useState(false)
+  const [minimized, setMinimized] = useState(false)
+  const l2VisibleBeforeMinimize   = useRef(false)
 
   const loadJobs = () => {
     setLoading(true)
@@ -1880,20 +2015,40 @@ export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSel
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        onClick={() => { setL2(null); onClose() }}
-        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 110 }}
-      />
+      {/* Standalone ‹‹‹ tab — only shown when minimized, lives outside hidden containers */}
+      {minimized && (
+        <button
+          onClick={() => { setMinimized(false); setL2Visible(l2VisibleBeforeMinimize.current) }}
+          title="Restore drawers"
+          style={{
+            position: 'fixed', right: 0, top: '50%', transform: 'translateY(-50%)',
+            width: 28, height: 72, zIndex: 120,
+            background: t.bg2, border: `1px solid ${t.border}`,
+            borderRight: 'none', borderRadius: '6px 0 0 6px',
+            cursor: 'pointer', color: t.textMuted, fontSize: 11,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            writingMode: 'vertical-rl', letterSpacing: 2,
+          }}
+        >‹‹‹</button>
+      )}
 
-      {/* L2 drawer */}
+      {/* Backdrop — click minimizes (hides) all drawers without unmounting */}
+      {!minimized && (
+        <div
+          onClick={() => { l2VisibleBeforeMinimize.current = l2Visible; setL2Visible(false); setMinimized(true) }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 110 }}
+        />
+      )}
+
+      {/* L2 drawer — always mounted while l2 is set; hidden via CSS when not visible or minimized */}
       {l2 && (
         <JobRoleDrawer
           theme={t}
           job={l2.job}
           role={l2.role}
           cls={l2.cls}
-          onClose={() => setL2(null)}
+          hidden={!l2Visible || minimized}
+          onClose={() => { setL2(null); setL2Visible(false) }}
           onFolderRefresh={loadJobs}
           onRasterSelect={onRasterSelect}
           onSettingsOpen={onSettingsOpen}
@@ -1908,6 +2063,8 @@ export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSel
         display: 'flex', flexDirection: 'column',
         zIndex: 111,
         boxShadow: '-4px 0 24px rgba(0,0,0,0.3)',
+        visibility: minimized ? 'hidden' : 'visible',
+        pointerEvents: minimized ? 'none' : 'auto',
       }}>
         {/* Header */}
         <div style={{
@@ -1920,7 +2077,7 @@ export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSel
             <span style={{ color: t.textMuted, fontSize: 11, marginLeft: 8 }}>{workdir}</span>
           </div>
           <button
-            onClick={() => { setL2(null); onClose() }}
+            onClick={() => { setL2(null); setL2Visible(false); onClose() }}
             style={{ background: 'none', border: 'none', cursor: 'pointer',
                      color: t.textMuted, fontSize: 20, lineHeight: 1, padding: '0 4px' }}
           >×</button>
@@ -1955,7 +2112,7 @@ export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSel
                     onClick={() => {
                       if (!confirm(`Delete "${job.name}" and all its contents?`)) return
                       fetch(`${API}/api/job-folder?path=${encodeURIComponent(job.path)}`, { method: 'DELETE' })
-                        .then(r => { if (r.ok) { if (l2?.job.path === job.path) setL2(null); loadJobs() } })
+                        .then(r => { if (r.ok) { if (l2?.job.path === job.path) { setL2(null); setL2Visible(false) } loadJobs() } })
                         .catch(() => {})
                     }}
                     style={{
@@ -1980,7 +2137,14 @@ export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSel
                               <span style={{ color: t.textMuted, fontSize: 10, userSelect: 'none' }}>→</span>
                             )}
                             <button
-                              onClick={() => setL2(isActive ? null : { job, role, cls })}
+                              onClick={() => {
+                                if (isActive && l2Visible) {
+                                  setL2Visible(false)
+                                } else {
+                                  setL2({ job, role, cls })
+                                  setL2Visible(true)
+                                }
+                              }}
                               title={`${role}: ${cls}`}
                               style={{
                                 fontSize: 10, fontWeight: 600,

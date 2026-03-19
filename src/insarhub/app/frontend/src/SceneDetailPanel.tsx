@@ -43,10 +43,11 @@ function fmtList(v: string[] | string | undefined | null): string {
 export default function SceneDetailPanel({ feature, theme: t, workdir, onClose }: Props) {
   const p = feature.properties ?? {}
 
-  const [dlStatus,       setDlStatus]       = useState<'idle'|'downloading'|'done'|'error'>('idle')
-  const [dlMessage,      setDlMessage]      = useState('')
-  const [copied,         setCopied]         = useState(false)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [dlStatus,  setDlStatus]  = useState<'idle'|'downloading'|'done'|'error'>('idle')
+  const [dlMessage, setDlMessage] = useState('')
+  const [copied,    setCopied]    = useState(false)
+  const pollRef  = useRef<ReturnType<typeof setInterval> | null>(null)
+  const jobIdRef = useRef<string | null>(null)
 
   async function handleDownload() {
     if (!p.url) return
@@ -59,15 +60,18 @@ export default function SceneDetailPanel({ feature, theme: t, workdir, onClose }
         body: JSON.stringify({ url: p.url, workdir }),
       })
       const { job_id } = await res.json()
+      jobIdRef.current = job_id
       pollRef.current = setInterval(async () => {
         const r   = await fetch(`${API}/api/jobs/${job_id}`)
         const job = await r.json()
         setDlMessage(job.message)
         if (job.status === 'done') {
           clearInterval(pollRef.current!)
-          setDlStatus('done')
+          jobIdRef.current = null
+          setDlStatus(job.message === 'Stopped.' ? 'idle' : 'done')
         } else if (job.status === 'error') {
           clearInterval(pollRef.current!)
+          jobIdRef.current = null
           setDlStatus('error')
         }
       }, 1500)
@@ -75,6 +79,17 @@ export default function SceneDetailPanel({ feature, theme: t, workdir, onClose }
       setDlStatus('error')
       setDlMessage(String(e))
     }
+  }
+
+  async function handleStop() {
+    const id = jobIdRef.current
+    if (!id) return
+    clearInterval(pollRef.current!)
+    pollRef.current = null
+    jobIdRef.current = null
+    setDlStatus('idle')
+    setDlMessage('')
+    await fetch(`${API}/api/jobs/${id}/stop`, { method: 'POST' })
   }
 
   function handleCopyUrl() {
@@ -206,28 +221,45 @@ export default function SceneDetailPanel({ feature, theme: t, workdir, onClose }
           <div style={{ marginTop: 4 }}>
             {/* Action buttons */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-              {/* Direct download to server */}
+              {dlStatus === 'downloading' ? <>
+                <button
+                  onClick={handleStop}
+                  style={{
+                    flex: 1, padding: '7px 0',
+                    background: '#b71c1c', color: '#ef9a9a',
+                    border: '1px solid #e53935',
+                    borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  ■ Stop
+                </button>
+                {dlMessage && (
+                  <span style={{
+                    display: 'flex', alignItems: 'center',
+                    color: t.textMuted, fontSize: 11, fontFamily: 'monospace',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>{dlMessage}</span>
+                )}
+              </> : (
               <button
-                onClick={handleDownload}
-                disabled={dlStatus === 'downloading'}
+                onClick={dlStatus === 'error' ? handleDownload : handleDownload}
                 style={{
                   flex: 1, padding: '7px 0',
-                  background: dlStatus === 'done'    ? '#1b5e20'
-                             : dlStatus === 'error'  ? '#b71c1c'
+                  background: dlStatus === 'done'   ? '#1b5e20'
+                             : dlStatus === 'error' ? '#b71c1c'
                              : t.btnActiveBg,
                   color: dlStatus === 'done'   ? '#a5d6a7'
                        : dlStatus === 'error'  ? '#ef9a9a'
                        : t.accent,
                   border: `1px solid ${t.btnActiveBorder}`,
-                  borderRadius: 6, fontSize: 12, fontWeight: 600,
-                  cursor: dlStatus === 'downloading' ? 'wait' : 'pointer',
+                  borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                 }}
               >
-                {dlStatus === 'downloading' ? '⟳ Downloading…'
-                : dlStatus === 'done'       ? '✓ Downloaded'
-                : dlStatus === 'error'      ? '✕ Retry'
+                {dlStatus === 'done'  ? '✓ Downloaded'
+                : dlStatus === 'error' ? '✕ Retry'
                 : '↓ Download'}
               </button>
+              )}
 
               {/* Copy URL */}
               <button
@@ -245,8 +277,8 @@ export default function SceneDetailPanel({ feature, theme: t, workdir, onClose }
               </button>
             </div>
 
-            {/* Status message */}
-            {dlMessage && (
+            {/* Status message (done / error only — progress shown inline while downloading) */}
+            {dlMessage && dlStatus !== 'downloading' && (
               <div style={{ color: dlStatusColor, fontSize: 11, marginBottom: 6 }}>
                 {dlMessage}
               </div>

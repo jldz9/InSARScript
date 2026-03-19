@@ -9,6 +9,10 @@ export function parseStack(s: string): { path: number; frame: number } | null {
 
 const API = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
+// Persist active job IDs across ScenePanel unmount/remount, keyed by stack key "(path, frame)"
+const _dlJobs:    Map<string, string> = new Map()
+const _orbitJobs: Map<string, string> = new Map()
+
 interface Props {
   feature:      GeoJSON.Feature
   theme:        Theme
@@ -42,18 +46,66 @@ export default function ScenePanel({
   const p     = feature.properties ?? {}
   const stack = parseStack(p._stack ?? '')
 
-  const [dlStatus,  setDlStatus]  = useState<'idle'|'downloading'|'done'|'error'>('idle')
+  const stackKey = p._stack ?? ''
+
+  const [dlStatus,  setDlStatus]  = useState<'idle'|'downloading'|'done'|'error'>(
+    () => _dlJobs.has(stackKey) ? 'downloading' : 'idle'
+  )
   const [dlMessage, setDlMessage] = useState('')
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null)
-  const dlJobIdRef = useRef<string | null>(null)
+  const dlJobIdRef = useRef<string | null>(_dlJobs.get(stackKey) ?? null)
 
   const [ajStatus,  setAjStatus]  = useState<'idle'|'running'|'done'|'error'>('idle')
   const [ajMessage, setAjMessage] = useState('')
 
-  const [orbitStatus,  setOrbitStatus]  = useState<'idle'|'running'|'done'|'error'>('idle')
+  const [orbitStatus,  setOrbitStatus]  = useState<'idle'|'running'|'done'|'error'>(
+    () => _orbitJobs.has(stackKey) ? 'running' : 'idle'
+  )
   const [orbitMessage, setOrbitMessage] = useState('')
-  const orbitPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const orbitJobIdRef = useRef<string | null>(null)
+  const orbitPollRef  = useRef<ReturnType<typeof setInterval> | null>(null)
+  const orbitJobIdRef = useRef<string | null>(_orbitJobs.get(stackKey) ?? null)
+
+  // Resume polling for any in-flight jobs when this panel mounts
+  useEffect(() => {
+    const dlId = dlJobIdRef.current
+    if (dlId) {
+      pollRef.current = setInterval(async () => {
+        try {
+          const r = await fetch(`${API}/api/jobs/${dlId}`)
+          const job = await r.json()
+          setDlMessage(job.message)
+          if (job.status === 'done') {
+            clearInterval(pollRef.current!); dlJobIdRef.current = null
+            _dlJobs.delete(stackKey); setDlStatus('done')
+          } else if (job.status === 'error') {
+            clearInterval(pollRef.current!); dlJobIdRef.current = null
+            _dlJobs.delete(stackKey); setDlStatus('error')
+          }
+        } catch { clearInterval(pollRef.current!); _dlJobs.delete(stackKey); setDlStatus('error') }
+      }, 1500)
+    }
+    const orbitId = orbitJobIdRef.current
+    if (orbitId) {
+      orbitPollRef.current = setInterval(async () => {
+        try {
+          const r = await fetch(`${API}/api/jobs/${orbitId}`)
+          const job = await r.json()
+          setOrbitMessage(job.message ?? '')
+          if (job.status === 'done') {
+            clearInterval(orbitPollRef.current!); orbitJobIdRef.current = null
+            _orbitJobs.delete(stackKey); setOrbitStatus('done')
+          } else if (job.status === 'error') {
+            clearInterval(orbitPollRef.current!); orbitJobIdRef.current = null
+            _orbitJobs.delete(stackKey); setOrbitStatus('error')
+          }
+        } catch { clearInterval(orbitPollRef.current!); _orbitJobs.delete(stackKey); setOrbitStatus('error') }
+      }, 1500)
+    }
+    return () => {
+      clearInterval(pollRef.current!)
+      clearInterval(orbitPollRef.current!)
+    }
+  }, [stackKey])
 
   // Reset Add Job status when feature changes
   useEffect(() => { setAjStatus('idle'); setAjMessage('') }, [feature])
@@ -93,6 +145,7 @@ export default function ScenePanel({
       fetch(`${API}/api/jobs/${dlJobIdRef.current}/stop`, { method: 'POST' }).catch(() => {})
       dlJobIdRef.current = null
     }
+    _dlJobs.delete(stackKey)
     setDlStatus('idle')
     setDlMessage('Stopped.')
   }
@@ -126,6 +179,7 @@ export default function ScenePanel({
       const { job_id } = data
       if (!job_id) { setDlStatus('error'); setDlMessage('No job ID returned'); return }
       dlJobIdRef.current = job_id
+      _dlJobs.set(stackKey, job_id)
       pollRef.current = setInterval(async () => {
         try {
           const r   = await fetch(`${API}/api/jobs/${job_id}`)
@@ -133,15 +187,16 @@ export default function ScenePanel({
           setDlMessage(job.message)
           if (job.status === 'done') {
             clearInterval(pollRef.current!)
-            dlJobIdRef.current = null
+            dlJobIdRef.current = null; _dlJobs.delete(stackKey)
             setDlStatus('done')
           } else if (job.status === 'error') {
             clearInterval(pollRef.current!)
-            dlJobIdRef.current = null
+            dlJobIdRef.current = null; _dlJobs.delete(stackKey)
             setDlStatus('error')
           }
         } catch {
           clearInterval(pollRef.current!)
+          _dlJobs.delete(stackKey)
           setDlStatus('error')
           setDlMessage('Lost connection to server')
         }
@@ -158,6 +213,7 @@ export default function ScenePanel({
       fetch(`${API}/api/jobs/${orbitJobIdRef.current}/stop`, { method: 'POST' }).catch(() => {})
       orbitJobIdRef.current = null
     }
+    _orbitJobs.delete(stackKey)
     setOrbitStatus('idle')
     setOrbitMessage('Stopped.')
   }
@@ -184,17 +240,18 @@ export default function ScenePanel({
       })
       const { job_id } = await res.json()
       orbitJobIdRef.current = job_id
+      _orbitJobs.set(stackKey, job_id)
       orbitPollRef.current = setInterval(async () => {
         const r   = await fetch(`${API}/api/jobs/${job_id}`)
         const job = await r.json()
         setOrbitMessage(job.message ?? '')
         if (job.status === 'done') {
           clearInterval(orbitPollRef.current!)
-          orbitJobIdRef.current = null
+          orbitJobIdRef.current = null; _orbitJobs.delete(stackKey)
           setOrbitStatus('done')
         } else if (job.status === 'error') {
           clearInterval(orbitPollRef.current!)
-          orbitJobIdRef.current = null
+          orbitJobIdRef.current = null; _orbitJobs.delete(stackKey)
           setOrbitStatus('error')
         }
       }, 1500)

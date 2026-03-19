@@ -750,30 +750,56 @@ async def download_single_scene(req: DownloadSceneRequest, background_tasks: Bac
 
 
 async def _run_download_scene(job_id: str, req: DownloadSceneRequest):
+    stop_ev = _threading.Event()
+    _stop_events[job_id] = stop_ev
+
     def run():
+        file_path = None
         try:
             import asf_search as asf
+            from asf_search.download.download import _try_get_response
 
             workdir = Path(req.workdir)
             workdir.mkdir(parents=True, exist_ok=True)
 
             filename = req.filename or req.url.rstrip("/").split("/")[-1].split("?")[0]
+            file_path = workdir / filename
             _jobs[job_id]["message"] = f"Downloading {filename}…"
 
-            asf.download_urls(
-                urls=[req.url],
-                path=str(workdir),
-                processes=1,
-            )
+            session = asf.ASFSession()
+            response = _try_get_response(session=session, url=req.url)
+            total_bytes = int(response.headers.get("content-length", 0))
+            downloaded = 0
+
+            with open(file_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=65536):
+                    if stop_ev.is_set():
+                        response.close()
+                        _jobs[job_id] = {"status": "done", "progress": 0, "message": "Stopped.", "data": None}
+                        return
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_bytes:
+                            pct = int(downloaded / total_bytes * 100)
+                            _jobs[job_id]["progress"] = pct
+                            _jobs[job_id]["message"] = f"Downloading {filename}… {pct}%"
 
             _jobs[job_id] = {
                 "status":   "done",
                 "progress": 100,
                 "message":  f"Saved {filename}",
-                "data":     str(workdir / filename),
+                "data":     str(file_path),
             }
+        except InterruptedError:
+            _jobs[job_id] = {"status": "done", "progress": 0, "message": "Stopped.", "data": None}
         except Exception as e:
+            # Clean up partial file on error
+            if file_path and file_path.exists():
+                file_path.unlink(missing_ok=True)
             _jobs[job_id] = {"status": "error", "progress": 0, "message": str(e), "data": None}
+        finally:
+            _stop_events.pop(job_id, None)
 
     await asyncio.to_thread(run)
 
@@ -1012,6 +1038,9 @@ async def folder_download(req: FolderDownloadRequest, background_tasks: Backgrou
 
 
 async def _run_folder_download(job_id: str, folder_path: str):
+    stop_ev = _threading.Event()
+    _stop_events[job_id] = stop_ev
+
     def run():
         try:
             folder = Path(folder_path)
@@ -1032,7 +1061,31 @@ async def _run_folder_download(job_id: str, folder_path: str):
                 _jobs[job_id] = {"status": "error", "progress": 0, "message": search_result.message, "data": None}
                 return
 
-            dl_result = DownloadScenesCommand(downloader, progress_callback=_make_progress(job_id)).run()
+            if stop_ev.is_set():
+                _jobs[job_id] = {"status": "done", "progress": 0, "message": "Stopped.", "data": None}
+                return
+
+            total = sum(len(v) for v in downloader.results.values())
+            _jobs[job_id]["message"] = f"Downloading 0/{total}"
+
+            def _on_progress(msg: str, pct: int):
+                count = msg.split(']')[0].lstrip('[') if ']' in msg else ''
+                _jobs[job_id]["message"] = f"Downloading {count}" if count else msg
+                _jobs[job_id]["progress"] = pct
+
+            # Pass folder.parent so download() creates p{path}_f{frame}/ inside it,
+            # landing files in the job folder itself rather than a nested subfolder.
+            dl_result = DownloadScenesCommand(
+                downloader,
+                stop_event=stop_ev,
+                on_progress=_on_progress,
+                save_path=str(folder.parent),
+            ).run()
+
+            if stop_ev.is_set():
+                _jobs[job_id] = {"status": "done", "progress": 0, "message": "Stopped.", "data": None}
+                return
+
             _jobs[job_id] = {
                 "status":   "done" if dl_result.success else "error",
                 "progress": 100,
@@ -1041,6 +1094,8 @@ async def _run_folder_download(job_id: str, folder_path: str):
             }
         except Exception as e:
             _jobs[job_id] = {"status": "error", "progress": 0, "message": str(e), "data": None}
+        finally:
+            _stop_events.pop(job_id, None)
 
     await asyncio.to_thread(run)
 

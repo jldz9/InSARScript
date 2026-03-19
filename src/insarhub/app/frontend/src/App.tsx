@@ -316,6 +316,9 @@ export default function App() {
     setAoiWkt(null)
     setAoiGeoJson(null)
     setAoi([-180, -90, 180, 90])
+    setFootprints(null)
+    setResultCount('')
+    setSelectedFeature(null)
   }
 
   // ── Shapefile upload ──────────────────────────────────────────────────────

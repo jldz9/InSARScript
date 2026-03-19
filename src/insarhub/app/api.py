@@ -1518,7 +1518,7 @@ def _colormap_numpy(data, mask, vmin: float, vmax: float, type_name: str):
     """Apply colormap to a 2-D float32 array; return H×W×4 uint8 RGBA."""
     import numpy as np
     rng = vmax - vmin or 1.0
-    t   = np.clip((data - vmin) / rng, 0.0, 1.0)
+    t   = np.where(mask, 0.0, np.clip((data - vmin) / rng, 0.0, 1.0))
     h, w = data.shape
     rgba = np.zeros((h, w, 4), dtype=np.uint8)
     if type_name == 'unw_phase':

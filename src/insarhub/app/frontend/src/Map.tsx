@@ -79,6 +79,40 @@ export default function Map({
     })
 
     map.dragRotate.disable()
+    map.dragPan.disable()
+
+    // ── Right-click pan ───────────────────────────────────────────────────
+    const canvas = map.getCanvas()
+    let isPanning = false
+    let lastPanPos = { x: 0, y: 0 }
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.button !== 2) return
+      e.preventDefault()
+      isPanning = true
+      lastPanPos = { x: e.clientX, y: e.clientY }
+      canvas.style.cursor = 'grabbing'
+    })
+
+    const onPanMove = (e: MouseEvent) => {
+      if (!isPanning) return
+      const rect = canvas.getBoundingClientRect()
+      const from = map.unproject([lastPanPos.x - rect.left, lastPanPos.y - rect.top])
+      const to   = map.unproject([e.clientX   - rect.left, e.clientY   - rect.top])
+      const c = map.getCenter()
+      map.setCenter([c.lng - (to.lng - from.lng), c.lat - (to.lat - from.lat)])
+      lastPanPos = { x: e.clientX, y: e.clientY }
+    }
+
+    const onPanUp = (e: MouseEvent) => {
+      if (e.button !== 2 || !isPanning) return
+      isPanning = false
+      canvas.style.cursor = drawModeRef.current ? 'crosshair' : 'default'
+    }
+
+    window.addEventListener('mousemove', onPanMove)
+    window.addEventListener('mouseup',   onPanUp)
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault())
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right')
     map.addControl(new maplibregl.ScaleControl(), 'bottom-left')
@@ -169,7 +203,7 @@ export default function Map({
       function onFootprintMouseLeave() {
         if (hoveredId !== null) map.setFeatureState({ source: 'footprints', id: hoveredId }, { hover: false })
         hoveredId = null
-        if (!drawModeRef.current) map.getCanvas().style.cursor = ''
+        if (!drawModeRef.current) map.getCanvas().style.cursor = 'default'
       }
 
       function onFootprintClick(e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) {
@@ -225,14 +259,12 @@ export default function Map({
     map.on('click', (e) => {
       if (drawModeRef.current !== 'box') return
       if (!boxStartRef.current) {
-        // First click — store start, disable pan so user can move freely
-        map.dragPan.disable()
+        // First click — store start
         boxStartRef.current = [e.lngLat.lng, e.lngLat.lat]
       } else {
         // Second click — complete the box
         const start = boxStartRef.current
         boxStartRef.current = null
-        map.dragPan.enable()
         map.getCanvas().style.cursor = 'crosshair'
         ;(map.getSource('box-preview') as maplibregl.GeoJSONSource)?.setData(EMPTY_FC)
         const bbox: Bbox = [
@@ -260,8 +292,14 @@ export default function Map({
         const [W, S, E, N] = ov.bounds
         const lng = e.lngLat.lng, lat = e.lngLat.lat
         if (lng >= W && lng <= E && lat >= S && lat <= N) {
-          const col = Math.floor((lng - W) / (E - W) * ov.width)
-          const row = Math.floor((N - lat) / (N - S) * ov.height)
+          // Project to Mercator for correct pixel lookup (PNG is in EPSG:3857)
+          const R = 6378137
+          const toMercX = (lon: number) => lon * Math.PI / 180 * R
+          const toMercY = (la: number) => Math.log(Math.tan(Math.PI / 4 + la * Math.PI / 360)) * R
+          const mX = toMercX(lng), mW = toMercX(W), mE = toMercX(E)
+          const mY = toMercY(lat), mN = toMercY(N), mS = toMercY(S)
+          const col = Math.floor((mX - mW) / (mE - mW) * ov.width)
+          const row = Math.floor((mN - mY) / (mN - mS) * ov.height)
           const val = ov.pixelData[row * ov.width + col]
           onRasterPixelRef.current?.((ov.nodata !== null && val === ov.nodata) ? null : val)
         } else {
@@ -343,14 +381,18 @@ export default function Map({
     })
 
     mapRef.current = map
-    return () => map.remove()
+    return () => {
+      window.removeEventListener('mousemove', onPanMove)
+      window.removeEventListener('mouseup',   onPanUp)
+      map.remove()
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Cursor on draw mode change ────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    map.getCanvas().style.cursor = drawMode ? 'crosshair' : ''
+    map.getCanvas().style.cursor = drawMode ? 'crosshair' : 'default'
     // Cancel any in-progress polygon when mode changes away
     if (drawMode !== 'polygon') {
       polyPointsRef.current = []
@@ -358,7 +400,6 @@ export default function Map({
     }
     if (drawMode !== 'box') {
       boxStartRef.current = null
-      map.dragPan.enable()
       ;(map.getSource('box-preview') as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY_FC)
     }
   }, [drawMode])
@@ -424,7 +465,7 @@ export default function Map({
         if (!rasterOverlay) return
 
         const [W, S, E, N] = rasterOverlay.bounds
-        console.debug('[InSARHub] raster overlay bounds W,S,E,N:', W, S, E, N)
+
 
         if (!isFinite(W) || !isFinite(S) || !isFinite(E) || !isFinite(N) || W >= E || S >= N) {
           console.error('[InSARHub] invalid raster overlay bounds — skipping:', rasterOverlay.bounds)

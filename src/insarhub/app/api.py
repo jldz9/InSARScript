@@ -27,9 +27,13 @@ import geopandas as gpd
 from shapely import wkt as shapely_wkt
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from rasterio.crs import CRS
+from rasterio.warp import reproject, Resampling, calculate_default_transform
+from rasterio.transform import from_origin, from_bounds
+from pyproj import Transformer
 
 from insarhub.commands.downloader import DownloadScenesCommand, SearchCommand
 from insarhub.commands.processor import SaveJobsCommand, SubmitCommand
@@ -1019,9 +1023,14 @@ async def get_folder_pairs(path: str):
 async def get_folder_image(path: str):
     """Serve a PNG image from the filesystem by absolute path."""
     img_path = Path(path)
+    workdir = Path(_settings["workdir"])
+    try:
+        img_path.resolve().relative_to(workdir.resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Path is outside workdir")
     if not img_path.exists() or img_path.suffix.lower() != ".png":
         raise HTTPException(status_code=404, detail="Image not found")
-    return StreamingResponse(open(img_path, "rb"), media_type="image/png")
+    return Response(content=img_path.read_bytes(), media_type="image/png")
 
 
 @app.post("/api/folder-download", response_model=JobResponse)
@@ -1836,15 +1845,16 @@ def _mintpy_bounds(attrs) -> list:
     y_step  = float(_mintpy_attr_val(attrs, 'Y_STEP'))
     width   = int(float(str(_mintpy_attr_val(attrs, 'WIDTH')).strip()))
     length  = int(float(str(_mintpy_attr_val(attrs, 'LENGTH')).strip()))
-
-    x_last = x_first + x_step * width
-    y_last = y_first + y_step * length
-    # Use min/max to handle either sign of Y_STEP
-    west  = min(x_first, x_last)
-    east  = max(x_first, x_last)
-    south = min(y_first, y_last)
-    north = max(y_first, y_last)
-
+    # X_FIRST / Y_FIRST are pixel-centre coordinates; convert to pixel-edge bounds
+    # so that MapLibre renders the image with pixel centres at the correct geographic locations.
+    half_x = 0.5 * abs(x_step)
+    half_y = 0.5 * abs(y_step)
+    x_center_last = x_first + x_step * (width  - 1)
+    y_center_last = y_first + y_step * (length - 1)
+    west  = min(x_first, x_center_last) - half_x
+    east  = max(x_first, x_center_last) + half_x
+    south = min(y_first, y_center_last) - half_y
+    north = max(y_first, y_center_last) + half_y
     # Detect projected coordinates (UTM easting ~100 000 – 900 000 m)
     if abs(x_first) > 360 or abs(y_first) > 90:
         epsg = _mintpy_epsg(attrs)
@@ -1853,7 +1863,6 @@ def _mintpy_bounds(attrs) -> list:
         xs, ys = tf.transform([west, east, west, east],
                                [south, south, north, north])
         return [min(xs), min(ys), max(xs), max(ys)]
-
     return [west, south, east, north]
 
 
@@ -1877,10 +1886,9 @@ async def render_velocity(path: str):
     if not vel_path.exists():
         raise HTTPException(status_code=404, detail='velocity.h5 not found')
     try:
-        import h5py, rasterio
-        from rasterio.warp import transform_bounds as rio_transform_bounds
+        import h5py
 
-        # ── Read pixel data via h5py ──────────────────────────────────────────
+        # ── Read pixel data and geo-attributes via h5py ───────────────────────
         with h5py.File(vel_path, 'r') as f:
             ds   = f['velocity']
             data = ds[:].astype(np.float32)
@@ -1890,62 +1898,105 @@ async def render_velocity(path: str):
             data = data[0]
         orig_h, orig_w = data.shape
 
-        # ── Bounds: try rasterio/GDAL HDF5 driver first (same as render-tif) ──
-        bounds = None
-        try:
-            hdf_path = f'HDF5:"{vel_path}"://velocity'
-            with rasterio.open(hdf_path) as src:
-                if src.crs:
-                    bounds = list(rio_transform_bounds(src.crs, 'EPSG:4326', *src.bounds))
-        except Exception:
-            pass
+        # ── WGS84 pixel-edge bounds from actual data shape ────────────────────
+        x_first = float(_mintpy_attr_val(attrs, 'X_FIRST'))
+        y_first = float(_mintpy_attr_val(attrs, 'Y_FIRST'))
+        x_step  = float(_mintpy_attr_val(attrs, 'X_STEP'))
+        y_step  = float(_mintpy_attr_val(attrs, 'Y_STEP'))
+        
+        is_projected = abs(x_first) > 360 or abs(y_first) > 90
+        src_epsg = _mintpy_epsg(attrs) if is_projected else 4326
+        src_crs = CRS.from_epsg(src_epsg)
+        dst_crs = CRS.from_epsg(3857)
 
-        # ── Fallback: parse MintPy custom attributes (handles UTM via pyproj) ─
-        if bounds is None:
-            bounds = _mintpy_bounds(attrs)
+        # Pixel-edge bounds in the SOURCE CRS (UTM meters or WGS84 degrees)
+        half_x = 0.5 * abs(x_step)
+        half_y = 0.5 * abs(y_step)
+        src_west  = x_first - half_x
+        src_east  = x_first + x_step * (orig_w - 1) + half_x
+        src_north = y_first + half_y
+        src_south = y_first + y_step * (orig_h - 1) - half_y
 
-    except KeyError as e:
-        raise HTTPException(status_code=400, detail=f'Missing geo-attribute in velocity.h5: {e}')
+        # Source transform must stay in the original CRS so reproject samples correctly
+        src_tf = from_bounds(src_west, src_south, src_east, src_north, orig_w, orig_h)
+
+        # Convert source corners to WGS84 for Mercator reprojection
+        if is_projected:
+            tf_src_to_wgs = Transformer.from_crs(src_epsg, 4326, always_xy=True)
+            xs, ys = tf_src_to_wgs.transform(
+                [src_west, src_east, src_west, src_east],
+                [src_south, src_south, src_north, src_north],
+            )
+            west, south, east, north = min(xs), min(ys), max(xs), max(ys)
+        else:
+            west, south, east, north = src_west, src_south, src_east, src_north
+
+        # Convert exact WGS84 corners to EPSG:3857 (no asymmetric padding)
+        tf_to_merc = Transformer.from_crs(4326, 3857, always_xy=True)
+        merc_w, merc_s = tf_to_merc.transform(west, south)
+        merc_e, merc_n = tf_to_merc.transform(east, north)
+        dst_w, dst_h = orig_w, orig_h
+        dst_tf = from_bounds(merc_w, merc_s, merc_e, merc_n, dst_w, dst_h)
+
+        src_data = np.where(np.isfinite(data) & (data != 0), data, np.nan)
+        dst_data = np.full((dst_h, dst_w), np.nan, dtype=np.float32)
+        reproject(
+            source=src_data,
+            destination=dst_data,
+            src_transform=src_tf,
+            src_crs=src_crs,
+            dst_transform=dst_tf,
+            dst_crs=dst_crs,
+            resampling=Resampling.bilinear,
+            src_nodata=np.nan,
+            dst_nodata=np.nan,
+        )
+
+        # WGS84 bounds for MapLibre (back-convert from exact Mercator corners)
+        tf_to_wgs = Transformer.from_crs(3857, 4326, always_xy=True)
+        wgs_w, wgs_s = tf_to_wgs.transform(merc_w, merc_s)
+        wgs_e, wgs_n = tf_to_wgs.transform(merc_e, merc_n)
+        bounds = [wgs_w, wgs_s, wgs_e, wgs_n]
+
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'h5py error: {e}')
+        raise HTTPException(status_code=500, detail=f'Processing error: {str(e)}')
 
-    # Use native data resolution — data already in memory, PIL encodes quickly
-    mask  = ~np.isfinite(data) | (data == 0)
-    valid = data[~mask]
-    if valid.size == 0:
-        raise HTTPException(status_code=500, detail='No valid velocity data')
-
+    # 7. Final PNG Generation
+    data = dst_data
+    mask = ~np.isfinite(data) | (data == 0)
+    
+    # Static limits for velocity visualization
     vmin, vmax = -0.1, 0.1
-
-    rgba      = _colormap_numpy(data, mask, vmin, vmax, 'velocity')
+    rgba = _colormap_numpy(data, mask, vmin, vmax, 'velocity')
     png_bytes = _rgba_to_png_bytes(rgba)
-    png_b64   = base64.b64encode(png_bytes).decode()
+    png_b64 = base64.b64encode(png_bytes).decode()
 
-    # Pixel hover data — keep small for fast JS lookup
-    scale_p = min(1.0, MAX_PIXEL / max(orig_h, orig_w))
-    ph = max(1, int(orig_h * scale_p))
-    pw = max(1, int(orig_w * scale_p))
-    row_p     = (np.arange(ph) * orig_h / ph).astype(int)
-    col_p     = (np.arange(pw) * orig_w / pw).astype(int)
-    pix_data  = data[np.ix_(row_p, col_p)]
+    # 8. Optimized Pixel Hover Data
+    # Resample the projected data for the frontend hover array
+    scale_p = min(1.0, MAX_PIXEL / max(dst_h, dst_w))
+    ph, pw = max(1, int(dst_h * scale_p)), max(1, int(dst_w * scale_p))
+    row_idx = (np.arange(ph) * dst_h / ph).astype(int)
+    col_idx = (np.arange(pw) * dst_w / pw).astype(int)
+    pix_data = data[np.ix_(row_idx, col_idx)]
     pixel_b64 = base64.b64encode(pix_data.astype(np.float32).tobytes()).decode()
 
     unit = str(attrs.get('UNIT', 'm/year'))
     return {
-        'png_b64':      png_b64,
-        'pixel_b64':    pixel_b64,
-        'bounds':       bounds,
-        'vmin':         vmin,
-        'vmax':         vmax,
-        'nodata':       None,
-        'type':         'velocity',
-        'label':        f'Velocity ({unit})',
-        'width':        orig_w,
-        'height':       orig_h,
-        'pixel_width':  pw,
+        'png_b64': png_b64,
+        'pixel_b64': pixel_b64,
+        'bounds': bounds, # [West, South, East, North]
+        'vmin': vmin,
+        'vmax': vmax,
+        'width': dst_w,
+        'height': dst_h,
+        'pixel_width': pw,
         'pixel_height': ph,
-        'unit':         unit,
+        'unit': unit,
+        'label': f'Velocity ({unit})'
     }
+        
+       
 
 
 @app.post("/api/folder-analyzer-cleanup")

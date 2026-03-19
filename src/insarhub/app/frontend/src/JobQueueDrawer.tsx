@@ -20,6 +20,37 @@ export interface RasterOverlay {
 
 const API = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
+// ── Resizable drawer width ─────────────────────────────────────────────────
+function useResizable(initial: number, min = 160, max = 700) {
+  const [width, setWidth] = useState(initial)
+  const startRef = useRef<{ x: number; w: number } | null>(null)
+  function onHandleMouseDown(e: React.MouseEvent) {
+    e.preventDefault()
+    startRef.current = { x: e.clientX, w: width }
+    const onMove = (ev: MouseEvent) => {
+      if (!startRef.current) return
+      setWidth(Math.max(min, Math.min(max, startRef.current.w + startRef.current.x - ev.clientX)))
+    }
+    const onUp = () => {
+      startRef.current = null
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+  return { width, onHandleMouseDown }
+}
+
+const ResizeHandle = ({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) => (
+  <div
+    onMouseDown={onMouseDown}
+    style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, cursor: 'ew-resize', zIndex: 1 }}
+    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(128,128,128,0.25)')}
+    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+  />
+)
+
 // Persist active download job IDs across L2 drawer unmount/remount
 const _dlJobs:    Map<string, string> = new Map()
 const _orbitJobs: Map<string, string> = new Map()
@@ -219,9 +250,10 @@ function parseScene(name: string) {
   }
 }
 
-interface PairDetailProps { theme: Theme; ref_: string; sec: string; onClose: () => void }
+interface PairDetailProps { theme: Theme; ref_: string; sec: string; onClose: () => void; rightOffset: number }
 
-function PairDetailDrawer({ theme: t, ref_, sec, onClose }: PairDetailProps) {
+function PairDetailDrawer({ theme: t, ref_, sec, onClose, rightOffset }: PairDetailProps) {
+  const { width, onHandleMouseDown } = useResizable(300)
   const r = parseScene(ref_)
   const s = parseScene(sec)
   const dtDays = (r.date && s.date)
@@ -262,11 +294,12 @@ function PairDetailDrawer({ theme: t, ref_, sec, onClose }: PairDetailProps) {
 
   return (
     <div style={{
-      position: 'fixed', top: 48, right: 780, bottom: 0, width: 300,
+      position: 'fixed', top: 48, right: rightOffset, bottom: 0, width,
       background: t.bg, borderLeft: `1px solid ${t.border}`,
       display: 'flex', flexDirection: 'column', zIndex: 114,
       boxShadow: '-4px 0 20px rgba(0,0,0,0.25)',
     }}>
+      <ResizeHandle onMouseDown={onHandleMouseDown} />
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '10px 14px', borderBottom: `1px solid ${t.border}`,
@@ -296,9 +329,10 @@ function PairDetailDrawer({ theme: t, ref_, sec, onClose }: PairDetailProps) {
 
 // ── L3: Pairs list drawer ─────────────────────────────────────────────────────
 
-interface PairsDrawerProps { theme: Theme; folderPath: string; onClose: () => void }
+interface PairsDrawerProps { theme: Theme; folderPath: string; onClose: () => void; rightOffset: number }
 
-function PairsDrawer({ theme: t, folderPath, onClose }: PairsDrawerProps) {
+function PairsDrawer({ theme: t, folderPath, onClose, rightOffset }: PairsDrawerProps) {
+  const { width, onHandleMouseDown } = useResizable(280)
   const [pairs,       setPairs]       = useState<string[][]>([])
   const [count,       setCount]       = useState(0)
   const [fname,       setFname]       = useState('')
@@ -333,15 +367,17 @@ function PairsDrawer({ theme: t, folderPath, onClose }: PairsDrawerProps) {
           ref_={pairs[selectedIdx][0]}
           sec={pairs[selectedIdx][1]}
           onClose={() => setSelectedIdx(null)}
+          rightOffset={rightOffset + width}
         />
       )}
 
       <div style={{
-        position: 'fixed', top: 48, right: 500, bottom: 0, width: 280,
+        position: 'fixed', top: 48, right: rightOffset, bottom: 0, width,
         background: t.bg, borderLeft: `1px solid ${t.border}`,
         display: 'flex', flexDirection: 'column', zIndex: 113,
         boxShadow: '-4px 0 20px rgba(0,0,0,0.25)',
       }}>
+        <ResizeHandle onMouseDown={onHandleMouseDown} />
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '10px 14px', borderBottom: `1px solid ${t.border}`,
@@ -373,9 +409,9 @@ function PairsDrawer({ theme: t, folderPath, onClose }: PairsDrawerProps) {
                 fontSize: 11, fontFamily: 'monospace',
               }}>
                 <span style={{ color: t.textMuted, width: 28, textAlign: 'right', flexShrink: 0 }}>{i + 1}</span>
-                <span style={{ color: isSelected ? t.accent : '#90caf9' }}>{extractDate(ref)}</span>
+                <span style={{ color: isSelected ? t.accent : t.isDark ? '#90caf9' : '#1565c0' }}>{extractDate(ref)}</span>
                 <span style={{ color: t.textMuted }}>↔</span>
-                <span style={{ color: isSelected ? t.accent : '#a5d6a7' }}>{extractDate(sec)}</span>
+                <span style={{ color: isSelected ? t.accent : t.isDark ? '#a5d6a7' : '#2e7d32' }}>{extractDate(sec)}</span>
               </button>
             )
           })}
@@ -590,7 +626,7 @@ function ProcessModal({ theme: t, folderPath, downloaderType, onClose, onDone }:
         const r = await fetch(`${API}/api/jobs/${job_id}`)
         const job = await r.json()
         setMessage(job.message ?? '')
-        if (job.status === 'done')  { clearInterval(pollRef.current!); setStatus('done'); if (!dryRun) onDone() }
+        if (job.status === 'done')  { clearInterval(pollRef.current!); setStatus('done') }
         else if (job.status === 'error') { clearInterval(pollRef.current!); setStatus('error') }
       }, 1500)
     } catch (e) { setStatus('error'); setMessage(String(e)) }
@@ -702,7 +738,7 @@ function ProcessModal({ theme: t, folderPath, downloaderType, onClose, onDone }:
             <span style={{ color: t.textMuted, fontSize: 11 }}>Dry run</span>
           </label>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={onClose} style={{
+            <button onClick={() => { if (status === 'done' && !dryRun) onDone(); else onClose() }} style={{
               padding: '5px 16px', background: 'transparent', color: t.textMuted,
               border: `1px solid ${t.border}`, borderRadius: 6, fontSize: 12, cursor: 'pointer',
             }}>{status === 'done' ? 'Close' : 'Cancel'}</button>
@@ -774,8 +810,13 @@ function AnalyzerPanel({ theme: t, folderPath, analyzerType, onSettingsOpen }: A
     }, 1500)
   }
 
-  // On mount: load steps, then reconnect any in-progress job
+  // On mount / folder change: reset state, load steps, then reconnect any in-progress job
   useEffect(() => {
+    setRunStat('idle')
+    setRunMsg('')
+    setProgress(0)
+    setActiveJobId(null)
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
     setLoading(true)
     fetch(`${API}/api/analyzer-steps?analyzer_type=${encodeURIComponent(analyzerType)}`)
       .then(r => r.json())
@@ -995,9 +1036,11 @@ interface IfgViewerProps {
   folderPath:     string
   onClose:        () => void
   onRasterSelect: (overlay: RasterOverlay | null) => void
+  rightOffset:    number
 }
 
-function IfgViewerDrawer({ theme: t, folderPath, onClose, onRasterSelect }: IfgViewerProps) {
+function IfgViewerDrawer({ theme: t, folderPath, onClose, onRasterSelect, rightOffset }: IfgViewerProps) {
+  const { width, onHandleMouseDown } = useResizable(300)
   const [pairs,        setPairs]       = useState<IfgPair[]>([])
   const [loading,      setLoading]     = useState(true)
   const [error,        setError]       = useState('')
@@ -1033,11 +1076,12 @@ function IfgViewerDrawer({ theme: t, folderPath, onClose, onRasterSelect }: IfgV
 
   return (
     <div style={{
-      position: 'fixed', top: 48, right: 500, bottom: 0, width: 300,
+      position: 'fixed', top: 48, right: rightOffset, bottom: 0, width,
       background: t.bg, borderLeft: `1px solid ${t.border}`,
       display: 'flex', flexDirection: 'column', zIndex: 113,
       boxShadow: '-4px 0 20px rgba(0,0,0,0.25)',
     }}>
+      <ResizeHandle onMouseDown={onHandleMouseDown} />
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '10px 14px', borderBottom: `1px solid ${t.border}`,
@@ -1148,7 +1192,11 @@ function ProcessorPanel({ theme: t, folderPath, processorType, onFolderRefresh, 
       .then(d => {
         const fs: Hyp3File[] = d.files ?? []
         setFiles(fs)
-        if (fs.length > 0 && !selected) setSelected(fs[fs.length - 1].name)
+        setSelected(prev => {
+          if (fs.length === 0) return ''
+          if (prev && fs.some(f => f.name === prev)) return prev
+          return fs[fs.length - 1].name
+        })
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -1367,9 +1415,11 @@ interface MintpyViewerProps {
   hidden:         boolean
   onClose:        () => void
   onRasterSelect: (overlay: RasterOverlay | null) => void
+  rightOffset:    number
 }
 
-function MintpyViewerDrawer({ theme: t, folderPath, tsList, hidden, onClose, onRasterSelect }: MintpyViewerProps) {
+function MintpyViewerDrawer({ theme: t, folderPath, tsList, hidden, onClose, onRasterSelect, rightOffset }: MintpyViewerProps) {
+  const { width, onHandleMouseDown } = useResizable(260)
   const [active,         setActive]         = useState(false)
   const [decoding,       setDecoding]       = useState(false)
   const [error,          setError]          = useState('')
@@ -1410,13 +1460,14 @@ function MintpyViewerDrawer({ theme: t, folderPath, tsList, hidden, onClose, onR
 
   return (
     <div style={{
-      position: 'fixed', top: 48, right: 500, bottom: 0, width: 260,
+      position: 'fixed', top: 48, right: rightOffset, bottom: 0, width,
       background: t.bg, borderLeft: `1px solid ${t.border}`,
       display: 'flex', flexDirection: 'column', zIndex: 113,
       boxShadow: '-4px 0 20px rgba(0,0,0,0.25)',
       visibility: hidden ? 'hidden' : 'visible',
       pointerEvents: hidden ? 'none' : 'auto',
     }}>
+      <ResizeHandle onMouseDown={onHandleMouseDown} />
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '10px 14px', borderBottom: `1px solid ${t.border}`,
@@ -1505,9 +1556,11 @@ interface L2Props {
   onFolderRefresh:   () => void
   onRasterSelect:    (overlay: RasterOverlay | null) => void
   onSettingsOpen:    (analyzerType: string) => void
+  rightOffset:       number
 }
 
-function JobRoleDrawer({ theme: t, job, role, cls, hidden, onClose, onFolderRefresh, onRasterSelect, onSettingsOpen }: L2Props) {
+function JobRoleDrawer({ theme: t, job, role, cls, hidden, onClose, onFolderRefresh, onRasterSelect, onSettingsOpen, rightOffset }: L2Props) {
+  const { width, onHandleMouseDown } = useResizable(240)
   const rc = ROLE_COLORS[role] ?? ROLE_FALLBACK
 
   // Downloader-specific state
@@ -1661,6 +1714,7 @@ function JobRoleDrawer({ theme: t, job, role, cls, hidden, onClose, onFolderRefr
           theme={t}
           folderPath={job.path}
           onClose={() => setPairsOpen(false)}
+          rightOffset={rightOffset + width}
         />
       )}
 
@@ -1673,6 +1727,7 @@ function JobRoleDrawer({ theme: t, job, role, cls, hidden, onClose, onFolderRefr
           hidden={hidden}
           onClose={() => { setMintpyViewerOpen(false); setMintpyViewerEverOpen(false) }}
           onRasterSelect={onRasterSelect}
+          rightOffset={rightOffset + width}
         />
       )}
 
@@ -1683,6 +1738,7 @@ function JobRoleDrawer({ theme: t, job, role, cls, hidden, onClose, onFolderRefr
           folderPath={job.path}
           onClose={() => setIfgViewerOpen(false)}
           onRasterSelect={onRasterSelect}
+          rightOffset={rightOffset + width}
         />
       )}
 
@@ -1708,8 +1764,8 @@ function JobRoleDrawer({ theme: t, job, role, cls, hidden, onClose, onFolderRefr
       )}
 
       <div style={{
-        position: 'fixed', top: 48, right: 260, bottom: 0,
-        width: 240,
+        position: 'fixed', top: 48, right: rightOffset, bottom: 0,
+        width,
         background: t.bg, borderLeft: `1px solid ${t.border}`,
         display: 'flex', flexDirection: 'column',
         zIndex: 112,
@@ -1717,6 +1773,7 @@ function JobRoleDrawer({ theme: t, job, role, cls, hidden, onClose, onFolderRefr
         visibility: hidden ? 'hidden' : 'visible',
         pointerEvents: hidden ? 'none' : 'auto',
       }}>
+        <ResizeHandle onMouseDown={onHandleMouseDown} />
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1994,6 +2051,7 @@ function JobRoleDrawer({ theme: t, job, role, cls, hidden, onClose, onFolderRefr
 // ── Main Drawer ───────────────────────────────────────────────────────────────
 
 export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSelect, onSettingsOpen }: Props) {
+  const { width: l1Width, onHandleMouseDown: onL1Handle } = useResizable(260)
   const [jobs,    setJobs]    = useState<JobFolder[]>([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState('')
@@ -2048,6 +2106,7 @@ export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSel
           role={l2.role}
           cls={l2.cls}
           hidden={!l2Visible || minimized}
+          rightOffset={l1Width}
           onClose={() => { setL2(null); setL2Visible(false) }}
           onFolderRefresh={loadJobs}
           onRasterSelect={onRasterSelect}
@@ -2058,7 +2117,7 @@ export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSel
       {/* Main drawer */}
       <div style={{
         position: 'fixed', top: 48, right: 0, bottom: 0,
-        width: 260,
+        width: l1Width,
         background: t.bg, borderLeft: `1px solid ${t.border}`,
         display: 'flex', flexDirection: 'column',
         zIndex: 111,
@@ -2066,6 +2125,7 @@ export default function JobQueueDrawer({ theme: t, workdir, onClose, onRasterSel
         visibility: minimized ? 'hidden' : 'visible',
         pointerEvents: minimized ? 'none' : 'auto',
       }}>
+        <ResizeHandle onMouseDown={onL1Handle} />
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',

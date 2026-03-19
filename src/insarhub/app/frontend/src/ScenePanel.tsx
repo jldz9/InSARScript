@@ -305,20 +305,7 @@ export default function ScenePanel({
       <div style={{ overflowY: 'auto', padding: '8px 14px', flex: 1 }}>
         <div>
           {/* SCENES — clickable to open stack list */}
-          <div style={{ display: 'flex', gap: 8, padding: '4px 0',
-                        borderBottom: `1px solid ${t.divider}` }}>
-            <span style={{ width: 106, flexShrink: 0, color: t.textMuted, fontSize: 11,
-                           textTransform: 'uppercase', letterSpacing: '0.04em', paddingTop: 1 }}>
-              Scenes
-            </span>
-            <button onClick={onStackClick} style={{
-              background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-              color: stackOpen ? t.accent : t.btnActiveFg,
-              fontSize: 13, fontWeight: 600, textDecoration: 'underline',
-            }}>
-              {stackCount ?? '…'}
-            </button>
-          </div>
+          {row(t, 'Scenes', stackCount ?? '…')}
 
           {row(t, 'Start', stackStart ?? '—')}
           {row(t, 'End',   stackEnd   ?? '—')}
@@ -329,8 +316,24 @@ export default function ScenePanel({
           {p.processingLevel && row(t, 'Level', p.processingLevel)}
         </div>
 
-        {/* Download Stack */}
+        {/* View Detail */}
         <div style={{ marginTop: 14 }}>
+          <button
+            onClick={onStackClick}
+            style={{
+              display: 'block', width: '100%', padding: '8px 0', textAlign: 'center',
+              background: stackOpen ? t.btnActiveBg : 'transparent',
+              color: stackOpen ? t.accent : t.text,
+              border: `1px solid ${stackOpen ? t.btnActiveBorder : t.border}`,
+              borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            {stackOpen ? '◂ Hide Detail' : '▸ View Detail'}
+          </button>
+        </div>
+
+        {/* Download Stack */}
+        <div style={{ marginTop: 8 }}>
           {dlStatus === 'downloading' ? (
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <button

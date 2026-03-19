@@ -198,6 +198,11 @@ export default function App() {
   const [downloaderOptions, setDownloaderOptions] = useState<string[]>(['S1_SLC'])
   const [tsData,            setTsData]            = useState<TsData | null>(null)
 
+  // Revoke previous blob URL when raster overlay is replaced or cleared
+  useEffect(() => {
+    return () => { if (rasterOverlay?.url?.startsWith('blob:')) URL.revokeObjectURL(rasterOverlay.url) }
+  }, [rasterOverlay])
+
   // Fetch server settings + available downloaders once on mount
   useEffect(() => {
     fetch(`${API}/api/settings`)
@@ -236,6 +241,7 @@ export default function App() {
 
   // ── Polling helper ────────────────────────────────────────────────────────
   const pollJob = useCallback((jobId: string, onDone: (data: any) => void) => {
+    if (pollRef.current) clearInterval(pollRef.current)
     pollRef.current = setInterval(async () => {
       const res = await fetch(`${API}/api/jobs/${jobId}`)
       const job = await res.json()

@@ -1,29 +1,41 @@
 # Analyzer
 
-The Analyzer panel runs MintPy time-series analysis on downloaded HyP3 interferograms.
+Once the Processor has finished processing all interferograms, the Analyzer panel runs  time-series analysis on the resulting products.
 
-## Opening the Analyzer
+## Initializing the Analyzer
 
-Click a job folder that contains downloaded HyP3 results, then open the **Analyzer** tab.
-
+Once all submitted jobs have finished and show `SUCCEEDED` in the Processor panel, open the **Run Analyzer** tab within the same job folder. Select an analyzer type (e.g. `Hyp3_SBAS`) from the drop-down and click **Init** to initialize the analyzer workspace. This prepares the configuration and directory structure needed to run time-series analysis on the downloaded interferograms.
 <!-- screenshot: analyzer panel overview -->
 ![Analyzer Panel](fig/analyzer_light.png#only-light){: .doc-img}
 ![Analyzer Panel](fig/analyzer_dark.png#only-dark){: .doc-img}
 /// caption
-Analyzer panel showing available steps and configuration.
+The Run Analyzer tab — select an analyzer type and click Init to get started.
 ///
+
+Once initialization is complete, an **Analyzer** tag labeled with the analyzer you chose (e.g. `Hyp3_SBAS`) will appear on the job folder. Click that tag to open the Analyzer panel and proceed with configuration and processing.
+
+<!-- screenshot: analyzer tag on job folder -->
+![Analyzer Tag](fig/analyzer_tag_light.png#only-light){: .doc-img style="width: 60%"}
+![Analyzer Tag](fig/analyzer_tag_dark.png#only-dark){: .doc-img style="width: 60%"}
+/// caption
+The Analyzer tag appears on the job folder after initialization. Click it to open the Analyzer panel.
+///
+
+
 
 ---
 
 ## Configuration
 
-Click **Change Config** to open the analyzer settings. Each analyzer type (`Hyp3_SBAS`) has its own independent configuration that is saved separately.
+Once you enter the Analyzer panel, you can select the steps you want to run for time-series analysis. To adjust analysis parameters, click **Change Config** to switch to the configuration tab, where each analyzer type (e.g. `Hyp3_SBAS`) has its own independent settings that are saved separately.
+
+For a full description of all analyzer parameters and options, see the [Analyzer Reference](../advanced/analyzer.md).
 
 <!-- screenshot: analyzer config panel -->
-![Analyzer Config](fig/analyzer_config_light.png#only-light){: .doc-img}
-![Analyzer Config](fig/analyzer_config_dark.png#only-dark){: .doc-img}
+![Analyzer Config](fig/analyzer_config_light.png#only-light){: .doc-img style="width: 60%"}
+![Analyzer Config](fig/analyzer_config_dark.png#only-dark){: .doc-img style="width: 60%"}
 /// caption
-Analyzer configuration for Hyp3_SBAS.
+Analyzer tab.
 ///
 
 ---
@@ -33,37 +45,37 @@ Analyzer configuration for Hyp3_SBAS.
 Select the steps to run and click **Run**. Steps run sequentially and progress is shown in the log.
 
 <!-- screenshot: analyzer running with log output -->
-![Analyzer Running](fig/analyzer_running_light.png#only-light){: .doc-img}
-![Analyzer Running](fig/analyzer_running_dark.png#only-dark){: .doc-img}
+![Analyzer Running](fig/analyzer_running_light.png#only-light){: .doc-img style="width: 60%"}
+![Analyzer Running](fig/analyzer_running_dark.png#only-dark){: .doc-img style="width: 60%"}
 /// caption
-Analyzer running `load_data` and `invert_network` steps.
+Analyzer running all steps.
 ///
 
-Available MintPy steps:
 
-| Step | Description |
-|------|-------------|
-| `load_data` | Load interferograms into MintPy HDF5 format |
-| `modify_network` | Apply network modifications |
-| `reference_point` | Select reference pixel |
-| `invert_network` | SBAS inversion for time-series |
-| `correct_troposphere` | Tropospheric delay correction |
-| `deramp` | Remove orbital ramp |
-| `correct_topography` | DEM error correction |
-| `residual_RMS` | Residual RMS analysis |
-| `reference_date` | Set reference date |
-| `velocity` | Estimate linear velocity |
-| `geocode` | Geocode to geographic coordinates |
+## Viewing Results
+
+Once the `velocity` and `geocode` steps have completed successfully, a **View Results** button appears at the bottom of the Analyzer panel. Click it to open the Results viewer, which overlays the computed velocity map on the main map.
+
+Click any point on the velocity overlay to extract and display the displacement time series at that location.
+
+<!-- screenshot: view results panel -->
+![View Results](fig/results_light.png#only-light){: .doc-img style="width: 60%"}
+![View Results](fig/results_dark.png#only-dark){: .doc-img style="width: 60%"}
+/// caption
+Velocity map overlaid on the map. Click a point to view its displacement time series.
+///
+
+For more details on the Results viewer, see the [Results Viewer](results.md) page.
 
 ---
 
 ## Cleanup
 
-Click **Cleanup** to remove intermediate MintPy files and free disk space, allowing a clean rerun.
+Click **Cleanup** to free disk space after analysis. This removes the temporary working directories (`tmp/` and `clip/`) and any `.zip` archives in the job folder that were extracted during processing. MintPy outputs, and configuration files are preserved.
 
 <!-- screenshot: cleanup confirmation -->
-![Cleanup](fig/analyzer_cleanup_light.png#only-light){: .doc-img}
-![Cleanup](fig/analyzer_cleanup_dark.png#only-dark){: .doc-img}
+![Cleanup](fig/analyzer_cleanup_light.png#only-light){: .doc-img style="width: 60%"}
+![Cleanup](fig/analyzer_cleanup_dark.png#only-dark){: .doc-img style="width: 60%"}
 /// caption
 Cleanup removes intermediate HDF5 files from the working directory.
 ///

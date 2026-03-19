@@ -17,9 +17,8 @@ Settings panel showing work directory and API configuration.
 ## Searching for Scenes
 
 1. Draw an AOI on the map
-2. Open the **Search** panel in the job panel
-3. Set the date range and select a downloader (default is `S1_SLC`)
-4. Click **Search**
+2. Set the date range and select a downloader (default is `S1_SLC`)
+3. Click **Search**
 
 <!-- screenshot: search panel with results -->
 ![Search Panel](fig/search_light.png#only-light){: .doc-img}
@@ -28,40 +27,37 @@ Settings panel showing work directory and API configuration.
 Search panel showing available Sentinel-1 stacks.
 ///
 
-Search results appear as a list of stacks grouped by path and frame. Each stack shows the scene count and date range.
+Search results appear as footprints overlaid on the map. Click any footprint to open the **Scene Detail** panel, which displays acquisition metadata including platform, orbit, beam mode, polarization, file size, and download options for that scene.
 
----
+Click **▸ View Detail** in the Scene Detail panel to expand the job drawer showing the full list of individual scenes in the stack. Click **◂ Hide Detail** to collapse it.
 
-## Selecting Pairs
-
-Click **Select Pairs** to automatically generate an interferogram network from the search results.
-
-<!-- screenshot: pair network image shown -->
-![Pair Network](fig/pairs_light.png#only-light){: .doc-img}
-![Pair Network](fig/pairs_dark.png#only-dark){: .doc-img}
+<!-- screenshot: search results footprints on map -->
+![Search Results](fig/search_results_light.png#only-light){: .doc-img style="width: 60%"}
+![Search Results](fig/search_results_dark.png#only-dark){: .doc-img style="width: 60%"}
 /// caption
-Interferogram pair network generated from search results.
+Search result footprints displayed on the map. Click a footprint to view scene details.
 ///
 
 ---
 
 ## Downloading
 
-Click **Download** to start downloading scenes to the work directory. Progress is shown per worker.
+Click **Download Stack** to start downloading scenes for the selected stack to the work directory. Progress is shown live during the download and can be stopped at any time.
 
-<!-- screenshot: download in progress -->
-![Download Progress](fig/download_light.png#only-light){: .doc-img}
-![Download Progress](fig/download_dark.png#only-dark){: .doc-img}
-/// caption
-Scene download in progress with per-worker status.
-///
+For a full description of all downloader parameters and options, see the [Downloader Reference](../advanced/downloader.md).
 
-### Orbit Files
 
-Orbit file download is not available in the Web UI. Use the CLI instead:
+## Downloading Orbit Files
 
-```bash
-insarhub downloader --AOI ... --download -O
-```
+Click **Download Orbit Files** to download the corresponding precise orbit files for the stack. Orbit files are required for accurate InSAR processing and will be saved alongside the scene data in the work directory.
 
-See [CLI reference](../quickstart/cli.md#download) for details.
+
+## Adding a Job
+
+Click **Add Job** to register the selected stack as a job in the Jobs panel. This saves the stack configuration for future downloading and processing without starting any download immediately.
+
+---
+
+Once your job is added, head to the Processor panel to select interferometric pairs and submit them for processing.
+
+[Processor](processor.md){.md-button}

@@ -50,7 +50,7 @@ export default function TopBar({
 
   return (
     <div style={{
-      position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 150,
       background: t.bg, borderBottom: `1px solid ${t.border}`,
       display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px',
       height: 48,

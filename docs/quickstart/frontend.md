@@ -31,19 +31,6 @@ insarhub-app --version         # print version and exit
 InSARHub Web UI — map, toolbar, and job panel.
 ///
 
-<div style="text-align: center;">
-```mermaid
-graph LR
-    A[Top Bar\nSearch & Filters] --> B[Map]
-    B --> C[Draw Tools\nAOI]
-    B --> D[Basemap\nSwitcher]
-    E[Job Folders\nDrawer] --> F[Downloader\nPanel]
-    E --> G[Processor\nPanel]
-    E --> H[Analyzer\nPanel]
-    H --> I[MintPy\nResults Viewer]
-```
-</div>
-
 ---
 
 ## Top Bar
@@ -72,6 +59,14 @@ Click one of the draw tools on the left side of the map:
 | 📂 **Shapefile** | Upload a `.zip` shapefile |
 
 Click the active tool again to cancel drawing.
+
+## Map Navigation
+
+| Action | How |
+|--------|-----|
+| **Pan** | Right-click and drag |
+| **Zoom** | Scroll wheel or use the +/− buttons |
+| **Click footprint** | Left-click to select and view scene details |
 
 ---
 

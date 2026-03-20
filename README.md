@@ -14,8 +14,7 @@ The primary goal of this package is to provide a streamlined and user-friendly I
 
 ## Web UI
 
-InSARHub includes a **self-hosted web interface** that covers the full InSAR workflow — from scene search and download through interferogram processing to time-series analysis — entirely in your browser, with no cloud dependency.
-
+InSARHub includes a **self-hosted web interface** that covers the full InSAR workflow — from scene search and download through interferogram processing to time-series analysis.
 ```bash
 insarhub-app
 ```

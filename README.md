@@ -60,7 +60,8 @@ From source:
 ```bash
 git clone https://github.com/jldz9/InSARHub.git
 cd InSARHub
-conda env create -f environment.yml -n insarhub_dev && conda activate insarhub_dev
+conda env create -f environment.yml -n insarhub_dev 
+conda activate insarhub_dev
 pip install -e .
 ```
 

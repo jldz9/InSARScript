@@ -51,8 +51,8 @@ conda install insarhub -c conda-forge
 Pip:
 
 ```bash
+conda install gdal -c conda-forge
 pip install insarhub
-conda install gdal
 ```
 
 From source: 

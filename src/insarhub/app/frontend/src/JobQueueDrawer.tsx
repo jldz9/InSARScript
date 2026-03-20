@@ -733,7 +733,7 @@ function ProcessModal({ theme: t, folderPath, downloaderType, onClose, onDone }:
           padding: '10px 18px', borderTop: `1px solid ${t.border}`, background: t.bg2, flexShrink: 0,
         }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-            <input type="checkbox" checked={dryRun} onChange={e => setDryRun(e.target.checked)}
+            <input type="checkbox" checked={dryRun} onChange={e => { setDryRun(e.target.checked); if (status !== 'running') setStatus('idle') }}
               style={{ accentColor: '#ffb74d', width: 13, height: 13 }} />
             <span style={{ color: t.textMuted, fontSize: 11 }}>Dry run</span>
           </label>
@@ -742,12 +742,12 @@ function ProcessModal({ theme: t, folderPath, downloaderType, onClose, onDone }:
               padding: '5px 16px', background: 'transparent', color: t.textMuted,
               border: `1px solid ${t.border}`, borderRadius: 6, fontSize: 12, cursor: 'pointer',
             }}>{status === 'done' ? 'Close' : 'Cancel'}</button>
-            <button onClick={handleRun} disabled={loading || status === 'running' || status === 'done'} style={{
+            <button onClick={status === 'done' ? (dryRun ? onClose : onDone) : handleRun} disabled={loading || status === 'running'} style={{
               padding: '5px 20px', borderRadius: 6, fontSize: 12, fontWeight: 600,
               background: status === 'done' ? '#1b3a2a' : status === 'error' ? '#b71c1c' : dryRun ? '#2a2000' : '#4a2500',
               color:      status === 'done' ? '#a5d6a7' : status === 'error' ? '#ef9a9a' : dryRun ? '#ffeb80' : '#ffcc80',
               border: `1px solid ${status === 'done' ? '#2e7d32' : status === 'error' ? '#c62828' : dryRun ? '#f9a825' : '#e65100'}`,
-              cursor: loading || status === 'running' || status === 'done' ? 'default' : 'pointer',
+              cursor: loading || status === 'running' ? 'default' : 'pointer',
             }}>
               {status === 'running' ? (dryRun ? '⟳ Checking…' : '⟳ Submitting…') : status === 'done' ? '✓ Done' : status === 'error' ? '✕ Retry' : dryRun ? 'Dry Run' : 'Submit'}
             </button>

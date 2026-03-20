@@ -33,7 +33,7 @@ Open `http://localhost:8000` to access the UI.
 
 All data stays on your machine — InSARHub runs a local FastAPI server and delivers a modern React frontend directly in your browser.
 
-See the [Web UI documentation](https://jldz9.github.io/InSARHub/quickstart/frontend/) for a full walkthrough.
+See the [Web UI documentation](https://jldz9.github.io/InSARHub/) for a full walkthrough.
 
 <picture>
   <source media="(prefers-color-scheme: dark)"  srcset="docs/frontend/fig/overview_dark.png">

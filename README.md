@@ -28,10 +28,10 @@ Open `http://localhost:8000` to access the UI.
 |-------|-------------|
 | **Search & Download** | Draw an AOI on the map, search Sentinel-1 SLC stacks, download scenes and precise orbit files |
 | **Processor** | Select interferogram pairs from a network graph, submit to HyP3, monitor job status, and download results |
-| **Analyzer** | Run MintPy SBAS time-series analysis with configurable steps; view progress live in the log |
-| **Results Viewer** | Overlay the LOS velocity map on the basemap; click any pixel to plot its displacement time series |
+| **Analyzer** | Run time-series analysis with configurable steps; view progress live in the log |
+| **Results Viewer** | Overlay the velocity map on the basemap; click any pixel to plot its displacement time series |
 
-All data stays on your machine — InSARHub acts as a local backend server and the browser is just the interface.
+All data stays on your machine — InSARHub runs a local FastAPI server and delivers a modern React frontend directly in your browser.
 
 See the [Web UI documentation](https://jldz9.github.io/InSARHub/quickstart/frontend/) for a full walkthrough.
 
@@ -61,12 +61,13 @@ From source:
 ```bash
 git clone https://github.com/jldz9/InSARHub.git
 cd InSARHub
-conda env create -f environment.yml -n insarhub_dev
+conda env create -f environment.yml -n insarhub_dev && conda activate insarhub_dev
+pip install -e .
 ```
 
 ## Requirements
-- Python >=3.11
-- numpy <2.0"
+- Python >=3.11,<3.13
+- numpy <2.0
 - proj >=9.4
 - gdal >=3.8
 - sqlite >=3.44
@@ -77,7 +78,11 @@ conda env create -f environment.yml -n insarhub_dev
 - dem_stitcher 
 - hyp3_sdk 
 - rasterio >=1.4
-- sentineleof 
+- sentineleof
+- pyproj
+- fastapi
+- uvicorn
+- python-multipart
 
 ## Usage 
 
@@ -95,12 +100,12 @@ from insarhub import Downloader
 - Create downloader
 
     ```python
-    s1 = Downloader.create('S1_SLC', 
+    dl = Downloader.create('S1_SLC',
                             intersectsWith=[-113.05, 37.74, -112.68, 38.00],
-                            start='2020-01-01', 
-                            end='2020-12-31',  
-                            relativeOrbit=100, 
-                            frame=466, 
+                            start='2020-01-01',
+                            end='2020-12-31',
+                            relativeOrbit=100,
+                            frame=466,
                             workdir='path/to/dir')
     ```
 
@@ -146,7 +151,7 @@ from insarhub import Processor
     ```python
     jobs = processor.refresh()
     ```
-- Download Sucessed Jobs
+- Download Succeeded Jobs
 
     ```python
     processor.download()
@@ -199,10 +204,10 @@ insarhub downloader -N S1_SLC \
     --select-pairs
 
 # Submit pairs to HyP3 (auto-reads pairs_p*_f*.json from workdir subfolders)
-insarhub processor submit -w /data/bryce
+insarhub processor -N Hyp3_InSAR  -w /data/bryce submit
 
 # Wait for jobs and download results automatically
-insarhub processor watch -w /data/bryce
+insarhub processor -N Hyp3_InSAR  -w /data/bryce watch
 
 # Run MintPy time-series analysis
 insarhub analyzer -N Hyp3_SBAS -w /data/bryce run
@@ -212,15 +217,10 @@ insarhub analyzer -N Hyp3_SBAS -w /data/bryce run
 
 | Command | Description |
 |---------|-------------|
-| `insarhub downloader` | Search scenes, select pairs, and download data |
-| `insarhub processor submit` | Submit interferogram pairs to HyP3 |
-| `insarhub processor watch` | Poll HyP3 and download results when complete |
-| `insarhub analyzer run` | Prepare data and run MintPy SBAS analysis |
-| `insarhub utils clip` | Clip HyP3 zip contents to an AOI |
-| `insarhub utils select-pairs` | Select pairs from a saved search GeoJSON |
-| `insarhub utils plot-network` | Plot interferogram network |
-| `insarhub utils slurm` | Generate a SLURM batch script |
-| `insarhub utils era5-download` | Download ERA5 weather data for tropospheric correction |
+| `insarhub downloader` | Search scenes, select interferogram pairs, and download data |
+| `insarhub processor`  | Submit and manage InSAR processing jobs |
+| `insarhub analyzer`   | Run time-series analysis on processed interferograms |
+| `insarhub utils`      | Helper utilities (pair selection, network plot, SLURM, ERA5, clip) |
 
 Use `insarhub <command> --help` for full option details, or see the [CLI Reference](https://jldz9.github.io/InSARHub/quickstart/cli/).
 

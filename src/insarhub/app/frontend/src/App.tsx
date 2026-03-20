@@ -197,6 +197,7 @@ export default function App() {
   const [downloaderType,    setDownloaderType]    = useState('S1_SLC')
   const [downloaderOptions, setDownloaderOptions] = useState<string[]>(['S1_SLC'])
   const [tsData,            setTsData]            = useState<TsData | null>(null)
+  const [tsClickPoint,      setTsClickPoint]      = useState<[number, number] | null>(null)
 
   // Revoke previous blob URL when raster overlay is replaced or cleared
   useEffect(() => {
@@ -264,7 +265,10 @@ export default function App() {
       const r = await fetch(`${API}/api/timeseries-pixel?path=${encodeURIComponent(rasterOverlay.source.folderPath)}&lat=${lat}&lon=${lng}${tsParam}`)
       if (!r.ok) return
       const d = await r.json()
-      if (Array.isArray(d.dates) && d.dates.length > 0) setTsData(d)
+      if (Array.isArray(d.dates) && d.dates.length > 0) {
+        setTsData(d)
+        setTsClickPoint([lng, lat])
+      }
     } catch { /* ignore fetch errors */ }
   }
 
@@ -413,6 +417,7 @@ export default function App() {
           basemap={basemap}
           footprintOpacity={0.5}
           rasterOverlay={rasterOverlay}
+          tsClickPoint={tsClickPoint}
           onAoiDrawn={handleAoiDrawn}
           onMouseMove={setMouseCoords}
           onFootprintClick={setSelectedFeature}
@@ -506,7 +511,7 @@ export default function App() {
       )}
 
       {/* MintPy time series drawer */}
-      {tsData && <TimeSeriesDrawer data={tsData} onClose={() => setTsData(null)} theme={theme} />}
+      {tsData && <TimeSeriesDrawer data={tsData} onClose={() => { setTsData(null); setTsClickPoint(null) }} theme={theme} />}
 
       {/* Filter panel — mounts fresh each open so draft resets */}
       {filtersOpen && (

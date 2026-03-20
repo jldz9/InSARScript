@@ -62,7 +62,7 @@ Click any point on the velocity overlay to extract and display the displacement 
 ![View Results](fig/results_light.png#only-light){: .doc-img style="width: 60%"}
 ![View Results](fig/results_dark.png#only-dark){: .doc-img style="width: 60%"}
 /// caption
-Velocity map overlaid on the map. Click a point to view its displacement time series.
+View Results button
 ///
 
 For more details on the Results viewer, see the [Results Viewer](results.md) page.

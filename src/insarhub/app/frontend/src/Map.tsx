@@ -13,6 +13,7 @@ interface Props {
   basemap:            Basemap
   footprintOpacity:   number
   rasterOverlay?:     RasterOverlay | null
+  tsClickPoint?:      [number, number] | null
   onAoiDrawn:         (wkt: string, bbox: Bbox, feature?: GeoJSON.Feature) => void
   onMouseMove?:       (coords: { lat: number; lng: number } | null) => void
   onFootprintClick?:  (feature: GeoJSON.Feature) => void
@@ -39,7 +40,7 @@ const BASEMAP_TILES: Record<Basemap, { tiles: string[]; overlay?: string[]; attr
 
 export default function Map({
   footprints, aoi, aoiGeojson, drawMode, basemap,
-  footprintOpacity, rasterOverlay, onAoiDrawn, onMouseMove, onFootprintClick, onRasterPixel, onMapClick,
+  footprintOpacity, rasterOverlay, tsClickPoint, onAoiDrawn, onMouseMove, onFootprintClick, onRasterPixel, onMapClick,
 }: Props) {
   const containerRef        = useRef<HTMLDivElement>(null)
   const mapRef              = useRef<maplibregl.Map | null>(null)
@@ -155,6 +156,15 @@ export default function Map({
       map.addLayer({ id: 'pin-circle', type: 'circle', source: 'pin',
         paint: { 'circle-radius': 7, 'circle-color': '#e53935',
                  'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } })
+
+      // ── Timeseries click marker ──────────────────────────────────────
+      map.addSource('ts-click', { type: 'geojson', data: EMPTY_FC })
+      map.addLayer({ id: 'ts-click-ring', type: 'circle', source: 'ts-click',
+        paint: { 'circle-radius': 9, 'circle-color': 'rgba(0,0,0,0)',
+                 'circle-stroke-width': 2.5, 'circle-stroke-color': '#ffffff' } })
+      map.addLayer({ id: 'ts-click-dot', type: 'circle', source: 'ts-click',
+        paint: { 'circle-radius': 5, 'circle-color': '#facc15',
+                 'circle-stroke-width': 1.5, 'circle-stroke-color': '#000000' } })
 
       // ── Box drag preview — blue dashed ──────────────────────────────────
       map.addSource('box-preview', { type: 'geojson', data: EMPTY_FC })
@@ -477,7 +487,7 @@ export default function Map({
           coordinates: [[W, N], [E, N], [E, S], [W, S]],
         } as any)
         map.addLayer({ id: 'raster-overlay', type: 'raster', source: 'raster-overlay',
-          paint: { 'raster-opacity': 0.85 } })
+          paint: { 'raster-opacity': 0.85 } }, 'ts-click-ring')
         map.fitBounds([[W, S], [E, N]], { padding: 40, duration: 0 })
       } catch (err) {
         console.error('[InSARHub] raster-overlay error:', err)
@@ -491,6 +501,20 @@ export default function Map({
       return () => { map.off('load', applyOverlay) }
     }
   }, [rasterOverlay])
+
+  // ── Timeseries click marker ──────────────────────────────────────────────
+  useEffect(() => {
+    const src = mapRef.current?.getSource('ts-click') as maplibregl.GeoJSONSource | undefined
+    if (!src) return
+    if (tsClickPoint) {
+      src.setData({ type: 'FeatureCollection', features: [{
+        type: 'Feature', properties: {},
+        geometry: { type: 'Point', coordinates: tsClickPoint },
+      }]})
+    } else {
+      src.setData(EMPTY_FC)
+    }
+  }, [tsClickPoint])
 
   // ── Finished AOI display ──────────────────────────────────────────────────
   useEffect(() => {

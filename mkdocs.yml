@@ -97,6 +97,7 @@ extra_css:
   - stylesheets/extra.css
 plugins:
   - search
+  - glightbox
   - mkdocstrings:
        handlers:
           python:

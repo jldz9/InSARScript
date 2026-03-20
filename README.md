@@ -5,13 +5,45 @@ InSARHub is a modular Python framework for automated InSAR and time-series proce
 The primary goal of this package is to provide a streamlined and user-friendly InSAR processing experience across multiple satellite products.
 
 ## Table of Contents
-- Installation
-- Requirements
-- Usage
-- CLI
-- Documentation
+- [Web UI](#web-ui)
+- [Installation](#installation)
+- [Requirements](#requirements)
+- [Usage](#usage)
+- [CLI](#cli)
+- [Documentation](#documentation)
 
-## Installation 
+## Web UI
+
+InSARHub includes a **self-hosted web interface** that covers the full InSAR workflow — from scene search and download through interferogram processing to time-series analysis — entirely in your browser, with no cloud dependency.
+
+```bash
+insarhub-app
+```
+
+Open `http://localhost:8000` to access the UI.
+
+### Features
+
+| Panel | What it does |
+|-------|-------------|
+| **Search & Download** | Draw an AOI on the map, search Sentinel-1 SLC stacks, download scenes and precise orbit files |
+| **Processor** | Select interferogram pairs from a network graph, submit to HyP3, monitor job status, and download results |
+| **Analyzer** | Run MintPy SBAS time-series analysis with configurable steps; view progress live in the log |
+| **Results Viewer** | Overlay the LOS velocity map on the basemap; click any pixel to plot its displacement time series |
+
+All data stays on your machine — InSARHub acts as a local backend server and the browser is just the interface.
+
+See the [Web UI documentation](https://jldz9.github.io/InSARHub/quickstart/frontend/) for a full walkthrough.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)"  srcset="docs/frontend/fig/overview_dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/frontend/fig/overview_light.png">
+  <img alt="InSARHub Web UI" src="docs/frontend/fig/overview_light.png" width="100%">
+</picture>
+
+---
+
+## Installation
 
 InSARHub can be installed using Conda:
 ```bash

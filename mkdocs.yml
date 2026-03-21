@@ -11,7 +11,7 @@ theme:
   features:
     - navigation.instant
     - navigation.tabs
-    - navigation.tabs.sticky  
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.expand
     - navigation.instant

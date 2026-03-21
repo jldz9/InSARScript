@@ -10,8 +10,8 @@ After analysis completes, InSARHub can display MintPy results directly on the ma
 4. Click **Plot**
 
 <!-- screenshot: view results panel with ts file selected -->
-![View Results Panel](fig/results_panel_light.png#only-light){: .doc-img}
-![View Results Panel](fig/results_panel_dark.png#only-dark){: .doc-img}
+![View Results Panel](fig/results_panel_light.png#only-light){: .doc-img style="width: 60%"}
+![View Results Panel](fig/results_panel_dark.png#only-dark){: .doc-img style="width: 60%"}
 /// caption
 Results panel with timeseries file selected, ready to plot.
 ///
@@ -19,8 +19,8 @@ Results panel with timeseries file selected, ready to plot.
 The velocity map is overlaid on the map with a ±0.1 cm/yr colorbar (red = subsidence, blue = uplift). Zero-displacement pixels are transparent.
 
 <!-- screenshot: velocity map overlaid on map -->
-![Velocity Map](fig/velocity_map_light.png#only-light){: .doc-img-wide}
-![Velocity Map](fig/velocity_map_dark.png#only-dark){: .doc-img-wide}
+![Velocity Map](fig/velocity_map_light.png#only-light){: .doc-img-wide }
+![Velocity Map](fig/velocity_map_dark.png#only-dark){: .doc-img-wide }
 /// caption
 Line-of-sight velocity map overlaid on the basemap.
 ///
@@ -32,8 +32,8 @@ Line-of-sight velocity map overlaid on the basemap.
 Click any pixel on the velocity map to plot the displacement timeseries at that location.
 
 <!-- screenshot: timeseries drawer open at bottom -->
-![Timeseries Drawer](fig/timeseries_light.png#only-light){: .doc-img-wide}
-![Timeseries Drawer](fig/timeseries_dark.png#only-dark){: .doc-img-wide}
+![Timeseries Drawer](fig/timeseries_light.png#only-light){: .doc-img-wide }
+![Timeseries Drawer](fig/timeseries_dark.png#only-dark){: .doc-img-wide }
 /// caption
 Displacement timeseries for a clicked pixel. First date is set to zero (relative displacement).
 ///

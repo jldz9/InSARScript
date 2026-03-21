@@ -5,7 +5,7 @@ InSARHub is an open-source package designed to support the full InSAR processing
 The primary goal of this package is to provide a streamlined and user-friendly InSAR processing experience across multiple satellite products, from data search and download through time-series analysis — all accessible via a modern web UI or the command line.
 
 [QuickStart](quickstart/install.md){ .md-button .md-button--lg .md-button--primary}
-[Web UI Guide](frontend/index.md){ .md-button .md-button--lg }
+[Web UI Guide](quickstart/frontend.md){ .md-button .md-button--lg }
 
 ![InSARHub Web UI](frontend/fig/overview_light.png#only-light){: .doc-img-wide }
 ![InSARHub Web UI](frontend/fig/overview_dark.png#only-dark){: .doc-img-wide }

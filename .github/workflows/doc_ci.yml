@@ -34,11 +34,12 @@ jobs:
             mkdocs-material-
       - run: pip install mkdocs-material mike mkdocstrings[python] pymdown-extensions mkdocs-glightbox
       - run: pip install -e .
+      - run: git fetch origin gh-pages --depth=1 || true
       - run: |
            VERSION=${GITHUB_REF##*/}
            if  [[ $GITHUB_REF == refs/tags/* ]]; then
-            mike deploy --push --update-aliases $VERSION latest   
-            mike set-default $VERSION --push 
+            mike deploy --push --update-aliases $VERSION latest
+            mike set-default $VERSION --push
            else
             mike deploy --push dev
            fi

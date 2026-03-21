@@ -45,12 +45,13 @@ class Mintpy_SBAS_Base_Analyzer(BaseAnalyzer):
                 cdsrc_path = Path.home().joinpath(".cdsapirc")
                 if cdsrc_path.is_file():
                     cdsrc_path.unlink()
-                cdsrc_entry = f"\nurl: https://cds.climate.copernicus.eu/api\nkey: {self._cds_token}"
+                cdsrc_entry = f"url: https://cds.climate.copernicus.eu/api\nkey: {self._cds_token}"
                 with open(cdsrc_path, 'a') as f:
                     f.write(cdsrc_entry)
                     print(f"{Fore.GREEN}Credentials saved to {cdsrc_path}.\n")
                 try:
-                    tmp = (Path.home().joinpath(".cdsrc_test")).mkdir(exist_ok=True)
+                    tmp = Path.home().joinpath(".cdsrc_test")
+                    tmp.mkdir(exist_ok=True)
                     pyaps3.ECMWFdload(['20200601','20200901'], hr='14', filedir=tmp, model='ERA5', snwe=(30,40,120,140))
                     shutil.rmtree(tmp)
                     print(f"{Fore.GREEN}Authentication successful.\n")

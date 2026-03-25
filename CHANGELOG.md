@@ -4,7 +4,6 @@
 
 ### New Features
 - **CLI & API**: `select_pairs()` is now a pure computation method — no file I/O inside the class. File writing (JSON, PNG, workflow marker) has been moved to the CLI and API call sites, keeping the core logic reusable and testable
-- **CLI**: Added `s1.reset()` to allow re-running pair selection without restarting the session
 - **Path handling**: All functions that accept path arguments now call `.expanduser().resolve()`, enabling `~` tilde paths everywhere
 - **WebUI**: Added documentation button in the General Settings panel (bottom-left) linking to the InSARHub docs site
 - **WebUI (`insarhub-app`)**: Auto-creates the working directory if it does not exist when `-w <path>` is passed

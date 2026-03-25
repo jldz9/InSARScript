@@ -680,23 +680,16 @@ Check documentation for how to setup .netrc file.\n""")
         max_degree: int = 999,
         force_connect: bool = True,
         max_workers: int = 4,
-        plot: bool = True,
-        pairs_output: str | None = None,
     ) -> tuple:
-        """Select interferogram pairs and save them into workdir subdirectories.
-
-        For multi-stack results each (path, frame) group gets its own
-        ``p{path}_f{frame}/`` subfolder with ``pairs_p*_f*.json``,
-        ``network_p*_f*.png``, and ``insarhub_workflow.json``.
-        For a single stack the flat ``pairs.json`` is written directly to
-        ``workdir`` (or *pairs_output* if given).
+        """Compute interferogram pairs for all active stacks.
 
         Returns:
-            tuple: (pairs, baselines, scene_bperp) — same as the utility function.
+            tuple: (pairs, baselines, scene_bperp)
+                - pairs: dict keyed by (path, frame) for multi-stack, or list for single stack
+                - baselines: temporal baselines
+                - scene_bperp: perpendicular baselines per scene
         """
-        import json
-        from insarhub.utils.tool import select_pairs as _select_pairs, write_workflow_marker
-        from insarhub.utils import plot_pair_network as _plot_pair_network
+        from insarhub.utils.tool import select_pairs as _select_pairs
 
         if not hasattr(self, 'results'):
             raise ValueError("No search results found. Please run search() first.")
@@ -714,39 +707,6 @@ Check documentation for how to setup .netrc file.\n""")
         )
         pairs, baselines = _sp_result[0], _sp_result[1]
         scene_bperp: dict = _sp_result[2] if len(_sp_result) > 2 else {}
-
-        workdir = self.config.workdir
-        if isinstance(pairs, dict):
-            for (path, frame), group_pairs in pairs.items():
-                subdir = workdir / f"p{path}_f{frame}"
-                subdir.mkdir(parents=True, exist_ok=True)
-                write_workflow_marker(subdir, downloader=type(self).name)
-                cfg = {k: v for k, v in asdict(self.config).items() if k != 'workdir'}
-                cfg['relativeOrbit'] = path
-                cfg['frame'] = frame
-                (subdir / "downloader_config.json").write_text(json.dumps(cfg, indent=2, default=str))
-                pjson = subdir / f"pairs_p{path}_f{frame}.json"
-                pjson.write_text(json.dumps([list(p) for p in group_pairs], indent=2))
-                if plot:
-                    _plot_pair_network(
-                        group_pairs, baselines[(path, frame)],
-                        scene_baselines=scene_bperp.get((path, frame)),
-                        title=f"Interferogram Network — P{path}/F{frame}",
-                        save_path=subdir / f"network_p{path}_f{frame}.png",
-                    )
-                print(f"[pairs] p{path}_f{frame}: {len(group_pairs)} pairs → {pjson}")
-        else:
-            pairs_path = Path(pairs_output).expanduser().resolve() if pairs_output else workdir / "pairs.json"
-            pairs_path.parent.mkdir(parents=True, exist_ok=True)
-            write_workflow_marker(pairs_path.parent, downloader=type(self).name)
-            cfg = {k: v for k, v in asdict(self.config).items() if k != 'workdir'}
-            (pairs_path.parent / "downloader_config.json").write_text(json.dumps(cfg, indent=2, default=str))
-            pairs_path.write_text(json.dumps([list(p) for p in pairs], indent=2))
-            if plot:
-                _plot_pair_network(pairs, baselines, scene_baselines=scene_bperp,
-                                   save_path=workdir / "network.png")
-            print(f"[pairs] Saved {len(pairs)} pairs → {pairs_path}")
-
         return pairs, baselines, scene_bperp
 
     def download(self, save_path: str | None = None, max_workers: int = 3, stop_event=None, on_progress=None):

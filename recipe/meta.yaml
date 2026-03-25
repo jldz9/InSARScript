@@ -35,7 +35,6 @@ requirements:
     - openpyxl
     - python-multipart
     - hyp3_sdk
-    - panel >=1.4
     - rasterio >=1.4
     - sentineleof
     - numpy <2.0

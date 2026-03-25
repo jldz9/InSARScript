@@ -8,11 +8,16 @@ import importlib.resources
 from pathlib import Path
 
 
-def serve(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> None:
+def serve(host: str = "127.0.0.1", port: int = 8000, reload: bool = False, workdir: str | None = None) -> None:
     import uvicorn
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse
-    from .api import app
+    from .api import app, _settings
+
+    if workdir is not None:
+        resolved = Path(workdir).expanduser().resolve()
+        resolved.mkdir(parents=True, exist_ok=True)
+        _settings["workdir"] = str(resolved)
 
     # Locate the built frontend dist directory bundled with the package
     try:
@@ -32,7 +37,13 @@ def serve(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> No
             index = dist_path / "index.html"
             return FileResponse(str(index))
 
-    print(f"\n  InSARHub is running at http://{host}:{port}\n  Open that URL in your browser to get started.\n")
+    import sys
+    if sys.platform == "win32":
+        import asyncio
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    resolved_workdir = _settings["workdir"]
+    print(f"\n  InSARHub is running at http://{host}:{port}\n  Workdir: {resolved_workdir}\n  Open that URL in your browser to get started.\n")
     uvicorn.run(
         app,
         host=host,
@@ -46,13 +57,14 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload (dev only)")
-    parser.add_argument("--version", action="store_true", help="Print version and exit")
+    parser.add_argument("-w", "--workdir", default=None, help="Working directory (default: current directory)")
+    parser.add_argument("-v", "--version", action="store_true", help="Print version and exit")
     args = parser.parse_args()
     if args.version:
         from insarhub._version import __version__
         print(__version__)
         return
-    serve(host=args.host, port=args.port, reload=args.reload)
+    serve(host=args.host, port=args.port, reload=args.reload, workdir=args.workdir)
 
 
 if __name__ == "__main__":

@@ -53,6 +53,7 @@ interface PoolAccount {
 interface AuthStatus {
   earthdata_connected?: boolean
   cdse_connected?:      boolean
+  cds_connected?:       boolean
   credit_pool_exists?:  boolean
   hyp3?:                PoolAccount
   credit_pool:          PoolAccount[]
@@ -82,6 +83,12 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
   const [tab,         setTab]         = useState<Tab>(initialTab ?? 'general')
   const [loading,     setLoading]     = useState(true)
   const [authLoading, setAuthLoading] = useState(false)
+  const [expandedCred, setExpandedCred] = useState<'earthdata'|'cdse'|'cds'|'hyp3'|'pool'|null>(null)
+  const [credUser,  setCredUser]  = useState('')
+  const [credPass,  setCredPass]  = useState('')
+  const [credToken, setCredToken] = useState('')
+  const [credSaving, setCredSaving] = useState(false)
+  const [credMsg,   setCredMsg]   = useState('')
   const [saving,      setSaving]      = useState(false)
   const [saveMsg,     setSaveMsg]     = useState('')
 
@@ -119,6 +126,8 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
       if (msg.type === 'netrc') {
         setAuth(prev => ({ ...prev, earthdata_connected: msg.earthdata_connected,
           cdse_connected: msg.cdse_connected, credit_pool_exists: msg.credit_pool_exists }))
+      } else if (msg.type === 'cds') {
+        setAuth(prev => ({ ...prev, cds_connected: msg.data.connected }))
       } else if (msg.type === 'main') {
         setAuth(prev => ({ ...prev, hyp3: msg.data }))
       } else if (msg.type === 'pool') {
@@ -421,19 +430,61 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
   const creditPool = auth.credit_pool
   const poolExists = auth.credit_pool_exists
 
-  const serviceRow = (label: string, connected: boolean | undefined, last = false) => (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '9px 14px', borderBottom: last ? 'none' : `1px solid ${t.divider}`,
-    }}>
-      <span style={{ color: t.text, fontSize: 13 }}>{label}</span>
-      {connected === undefined
-        ? <span style={{ color: t.textMuted, fontSize: 12 }}>Checking…</span>
-        : <span style={{ fontSize: 12, fontWeight: 600, color: connected ? '#4caf50' : '#e53935' }}>
-            {connected ? '✓ Connected' : '✕ Not connected'}
-          </span>}
+  const openCred = (key: typeof expandedCred) => {
+    setExpandedCred(expandedCred === key ? null : key)
+    setCredUser(''); setCredPass(''); setCredToken(''); setCredMsg('')
+  }
+
+  const saveCred = async (endpoint: string, body: Record<string, string>) => {
+    setCredSaving(true); setCredMsg('')
+    try {
+      const res = await fetch(`${API}${endpoint}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) { const d = await res.json(); setCredMsg(d.detail ?? 'Error'); return }
+      setCredMsg('Saved'); setExpandedCred(null)
+      startAuthStream()
+    } catch (e) { setCredMsg(String(e)) }
+    finally { setCredSaving(false) }
+  }
+
+  const inp2: React.CSSProperties = {
+    background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text,
+    borderRadius: 4, padding: '4px 8px', fontSize: 12, width: '100%',
+    boxSizing: 'border-box', colorScheme: t.isDark ? 'dark' : 'light',
+  }
+
+  const credForm = (key: typeof expandedCred, fields: React.ReactNode, onSave: () => void, last = false) => (
+    <div style={{ borderBottom: last ? 'none' : `1px solid ${t.divider}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '9px 14px', cursor: 'pointer' }} onClick={() => openCred(key)}>
+        <span style={{ color: t.text, fontSize: 13 }}>{key === 'earthdata' ? 'NASA Earthdata Login' : key === 'cdse' ? 'Copernicus Data Space (CDSE)' : key === 'cds' ? 'Copernicus Climate Data Store (CDS)' : key === 'hyp3' ? 'HyP3 (NASA ASF)' : 'HyP3 Credit Pool'}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {expandedCred !== key && (() => { const connected = key === 'earthdata' ? auth.earthdata_connected : key === 'cdse' ? auth.cdse_connected : key === 'cds' ? auth.cds_connected : key === 'hyp3' ? (hyp3 === undefined ? undefined : !hyp3?.error) : (auth.credit_pool_exists ?? undefined); return connected === undefined ? <span style={{ color: t.textMuted, fontSize: 12 }}>Checking…</span> : <span style={{ fontSize: 12, fontWeight: 600, color: connected ? '#4caf50' : '#e53935' }}>{connected ? '✓ Connected' : '✕ Not connected'}</span> })()}
+          <span style={{ color: t.textMuted, fontSize: 11 }}>{expandedCred === key ? '▲' : '▼'}</span>
+        </div>
+      </div>
+      {expandedCred === key && (
+        <div style={{ padding: '0 14px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {fields}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+            <button onClick={onSave} disabled={credSaving} style={{
+              padding: '4px 14px', background: t.btnActiveBg, color: t.accent,
+              border: `1px solid ${t.btnActiveBorder}`, borderRadius: 5, fontSize: 12,
+              fontWeight: 600, cursor: credSaving ? 'wait' : 'pointer',
+            }}>{credSaving ? 'Saving…' : 'Save'}</button>
+            <button onClick={() => setExpandedCred(null)} style={{
+              padding: '4px 10px', background: 'transparent', color: t.textMuted,
+              border: `1px solid ${t.border}`, borderRadius: 5, fontSize: 12, cursor: 'pointer',
+            }}>Cancel</button>
+            {credMsg && <span style={{ fontSize: 11, color: credMsg === 'Saved' ? '#4caf50' : '#e53935' }}>{credMsg}</span>}
+          </div>
+        </div>
+      )}
     </div>
   )
+
 
   // ── Component type selector ───────────────────────────────────────────────
   const typeSelector = (
@@ -546,21 +597,39 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
             </div>
             <div style={{ background: t.bg2, borderRadius: 6, border: `1px solid ${t.border}`,
                           overflow: 'hidden', marginBottom: 16 }}>
-              {serviceRow('NASA Earthdata Login',         auth.earthdata_connected)}
-              {serviceRow('Copernicus Data Space (CDSE)', auth.cdse_connected)}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            padding: '9px 14px', borderBottom: `1px solid ${t.divider}` }}>
-                <span style={{ color: t.text, fontSize: 13 }}>HyP3 (NASA ASF)</span>
-                {hyp3 === undefined
-                  ? <span style={{ color: t.textMuted, fontSize: 12 }}>Checking…</span>
-                  : hyp3?.error
-                    ? <span style={{ color: '#e53935', fontSize: 12, fontWeight: 600 }}>✕ Not connected</span>
-                    : <span style={{ color: '#4caf50', fontSize: 12, fontWeight: 600 }}>✓ Connected</span>}
-              </div>
-              {serviceRow(poolExists && creditPool.length > 0
-                ? `HyP3 Credit Pool (${creditPool.length})`
-                : 'HyP3 Credit Pool',
-                poolExists === undefined ? undefined : !!poolExists, true)}
+              {credForm('earthdata',
+                <>
+                  <input style={inp2} placeholder="Username" value={credUser} onChange={e => setCredUser(e.target.value)} autoComplete="username" />
+                  <input style={inp2} placeholder="Password" type="password" value={credPass} onChange={e => setCredPass(e.target.value)} autoComplete="current-password" />
+                </>,
+                () => saveCred('/api/credentials/earthdata', { username: credUser, password: credPass })
+              )}
+              {credForm('cdse',
+                <>
+                  <input style={inp2} placeholder="Username" value={credUser} onChange={e => setCredUser(e.target.value)} autoComplete="username" />
+                  <input style={inp2} placeholder="Password" type="password" value={credPass} onChange={e => setCredPass(e.target.value)} autoComplete="current-password" />
+                </>,
+                () => saveCred('/api/credentials/cdse', { username: credUser, password: credPass })
+              )}
+              {credForm('cds',
+                <input style={inp2} placeholder="API Token" value={credToken} onChange={e => setCredToken(e.target.value)} />,
+                () => saveCred('/api/credentials/cds', { token: credToken })
+              )}
+              {credForm('hyp3',
+                <>
+                  <input style={inp2} placeholder="Username" value={credUser} onChange={e => setCredUser(e.target.value)} autoComplete="username" />
+                  <input style={inp2} placeholder="Password" type="password" value={credPass} onChange={e => setCredPass(e.target.value)} autoComplete="current-password" />
+                </>,
+                () => saveCred('/api/credentials/earthdata', { username: credUser, password: credPass })
+              )}
+              {credForm('pool',
+                <>
+                  <input style={inp2} placeholder="Username" value={credUser} onChange={e => setCredUser(e.target.value)} autoComplete="username" />
+                  <input style={inp2} placeholder="Password" type="password" value={credPass} onChange={e => setCredPass(e.target.value)} autoComplete="current-password" />
+                </>,
+                () => saveCred('/api/credentials/credit-pool', { username: credUser, password: credPass }),
+                true
+              )}
             </div>
             <div style={{ color: t.textMuted, fontSize: 11, marginBottom: 16, lineHeight: 1.6 }}>
               Credentials are read from <code>~/.netrc</code>.
@@ -679,8 +748,20 @@ export default function SettingsPanel({ theme: t, onClose, downloaderType, onDow
             gap: 10, padding: '12px 20px',
             borderTop: `1px solid ${t.border}`, background: t.bg2, flexShrink: 0,
           }}>
+            <a href="https://jldz9.github.io/InSARHub" target="_blank" rel="noopener noreferrer"
+              style={{
+                marginRight: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5,
+                fontSize: 12, color: t.textMuted, textDecoration: 'none',
+                padding: '4px 10px', border: `1px solid ${t.border}`,
+                borderRadius: 6, cursor: 'pointer',
+              }}>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style={{ width: 13, height: 13, fill: 'currentColor' }}>
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
+              </svg>
+              Docs
+            </a>
             {saveMsg && (
-              <span style={{ fontSize: 12, marginRight: 'auto',
+              <span style={{ fontSize: 12,
                 color: saveMsg.startsWith('Error') ? '#e53935' : '#4caf50' }}>
                 {saveMsg}
               </span>

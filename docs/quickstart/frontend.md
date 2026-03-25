@@ -15,10 +15,13 @@ Then open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** in your browser.
 Options:
 
 ```bash
+insarhub-app -w /data/bryce    # set working directory
 insarhub-app --host 0.0.0.0   # expose to your local network
 insarhub-app --port 8080       # change port
 insarhub-app --version         # print version and exit
 ```
+
+The `-w` / `--workdir` flag pre-sets the working directory so you do not need to configure it in the Settings panel after launch. If omitted, the directory where you run `insarhub-app` is used.
 
 ---
 

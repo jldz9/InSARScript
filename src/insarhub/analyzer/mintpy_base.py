@@ -36,44 +36,43 @@ class Mintpy_SBAS_Base_Analyzer(BaseAnalyzer):
         """Write the MintPy config file to workdir."""
         self.config.write_mintpy_config(self.cfg_path)
 
-    def _cds_authorize(self):
-        if self._check_cdsapirc():
-           return True
-        else: 
-            while True:
-                self._cds_token = getpass.getpass("Enter your CDS api token at https://cds.climate.copernicus.eu/profile: ")
-                cdsrc_path = Path.home().joinpath(".cdsapirc")
-                if cdsrc_path.is_file():
-                    cdsrc_path.unlink()
-                cdsrc_entry = f"url: https://cds.climate.copernicus.eu/api\nkey: {self._cds_token}"
-                with open(cdsrc_path, 'a') as f:
-                    f.write(cdsrc_entry)
-                    print(f"{Fore.GREEN}Credentials saved to {cdsrc_path}.\n")
-                try:
-                    tmp = Path.home().joinpath(".cdsrc_test")
-                    tmp.mkdir(exist_ok=True)
-                    pyaps3.ECMWFdload(['20200601','20200901'], hr='14', filedir=tmp, model='ERA5', snwe=(30,40,120,140))
-                    shutil.rmtree(tmp)
-                    print(f"{Fore.GREEN}Authentication successful.\n")
-                except requests.exceptions.HTTPError as e:
-                    if e.response.status_code == 401:
-                        print(f'{Fore.RED} Authentication Failed please check your token')
-                break
-            
-    def _check_cdsapirc(self):
-        """Check if .cdsapirc token exist under home directory."""
-        cdsapirc_path = Path.home().joinpath('.cdsapirc')
-        if not cdsapirc_path.is_file():            
-            print(f"{Fore.RED}No .cdsapirc file found in your home directory. Will prompt login.\n")
+    def _validate_cds_token(self, key: str) -> bool:
+        """Validate a CDS API token via a lightweight HTTP request (no download)."""
+        try:
+            import requests as _requests
+            resp = _requests.get(
+                "https://cds.climate.copernicus.eu/api/retrieve/v1/jobs",
+                headers={"PRIVATE-TOKEN": key},
+                params={"limit": 1},
+                timeout=5,
+            )
+            return resp.status_code == 200
+        except Exception:
             return False
-        else: 
-            with cdsapirc_path.open() as f:
-                content = f.read()
-                if 'key:' in content:
-                    return True
-                else:
-                    print(f"{Fore.RED}no api token found under .cdsapirc. Will prompt login.\n")
-                    return False
+
+    def _cds_authorize(self):
+        """Ensure valid CDS credentials exist, prompting the user if needed."""
+        cdsapirc_path = Path.home() / ".cdsapirc"
+        # Try existing .cdsapirc first
+        if cdsapirc_path.is_file():
+            key = None
+            for line in cdsapirc_path.read_text().splitlines():
+                if line.strip().startswith("key:"):
+                    key = line.split(":", 1)[1].strip()
+                    break
+            if key and self._validate_cds_token(key):
+                return True
+            print(f"{Fore.YELLOW}CDS token in .cdsapirc is invalid or expired. Will prompt login.\n")
+
+        # Prompt user for a valid token
+        while True:
+            self._cds_token = getpass.getpass("Enter your CDS api token at https://cds.climate.copernicus.eu/profile: ")
+            if not self._validate_cds_token(self._cds_token):
+                print(f"{Fore.RED}Authentication failed. Please check your token and try again.\n")
+                continue
+            cdsapirc_path.write_text(f"url: https://cds.climate.copernicus.eu/api\nkey: {self._cds_token}\n")
+            print(f"{Fore.GREEN}Credentials saved to {cdsapirc_path}.\n")
+            return True
     
     def run(self, steps=None):
         """

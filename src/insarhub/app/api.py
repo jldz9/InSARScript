@@ -152,9 +152,33 @@ _settings: dict[str, Any] = {
 }
 
 
-_NETRC     = Path.home() / ".netrc"
-_CSDAPI    = Path.home() / ".csdapi"
+_NETRC       = Path.home() / ".netrc"
+_CDSAPIRC    = Path.home() / ".cdsapirc"
 _CREDIT_POOL = Path.home() / ".credit_pool"
+
+
+def _check_cds_connected() -> bool:
+    """Check CDS credentials by parsing ~/.cdsapirc and verifying the token via HTTP."""
+    if not _CDSAPIRC.is_file():
+        return False
+    key = None
+    for line in _CDSAPIRC.read_text().splitlines():
+        if line.strip().startswith("key:"):
+            key = line.split(":", 1)[1].strip()
+            break
+    if not key:
+        return False
+    try:
+        import requests
+        resp = requests.get(
+            "https://cds.climate.copernicus.eu/api/retrieve/v1/jobs",
+            headers={"PRIVATE-TOKEN": key},
+            params={"limit": 1},
+            timeout=5,
+        )
+        return resp.status_code == 200
+    except Exception:
+        return False
 
 def _netrc_has(host: str) -> bool:
     """Simple string-search check — matches the pattern used throughout the codebase."""
@@ -213,13 +237,15 @@ def _check_hyp3_account(username: str | None = None, password: str | None = None
 def _build_auth_status() -> dict[str, Any]:
     """Synchronous helper that computes the full auth-status payload."""
     earthdata_connected = _netrc_has("urs.earthdata.nasa.gov")
-    cdse_connected      = _netrc_has("dataspace.copernicus.eu") or _CSDAPI.is_file()
+    cdse_connected      = _netrc_has("dataspace.copernicus.eu") or _check_cds_connected()
     pool_pairs          = _read_credit_pool_pairs()
     hyp3_main           = _check_hyp3_account()
     credit_pool         = [_check_hyp3_account(u, p) for u, p in pool_pairs]
+    cds_connected       = _check_cds_connected()
     return {
         "earthdata_connected": earthdata_connected,
         "cdse_connected":      cdse_connected,
+        "cds_connected":       cds_connected,
         "hyp3":                hyp3_main,
         "credit_pool":         credit_pool,
         "credit_pool_exists":  _CREDIT_POOL.is_file() and bool(pool_pairs),
@@ -437,7 +463,7 @@ async def get_job_folders():
 @app.delete("/api/job-folder")
 async def delete_job_folder(path: str):
     """Delete an entire job folder and all its contents."""
-    folder = Path(path)
+    folder = Path(path).expanduser().resolve()
     workdir = Path(_settings["workdir"])
     # Safety: must be a direct child of workdir
     if not folder.exists():
@@ -550,7 +576,7 @@ async def stream_auth_status():
     async def generate():
         # ── Instant: file-system checks ──────────────────────────────────────
         earthdata  = _netrc_has("urs.earthdata.nasa.gov")
-        cdse       = _netrc_has("dataspace.copernicus.eu") or _CSDAPI.is_file()
+        cdse       = _netrc_has("dataspace.copernicus.eu") or _check_cds_connected()
         pool_pairs = _read_credit_pool_pairs()
         netrc_event = json.dumps({
             "type": "netrc",
@@ -560,17 +586,22 @@ async def stream_auth_status():
         })
         yield f"data: {netrc_event}\n\n"
 
-        # ── Parallel: all HyP3 checks at once ────────────────────────────────
+        # ── Parallel: HyP3 + CDS checks ──────────────────────────────────────
         queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue()
 
         async def _check(kind: str, u: str | None = None, p: str | None = None) -> None:
             result = await asyncio.to_thread(_check_hyp3_account, u, p)
             await queue.put((kind, result))
 
-        n_tasks = 1 + len(pool_pairs)
+        async def _check_cds() -> None:
+            connected = await asyncio.to_thread(_check_cds_connected)
+            await queue.put(("cds", {"connected": connected}))
+
+        n_tasks = 1 + len(pool_pairs) + 1  # +1 for CDS
         asyncio.create_task(_check("main"))
         for u, p in pool_pairs:
             asyncio.create_task(_check("pool", u, p))
+        asyncio.create_task(_check_cds())
 
         for _ in range(n_tasks):
             kind, data = await queue.get()
@@ -583,6 +614,84 @@ async def stream_auth_status():
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+class CredentialsBody(BaseModel):
+    username: str | None = None
+    password: str | None = None
+    token:    str | None = None
+
+
+def _netrc_upsert(host: str, username: str, password: str) -> None:
+    """Insert or update a machine entry in ~/.netrc."""
+    entry = f"machine {host}\n    login {username}\n    password {password}\n"
+    if _NETRC.is_file():
+        text = _NETRC.read_text()
+        import re
+        pattern = re.compile(
+            rf"machine\s+{re.escape(host)}\s+login\s+\S+\s+password\s+\S+\n?",
+            re.MULTILINE,
+        )
+        if pattern.search(text):
+            text = pattern.sub(entry, text)
+        else:
+            text = text.rstrip("\n") + "\n" + entry
+        _NETRC.write_text(text)
+    else:
+        _NETRC.write_text(entry)
+    _NETRC.chmod(0o600)
+
+
+@app.post("/api/credentials/earthdata")
+async def save_earthdata_credentials(body: CredentialsBody):
+    if not body.username or not body.password:
+        raise HTTPException(status_code=400, detail="username and password required")
+    await asyncio.to_thread(_netrc_upsert, "urs.earthdata.nasa.gov", body.username, body.password)
+    await asyncio.to_thread(_netrc_upsert, "asf.alaska.edu", body.username, body.password)
+    return {"ok": True}
+
+
+@app.post("/api/credentials/cdse")
+async def save_cdse_credentials(body: CredentialsBody):
+    if not body.username or not body.password:
+        raise HTTPException(status_code=400, detail="username and password required")
+    await asyncio.to_thread(_netrc_upsert, "dataspace.copernicus.eu", body.username, body.password)
+    return {"ok": True}
+
+
+@app.post("/api/credentials/cds")
+async def save_cds_credentials(body: CredentialsBody):
+    if not body.token:
+        raise HTTPException(status_code=400, detail="token required")
+    def _write():
+        _CDSAPIRC.write_text(f"url: https://cds.climate.copernicus.eu/api\nkey: {body.token}\n")
+    await asyncio.to_thread(_write)
+    return {"ok": True}
+
+
+@app.post("/api/credentials/credit-pool")
+async def save_credit_pool_entry(body: CredentialsBody):
+    if not body.username or not body.password:
+        raise HTTPException(status_code=400, detail="username and password required")
+    def _append():
+        existing = _CREDIT_POOL.read_text().splitlines() if _CREDIT_POOL.is_file() else []
+        lines = [l for l in existing if not l.startswith(f"{body.username}:")]
+        lines.append(f"{body.username}:{body.password}")
+        _CREDIT_POOL.write_text("\n".join(lines) + "\n")
+        _CREDIT_POOL.chmod(0o600)
+    await asyncio.to_thread(_append)
+    return {"ok": True}
+
+
+@app.delete("/api/credentials/credit-pool/{username}")
+async def delete_credit_pool_entry(username: str):
+    def _remove():
+        if not _CREDIT_POOL.is_file():
+            return
+        lines = [l for l in _CREDIT_POOL.read_text().splitlines() if not l.startswith(f"{username}:")]
+        _CREDIT_POOL.write_text("\n".join(lines) + "\n")
+    await asyncio.to_thread(_remove)
+    return {"ok": True}
 
 
 @app.post("/api/parse-granule-file")
@@ -986,7 +1095,7 @@ class FolderDownloadRequest(BaseModel):
 @app.get("/api/folder-details")
 async def get_folder_details(path: str):
     """Return downloader config, pairs file presence, and network image path for a job folder."""
-    folder = Path(path)
+    folder = Path(path).expanduser().resolve()
     result: dict[str, Any] = {
         "downloader_config": None,
         "has_pairs": False,
@@ -1008,7 +1117,7 @@ async def get_folder_details(path: str):
 @app.get("/api/folder-pairs")
 async def get_folder_pairs(path: str):
     """Return pairs list from the first pairs_p*_f*.json found in the folder."""
-    folder = Path(path)
+    folder = Path(path).expanduser().resolve()
     pairs_files = sorted(folder.glob("pairs_p*_f*.json"))
     if not pairs_files:
         raise HTTPException(status_code=404, detail="No pairs file found")
@@ -1022,7 +1131,7 @@ async def get_folder_pairs(path: str):
 @app.get("/api/folder-image")
 async def get_folder_image(path: str):
     """Serve a PNG image from the filesystem by absolute path."""
-    img_path = Path(path)
+    img_path = Path(path).expanduser().resolve()
     workdir = Path(_settings["workdir"])
     try:
         img_path.resolve().relative_to(workdir.resolve())
@@ -1036,7 +1145,7 @@ async def get_folder_image(path: str):
 @app.post("/api/folder-download", response_model=JobResponse)
 async def folder_download(req: FolderDownloadRequest, background_tasks: BackgroundTasks):
     """Re-search and download using the downloader_config.json saved in the job folder."""
-    folder = Path(req.folder_path)
+    folder = Path(req.folder_path).expanduser().resolve()
     cfg_file = folder / "downloader_config.json"
     if not cfg_file.exists():
         raise HTTPException(status_code=404, detail="downloader_config.json not found in folder")
@@ -1052,7 +1161,7 @@ async def _run_folder_download(job_id: str, folder_path: str):
 
     def run():
         try:
-            folder = Path(folder_path)
+            folder = Path(folder_path).expanduser().resolve()
             raw: dict[str, Any] = json.loads((folder / "downloader_config.json").read_text())
 
             cfg = S1_SLC_Config(workdir=folder)
@@ -1112,7 +1221,7 @@ async def _run_folder_download(job_id: str, folder_path: str):
 @app.post("/api/folder-download-orbit", response_model=JobResponse)
 async def folder_download_orbit(req: FolderDownloadRequest, background_tasks: BackgroundTasks):
     """Download orbit files for scenes in a job folder."""
-    folder = Path(req.folder_path)
+    folder = Path(req.folder_path).expanduser().resolve()
     cfg_file = folder / "downloader_config.json"
     if not cfg_file.exists():
         raise HTTPException(status_code=404, detail="downloader_config.json not found in folder")
@@ -1128,7 +1237,7 @@ async def _run_folder_download_orbit(job_id: str, folder_path: str):
 
     def run():
         try:
-            folder = Path(folder_path)
+            folder = Path(folder_path).expanduser().resolve()
             raw: dict[str, Any] = json.loads((folder / "downloader_config.json").read_text())
 
             cfg = S1_SLC_Config(workdir=folder)
@@ -1176,7 +1285,7 @@ class SelectPairsRequest(BaseModel):
 @app.post("/api/folder-select-pairs", response_model=JobResponse)
 async def folder_select_pairs(req: SelectPairsRequest, background_tasks: BackgroundTasks):
     """Re-search using downloader_config.json and run select_pairs with given parameters."""
-    folder = Path(req.folder_path)
+    folder = Path(req.folder_path).expanduser().resolve()
     if not (folder / "downloader_config.json").exists():
         raise HTTPException(status_code=404, detail="downloader_config.json not found in folder")
     job_id = str(uuid.uuid4())
@@ -1188,7 +1297,7 @@ async def folder_select_pairs(req: SelectPairsRequest, background_tasks: Backgro
 async def _run_folder_select_pairs(job_id: str, req: SelectPairsRequest):
     def run():
         try:
-            folder  = Path(req.folder_path)
+            folder  = Path(req.folder_path).expanduser().resolve()
             raw: dict[str, Any] = json.loads((folder / "downloader_config.json").read_text())
 
             # Read downloader type from workflow marker
@@ -1203,7 +1312,6 @@ async def _run_folder_select_pairs(job_id: str, req: SelectPairsRequest):
             dl_cls  = Downloader._registry.get(dl_type)
             cfg_cls = getattr(dl_cls, "default_config", S1_SLC_Config) if dl_cls else S1_SLC_Config
 
-            # workdir = parent so select_pairs writes into the correct p{path}_f{frame} subfolder
             cfg = cfg_cls(workdir=folder.parent)
             valid_fields = {f.name for f in dataclasses.fields(cfg)}
             for key, val in raw.items():
@@ -1221,7 +1329,7 @@ async def _run_folder_select_pairs(job_id: str, req: SelectPairsRequest):
                 return
 
             _jobs[job_id]["message"] = "Selecting pairs…"
-            downloader.select_pairs(
+            pairs, baselines, scene_bperp = downloader.select_pairs(
                 dt_targets=tuple(req.dt_targets),
                 dt_tol=req.dt_tol,
                 dt_max=req.dt_max,
@@ -1230,8 +1338,35 @@ async def _run_folder_select_pairs(job_id: str, req: SelectPairsRequest):
                 max_degree=req.max_degree,
                 force_connect=req.force_connect,
                 max_workers=req.max_workers,
-                plot=True,
             )
+
+            # Save pairs and network plot into the folder
+            from insarhub.utils.tool import write_workflow_marker
+            from insarhub.utils import plot_pair_network as _plot_pair_network
+            if isinstance(pairs, dict):
+                for (path, frame), group_pairs in pairs.items():
+                    subdir = folder.parent / f"p{path}_f{frame}"
+                    subdir.mkdir(parents=True, exist_ok=True)
+                    write_workflow_marker(subdir, downloader=dl_type)
+                    cfg_dict = {k: v for k, v in dataclasses.asdict(cfg).items() if k != 'workdir'}
+                    cfg_dict['relativeOrbit'] = path
+                    cfg_dict['frame'] = frame
+                    (subdir / "downloader_config.json").write_text(json.dumps(cfg_dict, indent=2, default=str))
+                    pjson = subdir / f"pairs_p{path}_f{frame}.json"
+                    pjson.write_text(json.dumps([list(p) for p in group_pairs], indent=2))
+                    _plot_pair_network(
+                        group_pairs, baselines[(path, frame)],
+                        scene_baselines=scene_bperp.get((path, frame)),
+                        title=f"Interferogram Network — P{path}/F{frame}",
+                        save_path=subdir / f"network_p{path}_f{frame}.png",
+                    )
+            else:
+                pjson = folder / "pairs.json"
+                pjson.write_text(json.dumps([list(p) for p in pairs], indent=2))
+                write_workflow_marker(folder, downloader=dl_type)
+                _plot_pair_network(pairs, baselines, scene_baselines=scene_bperp,
+                                   save_path=folder / "network.png")
+
             _jobs[job_id] = {"status": "done", "progress": 100, "message": "Pairs selected", "data": None}
         except Exception as e:
             _jobs[job_id] = {"status": "error", "progress": 0, "message": str(e), "data": None}
@@ -1249,7 +1384,7 @@ class ProcessRequest(BaseModel):
 @app.post("/api/folder-process", response_model=JobResponse)
 async def folder_process(req: ProcessRequest, background_tasks: BackgroundTasks):
     """Read pairs from folder, submit to processor, save job IDs."""
-    folder = Path(req.folder_path)
+    folder = Path(req.folder_path).expanduser().resolve()
     pairs_files = sorted(folder.glob("pairs_p*_f*.json"))
     if not pairs_files:
         raise HTTPException(status_code=404, detail="No pairs file found in folder")
@@ -1264,7 +1399,7 @@ async def _run_folder_process(job_id: str, req: ProcessRequest):
         try:
             from insarhub.utils.tool import write_workflow_marker
 
-            folder = Path(req.folder_path)
+            folder = Path(req.folder_path).expanduser().resolve()
             pairs_files = sorted(folder.glob("pairs_p*_f*.json"))
             if not pairs_files:
                 _jobs[job_id] = {"status": "error", "progress": 0, "message": "No pairs file found", "data": None}
@@ -1346,7 +1481,7 @@ async def _run_folder_process(job_id: str, req: ProcessRequest):
 @app.get("/api/folder-hyp3-jobs")
 async def get_folder_hyp3_jobs(path: str):
     """List hyp3*.json job files in a folder with stored job counts."""
-    folder = Path(path)
+    folder = Path(path).expanduser().resolve()
     if not folder.exists():
         raise HTTPException(status_code=404, detail="Folder not found")
     files = []
@@ -1380,7 +1515,7 @@ class InitAnalyzerRequest(BaseModel):
 async def folder_init_analyzer(req: InitAnalyzerRequest):
     """Mark a folder with an analyzer role in insarhub_workflow.json."""
     from insarhub.utils.tool import write_workflow_marker
-    folder = Path(req.folder_path)
+    folder = Path(req.folder_path).expanduser().resolve()
     if not folder.exists():
         raise HTTPException(status_code=404, detail="Folder not found")
     if req.analyzer_type not in Analyzer._registry:
@@ -1441,7 +1576,7 @@ async def _run_analyzer(job_id: str, req: RunAnalyzerRequest):
             _jobs[job_id]["message"]  = "\n".join(log)
 
         try:
-            folder = Path(req.folder_path)
+            folder = Path(req.folder_path).expanduser().resolve()
             cls = Analyzer._registry.get(req.analyzer_type)
             if cls is None:
                 _jobs[job_id] = {"status": "error", "progress": 0, "message": f"Unknown analyzer: {req.analyzer_type}", "data": None}
@@ -1599,7 +1734,7 @@ async def folder_ifg_list(path: str):
     hyp3*.json batch file (the download destination may differ from the config folder).
     """
     import zipfile as _zipfile
-    folder = Path(path)
+    folder = Path(path).expanduser().resolve()
     if not folder.exists():
         raise HTTPException(status_code=404, detail="Folder not found")
 
@@ -1869,7 +2004,7 @@ def _mintpy_bounds(attrs) -> list:
 @app.get("/api/mintpy-check")
 async def mintpy_check(path: str):
     """Return whether velocity.h5 exists and list all available timeseries*.h5 files."""
-    folder = Path(path)
+    folder = Path(path).expanduser().resolve()
     has_velocity = (folder / 'velocity.h5').exists()
     ts_files = [n for n in _TS_PRIORITY if (folder / n).exists()]
     return {"has_velocity": has_velocity, "timeseries_files": ts_files}
@@ -1882,7 +2017,7 @@ async def render_velocity(path: str):
 
     MAX_PIXEL = 256
 
-    vel_path = Path(path) / 'velocity.h5'
+    vel_path = Path(path).expanduser().resolve() / 'velocity.h5'
     if not vel_path.exists():
         raise HTTPException(status_code=404, detail='velocity.h5 not found')
     try:
@@ -2002,7 +2137,7 @@ async def render_velocity(path: str):
 @app.post("/api/folder-analyzer-cleanup")
 async def folder_analyzer_cleanup(req: RunAnalyzerRequest):
     """Run analyzer.cleanup() to remove tmp dirs and zip archives."""
-    folder = Path(req.folder_path)
+    folder = Path(req.folder_path).expanduser().resolve()
     cls = Analyzer._registry.get(req.analyzer_type)
     if cls is None:
         raise HTTPException(status_code=400, detail=f"Unknown analyzer: {req.analyzer_type}")
@@ -2021,7 +2156,7 @@ async def folder_analyzer_cleanup(req: RunAnalyzerRequest):
 @app.get("/api/timeseries-pixel")
 async def timeseries_pixel(path: str, lat: float, lon: float, ts_file: str | None = None):
     """Extract a single pixel time series without loading the full 3-D stack."""
-    folder = Path(path)
+    folder = Path(path).expanduser().resolve()
     if ts_file:
         ts_name = ts_file if (folder / ts_file).exists() else None
     else:
@@ -2085,7 +2220,7 @@ async def folder_hyp3_action(req: Hyp3ActionRequest, background_tasks: Backgroun
 async def _run_hyp3_action(job_id: str, req: Hyp3ActionRequest):
     def run():
         try:
-            folder = Path(req.folder_path)
+            folder = Path(req.folder_path).expanduser().resolve()
             job_file = folder / req.job_file
             if not job_file.exists():
                 _jobs[job_id] = {"status": "error", "progress": 0, "message": f"{req.job_file} not found", "data": None}

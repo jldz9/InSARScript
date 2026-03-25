@@ -116,9 +116,10 @@ class ERA5Downloader:
         '975', '1000'
     ]
 
-    def __init__(self, output_dir, num_processes=3, max_retries=3):
-        self.output_dir = Path(output_dir).expanduser().resolve()
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+    def __init__(self, output_dir=None, num_processes=3, max_retries=3):
+        self.output_dir = Path(output_dir).expanduser().resolve() if output_dir else None
+        if self.output_dir:
+            self.output_dir.mkdir(parents=True, exist_ok=True)
         self.num_processes = num_processes
         self.max_retries = max_retries
         
@@ -218,11 +219,14 @@ class ERA5Downloader:
         extents/dates, and downloads missing data.
         """
         batch_path = Path(batch_dir).expanduser().resolve()
-        
-        for subfolder in tqdm(list(batch_path.iterdir()), desc="Folders", position=0):
-            if not subfolder.is_dir():
-                continue
-                
+
+        # If zips are directly in batch_dir, treat it as a single group
+        direct_zips = list(batch_path.glob('*.zip'))
+        folders_to_scan = [batch_path] if direct_zips else [
+            s for s in batch_path.iterdir() if s.is_dir()
+        ]
+
+        for subfolder in tqdm(folders_to_scan, desc="Folders", position=0):
             zip_files = list(subfolder.glob('*.zip'))
             if not zip_files:
                 continue
@@ -260,10 +264,12 @@ class ERA5Downloader:
 
             # 2. Prepare Download Tasks
             snwe_tuple = self._calculate_snwe((S, N, W, E))
+            era5_out = self.output_dir if self.output_dir else subfolder
+            era5_out.mkdir(parents=True, exist_ok=True)
             tasks = []
             for date_str in sorted(dates):
                 day, hr = date_str.split('_')
-                output_path = self._get_mintpy_filename(self.output_dir, day, hr, snwe_tuple)
+                output_path = self._get_mintpy_filename(era5_out, day, hr, snwe_tuple)
                 
                 if output_path.exists():
                     continue
@@ -279,7 +285,7 @@ class ERA5Downloader:
                 print(f"{Fore.GREEN}All files exist for {subfolder.name}")
                 continue
 
-            print(f"{Fore.CYAN}Downloading {len(tasks)} files for {subfolder.name}...")
+            tqdm.write(f"{Fore.CYAN}Downloading {len(tasks)} files for {subfolder.name}...")
             with multiprocessing.Pool(processes=self.num_processes, initializer=self._worker_init) as pool:
                 with tqdm(total=len(tasks), desc="Progress", unit="file", leave=False) as pbar:
                     for result in pool.imap_unordered(self._download_worker, tasks):

@@ -432,58 +432,6 @@ insarhub utils save-footprint -i velocity.h5 -o footprint.geojson
 | `-i`, `--input` | required | Input raster file |
 | `-o`, `--output` | auto-named beside input | Output vector file path |
 
-### select-pairs
-
-Select interferogram pairs from a saved asf_search GeoJSON results file.
-Input is a GeoJSON saved from `asf_search.ASFSearchResults.geojson()` or produced via `insarhub downloader`.
-Output is a JSON file containing pairs, pairwise baselines, and signed per-scene perpendicular baselines.
-
-```bash
-insarhub utils select-pairs -i results.geojson -o pairs.json
-insarhub utils select-pairs -i results.geojson --dt-max 96 --pb-max 150 --plot network.png
-```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-i`, `--input` | required | GeoJSON file with asf_search results |
-| `-o`, `--output` | `pairs.json` | Output JSON file |
-| `--dt-targets` | `6 12 24 36 48 72 96` | Target temporal spacings in days |
-| `--dt-tol` | `3` | Tolerance in days around each target |
-| `--dt-max` | `120` | Maximum temporal baseline (days) |
-| `--pb-max` | `150.0` | Maximum perpendicular baseline (m) |
-| `--min-degree` | `3` | Minimum connections per scene |
-| `--max-degree` | `999` | Maximum connections per scene |
-| `--no-force-connect` | — | Disable forced connectivity for isolated scenes |
-| `--max-workers` | `8` | Threads for API baseline fallback |
-| `--plot` | — | Also save a network plot to this path |
-
-The output JSON contains three keys:
-
-```json
-{
-  "pairs":       [["scene_a", "scene_b"], ...],
-  "baselines":   {"scene_a|||scene_b": [dt_days, bperp_m], ...},
-  "scene_bperp": {"scene_id": signed_bperp_m, ...}
-}
-```
-
-### plot-network
-
-Plot the interferogram network from a `pairs.json` file produced by `select-pairs`.
-Node y-positions follow the MintPy convention (signed perpendicular baseline relative to the anchor scene).
-
-```bash
-insarhub utils plot-network -i pairs.json -o network.png
-insarhub utils plot-network -i pairs.json --title "Path 100 Frame 466" --figsize 20 8
-```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-i`, `--input` | required | Pairs JSON from `select-pairs` |
-| `-o`, `--output` | `network.png` | Output figure path |
-| `--title` | `Interferogram Network` | Plot title |
-| `--figsize` | `18 7` | Figure width and height in inches |
-
 ### slurm
 
 Generate a SLURM batch script for running an `insarhub` pipeline on an HPC cluster.

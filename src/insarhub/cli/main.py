@@ -25,8 +25,6 @@ Utilities
 insarhub utils clip           --workdir /data/bryce --aoi -113.05 37.74 -112.68 38.00
 insarhub utils h5-to-raster   --input velocity.h5
 insarhub utils save-footprint --input velocity.h5
-insarhub utils select-pairs   --input results.geojson --dt-max 120 --pb-max 150 -o pairs.json
-insarhub utils plot-network   --input pairs.json -o network.png
 insarhub utils slurm          --job-name insar_run --cpus 8 --mem 32G --command "insarhub analyzer -N Hyp3_SBAS -w /data/bryce run"
 insarhub utils era5-download  -w /data/bryce -o /data/era5
 """
@@ -374,8 +372,6 @@ def create_parser() -> argparse.ArgumentParser:
             "  clip           Clip HyP3 zip contents to an AOI\n"
             "  h5-to-raster   Convert MintPy HDF5 output to GeoTIFF\n"
             "  save-footprint Extract footprint polygon from a raster\n"
-            "  select-pairs   Select interferogram pairs from a search-results GeoJSON\n"
-            "  plot-network   Plot interferogram network from a saved pairs JSON\n"
             "  slurm          Generate a SLURM batch script\n"
             "  era5-download  Download ERA5 weather data for MintPy tropospheric correction\n"
         ),
@@ -412,61 +408,6 @@ def create_parser() -> argparse.ArgumentParser:
                       help="Input raster file")
     p_fp.add_argument("-o", "--output", metavar="PATH", default=None,
                       help="Output footprint file (default: auto-named beside input)")
-
-    # --- select-pairs -------------------------------------------------- #
-    p_sp = ut_sub.add_parser(
-        "select-pairs",
-        help="Select interferogram pairs from a search-results GeoJSON",
-        description=(
-            "Select interferogram pairs based on temporal and perpendicular baseline\n"
-            "constraints. Input must be a GeoJSON file saved from asf_search results\n"
-            "(e.g. via downloader --select-pairs or asf_search.ASFSearchResults.geojson()).\n"
-            "\nOutput JSON contains: pairs, baselines, and scene_bperp.\n"
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    p_sp.add_argument("-i", "--input", metavar="PATH", required=True,
-                      help="GeoJSON file containing asf_search results")
-    p_sp.add_argument("-o", "--output", metavar="PATH", default="pairs.json",
-                      help="Output JSON file for pairs/baselines (default: pairs.json)")
-    p_sp.add_argument("--dt-targets", metavar="DAYS", nargs="+", type=int,
-                      default=[6, 12, 24, 36, 48, 72, 96],
-                      help="Preferred temporal spacings in days (default: 6 12 24 36 48 72 96)")
-    p_sp.add_argument("--dt-tol", metavar="DAYS", type=int, default=3,
-                      help="Tolerance in days around each dt-target (default: 3)")
-    p_sp.add_argument("--dt-max", metavar="DAYS", type=int, default=120,
-                      help="Maximum temporal baseline in days (default: 120)")
-    p_sp.add_argument("--pb-max", metavar="METERS", type=float, default=150.0,
-                      help="Maximum perpendicular baseline in meters (default: 150.0)")
-    p_sp.add_argument("--min-degree", metavar="N", type=int, default=3,
-                      help="Minimum connections per scene (default: 3)")
-    p_sp.add_argument("--max-degree", metavar="N", type=int, default=999,
-                      help="Maximum connections per scene (default: 999)")
-    p_sp.add_argument("--no-force-connect", dest="force_connect", action="store_false",
-                      help="Disable forced connectivity for isolated scenes")
-    p_sp.add_argument("--max-workers", metavar="N", type=int, default=8,
-                      help="Threads for API baseline fallback (default: 8)")
-    p_sp.add_argument("--plot", metavar="PATH", default=None,
-                      help="Also save a network plot to this path (e.g. network.png)")
-
-    # --- plot-network -------------------------------------------------- #
-    p_pn = ut_sub.add_parser(
-        "plot-network",
-        help="Plot interferogram network from a saved pairs JSON",
-        description=(
-            "Visualise the interferogram network produced by select-pairs.\n"
-            "Input must be a pairs JSON file written by 'insarhub utils select-pairs'.\n"
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    p_pn.add_argument("-i", "--input", metavar="PATH", required=True,
-                      help="Pairs JSON file from select-pairs")
-    p_pn.add_argument("-o", "--output", metavar="PATH", default="network.png",
-                      help="Output figure path (default: network.png)")
-    p_pn.add_argument("--title", metavar="STR", default="Interferogram Network",
-                      help="Plot title (default: 'Interferogram Network')")
-    p_pn.add_argument("--figsize", metavar="N", nargs=2, type=int, default=[18, 7],
-                      help="Figure size width height in inches (default: 18 7)")
 
     # --- slurm --------------------------------------------------------- #
     p_slurm = ut_sub.add_parser(
@@ -524,10 +465,10 @@ def create_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p_era5.add_argument("-w", "--workdir", metavar="PATH", required=True,
-                        help="Directory containing HyP3 zip files (scanned recursively by subfolder)")
-    p_era5.add_argument("-o", "--output", metavar="PATH", required=True,
-                        help="Output directory for ERA5 .grb files")
+    p_era5.add_argument("-w", "--workdir", metavar="PATH", default=".",
+                        help="Directory containing HyP3 zip files (default: current directory)")
+    p_era5.add_argument("-o", "--output", metavar="PATH", default=".",
+                        help="Output directory for ERA5 .grb files (default: current directory)")
     p_era5.add_argument("--num-processes", metavar="N", type=int, default=3,
                         help="Parallel download workers (default: 3)")
     p_era5.add_argument("--max-retries", metavar="N", type=int, default=3,
@@ -1124,7 +1065,12 @@ def cmd_downloader(args, extra_args: list[str]):
         FootprintCommand(downloader, save_path=args.footprint).run()
 
     if args.select_pairs:
-        downloader.select_pairs(
+        import json
+        from dataclasses import asdict
+        from insarhub.utils.tool import write_workflow_marker
+        from insarhub.utils import plot_pair_network as _plot_pair_network
+
+        pairs, baselines, scene_bperp = downloader.select_pairs(
             dt_targets=tuple(args.dt_targets),
             dt_tol=args.dt_tol,
             dt_max=args.dt_max,
@@ -1133,8 +1079,38 @@ def cmd_downloader(args, extra_args: list[str]):
             max_degree=args.max_degree,
             force_connect=args.force_connect,
             max_workers=args.sp_workers,
-            pairs_output=args.pairs_output if hasattr(args, "pairs_output") else None,
         )
+
+        dl_workdir = downloader.config.workdir
+        if isinstance(pairs, dict):
+            for (path, frame), group_pairs in pairs.items():
+                subdir = dl_workdir / f"p{path}_f{frame}"
+                subdir.mkdir(parents=True, exist_ok=True)
+                write_workflow_marker(subdir, downloader=type(downloader).name)
+                cfg = {k: v for k, v in asdict(downloader.config).items() if k != 'workdir'}
+                cfg['relativeOrbit'] = path
+                cfg['frame'] = frame
+                (subdir / "downloader_config.json").write_text(json.dumps(cfg, indent=2, default=str))
+                pjson = subdir / f"pairs_p{path}_f{frame}.json"
+                pjson.write_text(json.dumps([list(p) for p in group_pairs], indent=2))
+                _plot_pair_network(
+                    group_pairs, baselines[(path, frame)],
+                    scene_baselines=scene_bperp.get((path, frame)),
+                    title=f"Interferogram Network — P{path}/F{frame}",
+                    save_path=subdir / f"network_p{path}_f{frame}.png",
+                )
+                print(f"[pairs] p{path}_f{frame}: {len(group_pairs)} pairs → {pjson}")
+        else:
+            pairs_output = args.pairs_output if hasattr(args, "pairs_output") and args.pairs_output else None
+            pairs_path = Path(pairs_output).expanduser().resolve() if pairs_output else dl_workdir / "pairs.json"
+            pairs_path.parent.mkdir(parents=True, exist_ok=True)
+            write_workflow_marker(pairs_path.parent, downloader=type(downloader).name)
+            cfg = {k: v for k, v in asdict(downloader.config).items() if k != 'workdir'}
+            (pairs_path.parent / "downloader_config.json").write_text(json.dumps(cfg, indent=2, default=str))
+            pairs_path.write_text(json.dumps([list(p) for p in pairs], indent=2))
+            _plot_pair_network(pairs, baselines, scene_baselines=scene_bperp,
+                               save_path=dl_workdir / "network.png")
+            print(f"[pairs] Saved {len(pairs)} pairs → {pairs_path}")
 
     if args.download:
         orbit_dir = args.orbit_files if isinstance(args.orbit_files, str) else None
@@ -1739,99 +1715,6 @@ def cmd_utils(args, extra_args: list[str]):
         from insarhub.utils.postprocess import save_footprint
         save_footprint(raster_file=args.input, out_footprint=args.output)
 
-    elif action == "select-pairs":
-        import asf_search
-        from insarhub.utils.tool import select_pairs
-
-        in_path = Path(args.input).expanduser().resolve()
-        with in_path.open() as f:
-            geojson_data = json.load(f)
-        products = [
-            asf_search.ASFProduct(feature)
-            for feature in geojson_data.get("features", [])
-        ]
-        _sp_result = select_pairs(
-            products,
-            dt_targets=tuple(args.dt_targets),
-            dt_tol=args.dt_tol,
-            dt_max=args.dt_max,
-            pb_max=args.pb_max,
-            min_degree=args.min_degree,
-            max_degree=args.max_degree,
-            force_connect=args.force_connect,
-            max_workers=args.max_workers,
-        )
-        pairs = _sp_result[0]
-        baselines = _sp_result[1]
-        scene_bperp: dict = _sp_result[2] if len(_sp_result) > 2 else {}
-
-        # Serialise — tuple keys become "a|||b" strings
-        def _pairs_to_list(p):
-            if isinstance(p, dict):
-                return {f"{k[0]}||{k[1]}": _pairs_to_list(v) for k, v in p.items()}
-            return [[a, b] for a, b in p]
-
-        def _baselines_to_dict(bl):
-            if isinstance(bl, dict) and bl and isinstance(next(iter(bl)), tuple) and isinstance(next(iter(bl.values())), dict):
-                # grouped: {(path,frame): BaselineTable}
-                return {f"{k[0]}||{k[1]}": _baselines_to_dict(v) for k, v in bl.items()}
-            # flat BaselineTable: {(a, b): (dt, bperp)}
-            return {f"{k[0]}|||{k[1]}": list(v) for k, v in bl.items()}
-
-        out = {
-            "pairs": _pairs_to_list(pairs),
-            "baselines": _baselines_to_dict(baselines),
-            "scene_bperp": {str(k): float(v) for k, v in scene_bperp.items()},
-        }
-        out_path = Path(args.output).expanduser().resolve()
-        with out_path.open("w") as f:
-            json.dump(out, f, indent=2)
-        pair_count = sum(len(v) for v in pairs.values()) if isinstance(pairs, dict) else len(pairs)
-        print(f"Saved {pair_count} pairs → {out_path}")
-
-        if args.plot:
-            from insarhub.utils.tool import plot_pair_network
-            fig = plot_pair_network(pairs, baselines, scene_baselines=scene_bperp,
-                                    save_path=args.plot)
-            print(f"Network plot saved → {args.plot}")
-
-    elif action == "plot-network":
-        from insarhub.utils.tool import plot_pair_network
-
-        in_path = Path(args.input).expanduser().resolve()
-        with in_path.open() as f:
-            data = json.load(f)
-
-        # Re-hydrate pairs
-        raw_pairs = data["pairs"]
-        if isinstance(raw_pairs, dict):
-            pairs = {tuple(int(x) for x in k.split("||")): [tuple(p) for p in v]
-                     for k, v in raw_pairs.items()}
-        else:
-            pairs = [tuple(p) for p in raw_pairs]
-
-        # Re-hydrate baselines
-        raw_bl = data["baselines"]
-        first_val = next(iter(raw_bl.values())) if raw_bl else None
-        if isinstance(first_val, dict):
-            # grouped
-            baselines = {tuple(int(x) for x in k.split("||")): {
-                tuple(ik.split("|||")): tuple(iv) for ik, iv in v.items()
-            } for k, v in raw_bl.items()}
-        else:
-            baselines = {tuple(k.split("|||")): tuple(v) for k, v in raw_bl.items()}
-
-        scene_bperp: dict = data.get("scene_bperp", {})
-
-        fig = plot_pair_network(
-            pairs, baselines,
-            scene_baselines=scene_bperp,
-            title=args.title,
-            figsize=tuple(args.figsize),
-            save_path=args.output,
-        )
-        print(f"Network plot saved → {args.output}")
-
     elif action == "slurm":
         from insarhub.utils.tool import Slurmjob_Config
         cfg = Slurmjob_Config(
@@ -1856,8 +1739,9 @@ def cmd_utils(args, extra_args: list[str]):
 
     elif action == "era5-download":
         from insarhub.utils.batch import ERA5Downloader
+        explicit_output = None if args.output == "." else args.output
         downloader = ERA5Downloader(
-            output_dir=args.output,
+            output_dir=explicit_output,
             num_processes=args.num_processes,
             max_retries=args.max_retries,
         )

@@ -55,7 +55,7 @@ class Hyp3Base(Hyp3Processor):
                 # Update output_dir from save file if present, else use config
                 saved_out = data.get("out_dir")
                 if saved_out:
-                    resolved = Path(saved_out).resolve()
+                    resolved = Path(saved_out).expanduser().resolve()
                     if not resolved.exists():
                         print(f"{Fore.YELLOW}Warning: saved out_dir '{resolved}' does not exist. "
                               f"Using config workdir instead.{Fore.RESET}")

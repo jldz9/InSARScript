@@ -189,6 +189,31 @@ def _netrc_has(host: str) -> bool:
     except Exception:
         return False
 
+def _check_cdse_connected() -> bool:
+    """Validate CDSE credentials from .netrc by authenticating against the Copernicus token endpoint."""
+    if not _NETRC.is_file():
+        return False
+    try:
+        import netrc as netrc_lib
+        import requests
+        creds = netrc_lib.netrc(str(_NETRC)).authenticators("dataspace.copernicus.eu")
+        if not creds:
+            return False
+        username, _, password = creds
+        resp = requests.post(
+            "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token",
+            data={
+                "grant_type": "password",
+                "client_id": "cdse-public",
+                "username": username,
+                "password": password,
+            },
+            timeout=10,
+        )
+        return resp.status_code == 200
+    except Exception:
+        return False
+
 def _read_credit_pool_pairs() -> list[tuple[str, str]]:
     """Return list of (username, password) from ~/.credit_pool."""
     if not _CREDIT_POOL.is_file():
@@ -237,7 +262,7 @@ def _check_hyp3_account(username: str | None = None, password: str | None = None
 def _build_auth_status() -> dict[str, Any]:
     """Synchronous helper that computes the full auth-status payload."""
     earthdata_connected = _netrc_has("urs.earthdata.nasa.gov")
-    cdse_connected      = _netrc_has("dataspace.copernicus.eu") or _check_cds_connected()
+    cdse_connected      = _check_cdse_connected()
     pool_pairs          = _read_credit_pool_pairs()
     hyp3_main           = _check_hyp3_account()
     credit_pool         = [_check_hyp3_account(u, p) for u, p in pool_pairs]
@@ -576,7 +601,7 @@ async def stream_auth_status():
     async def generate():
         # ── Instant: file-system checks ──────────────────────────────────────
         earthdata  = _netrc_has("urs.earthdata.nasa.gov")
-        cdse       = _netrc_has("dataspace.copernicus.eu") or _check_cds_connected()
+        cdse       = _check_cdse_connected()
         pool_pairs = _read_credit_pool_pairs()
         netrc_event = json.dumps({
             "type": "netrc",

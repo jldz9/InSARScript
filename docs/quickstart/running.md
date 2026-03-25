@@ -148,12 +148,12 @@ After locating SAR scene stack(s), the next step is to generate unwrapped interf
 
 HyP3 is an online processing platform provided by ASF. InSARHub has wrapped [hyp3_sdk](https://github.com/ASFHyP3/hyp3-sdk) as a `Processor`:
 
-Hyp3 InSAR Processor takes a pair of `reference_granule_id` and a `secondary_granule_id` to generate an interferogram. To automate the pair selection process: 
+Hyp3 InSAR Processor takes a pair of `reference_granule_id` and a `secondary_granule_id` to generate an interferogram. To automate the pair selection process:
 
 ```python
-from insarhub.utils import select_pairs, plot_pair_network
-pair_stacks, B = select_pairs(filter_results, max_degree=5) # We set the maximum connections to 5 to limit interferograms
-fig = plot_pair_network(pair_stacks, B)
+from insarhub.utils import plot_pair_network
+pair_stacks, B, scene_bperp = s1.select_pairs(max_degree=5) # We set the maximum connections to 5 to limit interferograms
+fig = plot_pair_network(pair_stacks, B, scene_bperp)
 fig.show()
 ```
 If the network is healthy without any disconnections, you are ready to submit your pairs: 

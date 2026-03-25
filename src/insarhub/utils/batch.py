@@ -104,9 +104,13 @@ def dis_scan(
         time.sleep(1)
 
 class ERA5Downloader:
-    """
-    A class to handle batch downloading of ERA5 weather data for InSAR processing,
+    """A class to handle batch downloading of ERA5 weather data for InSAR processing,
     formatted specifically for MintPy compatibility.
+
+    Args:
+        output_dir (str, optional): Directory to save ERA5 `.grb` files. Created if it does not exist. Defaults to None.
+        num_processes (int, optional): Number of parallel download workers. Defaults to 3.
+        max_retries (int, optional): Retry attempts per file on download failure. Defaults to 3.
     """
     
     PRESSURE_LEVELS = [
@@ -214,9 +218,15 @@ class ERA5Downloader:
                 time.sleep(min(60, 5 * attempt))
 
     def download_batch(self, batch_dir):
-        """
-        Scans a directory for Hyp3 jobs (zip files), determines required ERA5 
-        extents/dates, and downloads missing data.
+        """Scan a directory of HyP3 zip files, determine required ERA5 dates and extents, and download missing files.
+
+        Already-downloaded files are skipped automatically, so the method is safe to re-run after an interrupted download.
+
+        Args:
+            batch_dir (str): Directory containing HyP3 `.zip` files. Subdirectories are scanned if no zips are found directly.
+
+        Raises:
+            ValueError: If no valid geometry can be extracted from any zip file in the batch directory.
         """
         batch_path = Path(batch_dir).expanduser().resolve()
 

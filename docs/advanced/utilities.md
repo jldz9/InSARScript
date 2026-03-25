@@ -1,24 +1,24 @@
 Utilities are sets of tools designed to support and streamline InSAR processing workflows.
 
 
-### Select Pairs 
-Select interferogram pairs from ASF search results based on temporal and
-    perpendicular baseline criteria.
+### Select Pairs
+
+Select interferogram pairs from ASF search results based on temporal and perpendicular baseline criteria.
 
 ```python
 from insarhub import Downloader
-from insarhub.utils import select_pairs 
-s1 = Downloader.create('S1_SLC', 
+from insarhub.utils import select_pairs
+
+s1 = Downloader.create('S1_SLC',
                     intersectsWith=[-113.05, 37.74, -112.68, 38.00],
-                    start='2020-01-01', 
-                    end='2020-12-31',  
-                    relativeOrbit=100, 
-                    frame=466, 
+                    start='2020-01-01',
+                    end='2020-12-31',
+                    relativeOrbit=100,
+                    frame=466,
                     workdir='path/to/dir')
-results = dl.search()
+results = s1.search()
 
-pairs, baselines = select_pairs(search_results=results)
-
+pairs, baselines, scene_bperp = select_pairs(search_results=results)
 ```
 
 ::: insarhub.utils.select_pairs
@@ -29,14 +29,13 @@ pairs, baselines = select_pairs(search_results=results)
 
 ### Plot Pair Network
 
-Plot selected interferogram pairs SBAS network from select_pairs based on temporal and
-    perpendicular baseline criteria. 
+Plot the SBAS interferogram network returned by `select_pairs`.
 
 ```python
-
 from insarhub.utils import plot_pair_network
 
-fig = plot_pair_network(pairs=pairs, baselines=baselines)
+fig = plot_pair_network(pairs=pairs, baselines=baselines, scene_baselines=scene_bperp)
+fig.show()
 ```
 
 Example: 
@@ -47,6 +46,23 @@ Example:
 ::: insarhub.utils.plot_pair_network
     options:
         members: false
+        heading_level: 0
+
+### ERA5 Downloader
+
+Download ERA5 pressure-level weather data for MintPy tropospheric correction. Automatically determines required acquisition dates and spatial extents from HyP3 zip files and saves files using MintPy-compatible naming (`ERA5_S*_N*_W*_E*_YYYYMMDD_HH.grb`). Requires a `~/.cdsapirc` file with your [CDS API](https://cds.climate.copernicus.eu/api-how-to) credentials.
+
+```python
+from insarhub.utils import ERA5Downloader
+
+era5 = ERA5Downloader(output_dir='path/to/era5', num_processes=3, max_retries=3)
+era5.download_batch(batch_dir='path/to/hyp3/outputs')
+```
+
+::: insarhub.utils.ERA5Downloader
+    options:
+        members:
+            - download_batch
         heading_level: 0
 
 ### Earth Credit Pool

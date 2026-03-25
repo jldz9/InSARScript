@@ -683,6 +683,16 @@ Check documentation for how to setup .netrc file.\n""")
     ) -> tuple:
         """Compute interferogram pairs for all active stacks.
 
+        Args:
+            dt_targets (tuple, optional): Target temporal spacings in days. Defaults to (6, 12, 24, 36, 48, 72, 96).
+            dt_tol (int, optional): Tolerance in days around each target spacing. Defaults to 3.
+            dt_max (int, optional): Maximum temporal baseline in days. Defaults to 120.
+            pb_max (float, optional): Maximum perpendicular baseline in meters. Defaults to 150.0.
+            min_degree (int, optional): Minimum number of connections per scene. Defaults to 3.
+            max_degree (int, optional): Maximum number of connections per scene. Defaults to 999.
+            force_connect (bool, optional): Force connectivity for isolated scenes. Defaults to True.
+            max_workers (int, optional): Threads for API baseline fallback. Defaults to 4.
+
         Returns:
             tuple: (pairs, baselines, scene_bperp)
                 - pairs: dict keyed by (path, frame) for multi-stack, or list for single stack

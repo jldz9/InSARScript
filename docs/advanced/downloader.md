@@ -163,7 +163,34 @@ dl.download()
 ```python
 dl.dem()
 ```
+
     ::: insarhub.downloader.ASF_Base_Downloader.dem
+        options:
+            show_source: false
+            heading_level: 5
+
+
+
+- **Select Pairs**
+
+    Compute interferogram pairs for all active stacks based on temporal and perpendicular baseline constraints
+
+    ```python
+    from insarhub.utils import plot_pair_network
+    pairs, baselines, scene_bperp = dl.select_pairs(
+        dt_targets=(6, 12, 24, 36, 48, 72, 96),
+        dt_tol=3,
+        dt_max=120,
+        pb_max=150.0,
+        min_degree=3,
+        max_degree=5,
+        force_connect=True,
+    )
+    fig = plot_pair_network(pairs, baselines, scene_bperp)
+    fig.show()
+    ```
+
+    ::: insarhub.downloader.ASF_Base_Downloader.select_pairs
         options:
             show_source: false
             heading_level: 5
@@ -304,6 +331,31 @@ dl.download()
 dl.dem()
 ```
     ::: insarhub.downloader.s1_slc.S1_SLC.dem
+        options:
+            show_source: false
+            heading_level: 5
+
+- **Select Pairs**
+
+    Compute interferogram pairs for all active stacks based on temporal and perpendicular baseline constraints
+
+    ```python
+    from insarhub.utils import plot_pair_network
+    pairs, baselines, scene_bperp = s1.select_pairs(
+        dt_targets=(6, 12, 24, 36, 48, 72, 96),
+        dt_tol=3,
+        dt_max=120,
+        pb_max=150.0,
+        min_degree=3,
+        max_degree=5,
+        force_connect=True,
+    )
+    fig = plot_pair_network(pairs, baselines, scene_bperp)
+    fig.show()
+    ```
+  
+
+    ::: insarhub.downloader.ASF_Base_Downloader.select_pairs
         options:
             show_source: false
             heading_level: 5
